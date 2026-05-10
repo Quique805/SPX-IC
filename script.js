@@ -1,0 +1,4620 @@
+// ---- Regime config (edit defaults here, or tweak in the on-page table) ----
+// Each row: VIX <= maxVix selects this regime.
+// upperMult / lowerMult / k determine band width.
+// trade=false → the day is graphed but marked as "no-trade" (Iron Condor not opened).
+const DEFAULT_REGIMES = [
+  { maxVix: 16.0, upperMult: 1.4, lowerMult: 0.9, k: 1.2, trade: true  },
+  { maxVix: 19.5, upperMult: 1.2, lowerMult: 0.9, k: 0.9, trade: true  },
+  { maxVix: 20.5, upperMult: 1.2, lowerMult: 0.9, k: 0.9, trade: false }, // gap regime
+  { maxVix: 24.0, upperMult: 1.2, lowerMult: 1.2, k: 1.3, trade: true  },
+  { maxVix: 999,  upperMult: 1.2, lowerMult: 1.2, k: 1.3, trade: false }, // VIX > 24
+];
+
+// Minimum sample size required inside the lookback window before we trust σ.
+const MIN_SAMPLES = 20;
+
+// Trend window & threshold (mean of last N closes vs previous N).
+const TREND_WINDOW = 20;
+const TREND_THRESHOLD = 0.5; // %
+
+// ---- Dynamic compression factor C_t (variable selection model) ----------
+// Each variable has a standardized form (centered ~0, scale ~1) and a weight.
+// Z = sum(weight × standardized_value) over ACTIVE variables only.
+// C_t = sigmoid(λ × Z), clamped to [Cmin, Cmax].
+// Bands_t = Close_prev × (1 ± C_t × k_regime × mult × σ)
+//
+// Sign convention: a positive standardized value pushes toward LESS compression
+// (wider bands). A user can flip this by entering a negative weight.
+const COMPRESSION_VARS = [
+  { id: 'iv_hv',   label: 'IV/HV',         group: 'A', defaultWeight: 1.0, defaultActive: true,
+    desc: 'log(IV/HV) — positivo cuando IV > HV (mercado descuenta más vol)' },
+  { id: 'iv_rank', label: 'IV Rank',       group: 'B', defaultWeight: 0.5, defaultActive: false,
+    desc: '(IVR-50)/50 — positivo cuando IV está sobre la media del histórico' },
+  { id: 'iv_pctl', label: 'IV Percentile', group: 'B', defaultWeight: 0.5, defaultActive: false,
+    desc: '(IVP-50)/50 — positivo cuando IV está sobre la mediana histórica' },
+  { id: 'vix',     label: 'VIX',           group: 'B', defaultWeight: 0.7, defaultActive: true,
+    desc: '(Vref-VIX)/Vref — positivo cuando VIX < Vref' },
+  { id: 'iv_chg',  label: 'IV Change',     group: 'C', defaultWeight: 0.3, defaultActive: false,
+    desc: '(IV-IV_prev)/IV_prev — positivo cuando IV está subiendo' },
+  { id: 'pcv',     label: 'P/C Volume',    group: 'D', defaultWeight: 0.4, defaultActive: false,
+    desc: 'log(PCV) — positivo cuando puts dominan (sentimiento miedoso)' },
+];
+const COMPRESSION_GROUP_LABEL = {
+  A: 'Mispricing',
+  B: 'Nivel/régimen vol (REDUNDANTES — elige idealmente uno)',
+  C: 'Momentum vol',
+  D: 'Sentimiento',
+};
+
+// Mutable runtime state — initialized from defaults, edited via UI.
+const compressionVars = COMPRESSION_VARS.map(v => ({
+  ...v, active: v.defaultActive, weight: v.defaultWeight,
+}));
+const compressionParams = { lambda: 1.5, Cmin: 0.5, Cmax: 0.95, Vref: 18, shiftFactor: 0.25 };
+
+// Standardize a variable value to a centered ~[-1, 1] scale.
+// Returns null if data is missing for that variable.
+function standardizeVar(varId, prevRow, params) {
+  switch (varId) {
+    case 'iv_hv':
+      if (!isFinite(prevRow.iv) || !isFinite(prevRow.hv) || prevRow.iv <= 0 || prevRow.hv <= 0) return null;
+      return Math.log(prevRow.iv / prevRow.hv);
+    case 'iv_rank':
+      return isFinite(prevRow.ivRank) ? (prevRow.ivRank - 50) / 50 : null;
+    case 'iv_pctl':
+      return isFinite(prevRow.ivPctl) ? (prevRow.ivPctl - 50) / 50 : null;
+    case 'vix':
+      return isFinite(prevRow.vix) ? (params.Vref - prevRow.vix) / params.Vref : null;
+    case 'iv_chg':
+      return isFinite(prevRow.ivChg) ? prevRow.ivChg : null;
+    case 'pcv':
+      if (!isFinite(prevRow.pcv) || prevRow.pcv <= 0) return null;
+      return Math.log(prevRow.pcv);
+    default:
+      return null;
+  }
+}
+
+// Returns { Ccall, Cput, base, trend } so the caller can apply asymmetric
+// strikes per side. Cbase is the value of C_t straight from the sigmoid;
+// Ccall and Cput are after the trend shift Δ = shiftFactor × (Cmax − Cmin).
+function compressionFactor(prevRow) {
+  if (!prevRow) return { Ccall: 1.0, Cput: 1.0, base: 1.0, trend: null };
+  let Z = 0;
+  for (let i = 0; i < compressionVars.length; i++) {
+    const v = compressionVars[i];
+    if (!v.active) continue;
+    const s = standardizeVar(v.id, prevRow, compressionParams);
+    if (s === null || !isFinite(s)) continue;
+    Z += v.weight * s;
+  }
+  const Craw = 1 / (1 + Math.exp(-compressionParams.lambda * Z));
+  const Cmin = compressionParams.Cmin, Cmax = compressionParams.Cmax;
+  const base = Math.max(Cmin, Math.min(Cmax, Craw));
+
+  const trend = prevRow.trend || null;
+  const delta = compressionParams.shiftFactor * (Cmax - Cmin);
+  let Ccall = base, Cput = base;
+  if (trend === 'up')   { Ccall = base + delta; Cput = base - delta; }
+  else if (trend === 'down') { Ccall = base - delta; Cput = base + delta; }
+  // Final clamp (in case shift took us outside)
+  Ccall = Math.max(Cmin, Math.min(Cmax, Ccall));
+  Cput  = Math.max(Cmin, Math.min(Cmax, Cput));
+  return { Ccall, Cput, base, trend };
+}
+
+// For UI: produce a breakdown including base, Ccall, Cput, trend.
+function compressionBreakdown(prevRow) {
+  if (!prevRow) return null;
+  const terms = [];
+  let Z = 0;
+  for (const v of compressionVars) {
+    if (!v.active) continue;
+    const s = standardizeVar(v.id, prevRow, compressionParams);
+    if (s === null || !isFinite(s)) {
+      terms.push({ label: v.label, std: null, weighted: 0, missing: true });
+      continue;
+    }
+    const w = v.weight * s;
+    Z += w;
+    terms.push({ label: v.label, std: s, weight: v.weight, weighted: w });
+  }
+  const C_raw = 1 / (1 + Math.exp(-compressionParams.lambda * Z));
+  const Cmin = compressionParams.Cmin, Cmax = compressionParams.Cmax;
+  const base = Math.max(Cmin, Math.min(Cmax, C_raw));
+  const trend = prevRow.trend || null;
+  const delta = compressionParams.shiftFactor * (Cmax - Cmin);
+  let Ccall = base, Cput = base;
+  if (trend === 'up')   { Ccall = base + delta; Cput = base - delta; }
+  else if (trend === 'down') { Ccall = base - delta; Cput = base + delta; }
+  Ccall = Math.max(Cmin, Math.min(Cmax, Ccall));
+  Cput  = Math.max(Cmin, Math.min(Cmax, Cput));
+  return { Z, C_raw, base, Ccall, Cput, trend, delta, terms };
+}
+
+// ---- CSV loader -----------------------------------------------------------
+function parseCSV(text) {
+  // Strip UTF-8 BOM if present (Excel often adds it)
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  const rawLines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+  if (rawLines.length === 0) return [];
+
+  // Auto-detect delimiter: prefer the one that gives more columns in line 1
+  const tryDelims = [',', ';', '\t'];
+  const delim = tryDelims.reduce((best, d) =>
+    rawLines[0].split(d).length > rawLines[0].split(best).length ? d : best
+  );
+
+  const headers = rawLines[0].split(delim).map(h => h.trim());
+
+  // Header aliases — map common variants to internal IDs
+  const findHeader = (...aliases) => {
+    for (const a of aliases) {
+      const i = headers.findIndex(h => h.toLowerCase().replace(/[\s\/\-]/g, '') === a.toLowerCase().replace(/[\s\/\-]/g, ''));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const idx = {
+    Date:  findHeader('Date', 'Fecha'),
+    Close: findHeader('Close', 'Cierre'),
+    Open:  findHeader('Open', 'Apertura', 'Op'),
+    High:  findHeader('High', 'Maximo', 'Máximo'),
+    Low:   findHeader('Low', 'Minimo', 'Mínimo'),
+    VIX:   findHeader('VIX'),
+    IV:    findHeader('IV', 'Implied Volatility'),
+    HV:    findHeader('HV', 'Historical Volatility'),
+    IVR:   findHeader('IVR', 'IV Rank'),
+    IVP:   findHeader('IVP', 'IV Pctl', 'IV Percentile'),
+    IVCHG: findHeader('IVCHG', '1D IV Chg', 'IV Change', 'IV Chg', '1D Chg'),
+    PCV:   findHeader('PCV', 'P/C Vol', 'Put/Call', 'PC Vol', 'P C Vol'),
+  };
+
+  const missing = ['Date','Close','High','Low','VIX'].filter(h => idx[h] < 0);
+  if (missing.length) {
+    console.error('CSV: faltan columnas obligatorias:', missing, '· headers detectados:', headers);
+    alert('CSV inválido: faltan columnas obligatorias ' + missing.join(', ') +
+          '\n\nDelimitador detectado: "' + (delim === '\t' ? 'TAB' : delim) + '"' +
+          '\nHeaders detectados: ' + headers.join(' | '));
+    return [];
+  }
+
+  // Date parser: accepts YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY (Spanish/European)
+  const parseDate = (s) => {
+    if (!s) return null;
+    s = s.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (m) {
+      const dd = m[1].padStart(2, '0');
+      const mm = m[2].padStart(2, '0');
+      return `${m[3]}-${mm}-${dd}`;
+    }
+    return null;
+  };
+
+  // Number parser: strips %, spaces, and accepts both . and , as decimal
+  const parseNum = (s) => {
+    if (s === undefined || s === null) return NaN;
+    s = String(s).trim().replace(/[%\s]/g, '');
+    if (s === '') return NaN;
+    // If has both comma and dot, assume comma is thousands → strip commas
+    if (s.includes(',') && s.includes('.')) s = s.replace(/,/g, '');
+    // If only commas (no dots), treat comma as decimal separator
+    else if (s.includes(',') && !s.includes('.')) s = s.replace(/,/g, '.');
+    return parseFloat(s);
+  };
+
+  const get = (c, i) => i >= 0 ? parseNum(c[i]) : NaN;
+  const rows = [];
+  let badDates = 0;
+
+  for (let i = 1; i < rawLines.length; i++) {
+    const c = rawLines[i].split(delim);
+    const date = parseDate(c[idx.Date]);
+    if (!date) { badDates++; continue; }
+    rows.push({
+      date,
+      close:  parseNum(c[idx.Close]),
+      open:   get(c, idx.Open),
+      high:   parseNum(c[idx.High]),
+      low:    parseNum(c[idx.Low]),
+      vix:    parseNum(c[idx.VIX]),
+      iv:     get(c, idx.IV),
+      hv:     get(c, idx.HV),
+      ivRank: get(c, idx.IVR),
+      ivPctl: get(c, idx.IVP),
+      ivChg:  get(c, idx.IVCHG),
+      pcv:    get(c, idx.PCV),
+    });
+  }
+
+  if (badDates > 0) {
+    console.warn(`CSV: ${badDates} filas con fecha no parseable descartadas.`);
+  }
+  console.log(`CSV: ${rows.length} filas cargadas. Delimitador: "${delim === '\t' ? 'TAB' : delim}". Headers:`, headers, 'Mapping:', idx);
+
+  rows.sort((a, b) => new Date(a.date) - new Date(b.date));
+  return rows;
+}
+
+// Fill in derived metrics ONLY when the user didn't provide them in the CSV/form.
+// User-provided values (from Barchart) win because they're computed against the
+// full underlying option history (~252 days), not our small accumulated window.
+function enrichRows(rows, ivWindow = 252, hvWindow = 30) {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+
+    // Auto-compute HV from realized log-returns of close prices when missing.
+    // Standard formula: stdev(log returns) × √252 × 100, annualized %.
+    if (!isFinite(row.hv) && isFinite(row.close)) {
+      const returns = [];
+      const start = Math.max(1, i - hvWindow + 1);
+      for (let j = start; j <= i; j++) {
+        const c0 = rows[j - 1] ? rows[j - 1].close : NaN;
+        const c1 = rows[j] ? rows[j].close : NaN;
+        if (isFinite(c0) && isFinite(c1) && c0 > 0 && c1 > 0) {
+          returns.push(Math.log(c1 / c0));
+        }
+      }
+      if (returns.length >= 10) {
+        const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+        const variance = returns.reduce((a, b) => a + (b - mean) ** 2, 0) / (returns.length - 1);
+        row.hv = Math.sqrt(variance) * Math.sqrt(252) * 100;
+      }
+    }
+
+    // Compute IV Rank / Percentile from local history only if missing
+    if ((!isFinite(row.ivRank) || !isFinite(row.ivPctl)) && isFinite(row.iv)) {
+      const start = Math.max(0, i - ivWindow);
+      const ivHist = [];
+      for (let j = start; j < i; j++) {
+        if (isFinite(rows[j].iv)) ivHist.push(rows[j].iv);
+      }
+      if (ivHist.length >= 10) {
+        if (!isFinite(row.ivRank)) {
+          let mn = Infinity, mx = -Infinity;
+          for (let k = 0; k < ivHist.length; k++) {
+            if (ivHist[k] < mn) mn = ivHist[k];
+            if (ivHist[k] > mx) mx = ivHist[k];
+          }
+          row.ivRank = mx > mn ? (row.iv - mn) / (mx - mn) * 100 : 50;
+        }
+        if (!isFinite(row.ivPctl)) {
+          let below = 0;
+          for (let k = 0; k < ivHist.length; k++) if (ivHist[k] < row.iv) below++;
+          row.ivPctl = below / ivHist.length * 100;
+        }
+      }
+    }
+
+    // Compute IV Change only if missing
+    if (!isFinite(row.ivChg) && isFinite(row.iv)) {
+      for (let j = i - 1; j >= 0; j--) {
+        if (isFinite(rows[j].iv) && rows[j].iv > 0) {
+          row.ivChg = (row.iv - rows[j].iv) / rows[j].iv;
+          break;
+        }
+      }
+    }
+
+    // Compute opening gap vs previous close: (Open[t] − Close[t-1]) / Close[t-1] × 100
+    row.gap = NaN;
+    if (i > 0 && isFinite(row.open) && isFinite(rows[i - 1].close) && rows[i - 1].close > 0) {
+      row.gap = (row.open - rows[i - 1].close) / rows[i - 1].close * 100;
+    }
+
+    // Pre-compute trend AT this row (uses only data ≤ i, no look-ahead).
+    row.trend = null;
+    if (i >= TREND_WINDOW * 2 - 1) {
+      let rsum = 0, rn = 0, psum = 0, pn = 0;
+      for (let j = i - TREND_WINDOW + 1; j <= i; j++) {
+        if (isFinite(rows[j].close)) { rsum += rows[j].close; rn++; }
+      }
+      for (let j = i - TREND_WINDOW * 2 + 1; j <= i - TREND_WINDOW; j++) {
+        if (isFinite(rows[j].close)) { psum += rows[j].close; pn++; }
+      }
+      if (rn > 0 && pn > 0) {
+        const rm = rsum / rn, pm = psum / pn;
+        if (pm > 0) {
+          const diffPct = (rm - pm) / pm * 100;
+          if (diffPct > TREND_THRESHOLD)       row.trend = 'up';
+          else if (diffPct < -TREND_THRESHOLD) row.trend = 'down';
+          else                                 row.trend = 'flat';
+        }
+      }
+    }
+  }
+}
+
+// ---- Regime lookup --------------------------------------------------------
+// Plain for loop — much faster than for-of in hot paths (called millions of
+// times during optimization).
+function regimeFor(vix, regimes) {
+  const n = regimes.length;
+  for (let i = 0; i < n; i++) {
+    if (vix <= regimes[i].maxVix) return regimes[i];
+  }
+  return regimes[n - 1];
+}
+
+// ---- Band math ------------------------------------------------------------
+// σ from a rolling window of intraday range moves vs previous close:
+//   σ_high = std(High / Close_prev − 1)
+//   σ_low  = std(1 − Low  / Close_prev)
+// Bands for day t use Close[t-1] as base and the regime picked by VIX[t-1].
+// Sample standard deviation (Bessel-corrected, ddof=1) — matches pandas/numpy default.
+function std(arr) {
+  const n = arr.length;
+  if (n < 2) return 0;
+  const m = arr.reduce((a, b) => a + b, 0) / n;
+  const v = arr.reduce((a, b) => a + (b - m) ** 2, 0) / (n - 1);
+  return Math.sqrt(v);
+}
+
+function computeBands(rows, regimes, lookback) {
+  // Pre-compute daily range moves vs previous close
+  const upMoves = new Array(rows.length).fill(NaN);
+  const dnMoves = new Array(rows.length).fill(NaN);
+  for (let i = 1; i < rows.length; i++) {
+    const prevClose = rows[i - 1].close;
+    upMoves[i] = rows[i].high / prevClose - 1;
+    dnMoves[i] = 1 - rows[i].low / prevClose;
+  }
+
+  const bandAt = (t) => {
+    const winStart = Math.max(1, t - lookback);
+    const upWin = upMoves.slice(winStart, t).filter(Number.isFinite);
+    const dnWin = dnMoves.slice(winStart, t).filter(Number.isFinite);
+    if (upWin.length < MIN_SAMPLES || dnWin.length < MIN_SAMPLES) return null;
+
+    const sigUp = std(upWin);
+    const sigDn = std(dnWin);
+    const prev = rows[t - 1];
+    const today = rows[t]; // may be undefined for the next-day band
+    const reg = regimeFor(prev.vix, regimes);
+    const cf = compressionFactor(prev);
+    const trade = isDayAccepted(today, reg);
+    return {
+      upper: prev.close * (1 + cf.Ccall * reg.k * reg.upperMult * sigUp),
+      lower: prev.close * (1 - cf.Cput  * reg.k * reg.lowerMult * sigDn),
+      sigUp, sigDn,
+      Cbase: cf.base, Ccall: cf.Ccall, Cput: cf.Cput, trend: cf.trend,
+      regime: reg, trade,
+      gapRejected: reg.trade && !trade,
+    };
+  };
+
+  const bands = new Array(rows.length).fill(null);
+  for (let t = 1; t < rows.length; t++) bands[t] = bandAt(t);
+  const nextBand = bandAt(rows.length); // one step beyond the last row
+  return { bands, nextBand };
+}
+
+// ---- Backtest stats -------------------------------------------------------
+// A "loss" = close outside the band on a trading day.
+// No-trade days are excluded from the denominator.
+function computeStats(rows, bands) {
+  const overall = {
+    total: 0, wins: 0, lossUp: 0, lossDn: 0, noTrade: 0,
+    cleanWins: 0, touched: 0, callTouches: 0, putTouches: 0,
+    firstDate: null, lastDate: null,
+  };
+  const byRegime = new Map();
+
+  for (let i = 1; i < rows.length; i++) {
+    const b = bands[i];
+    const r = rows[i];
+    if (!b || !isFinite(r.close)) continue;
+    if (overall.firstDate === null) overall.firstDate = r.date;
+    overall.lastDate = r.date;
+
+    if (!b.trade) { overall.noTrade++; continue; }
+
+    overall.total++;
+    if (!byRegime.has(b.regime)) {
+      byRegime.set(b.regime, { total: 0, wins: 0, lossUp: 0, lossDn: 0, cleanWins: 0, touched: 0 });
+    }
+    const s = byRegime.get(b.regime);
+    s.total++;
+
+    // Strikes the model would actually sell (rounded outside)
+    const callStrike = Math.ceil(b.upper / 5) * 5;
+    const putStrike  = Math.floor(b.lower / 5) * 5;
+    const callTouched = isFinite(r.high) && r.high >= callStrike;
+    const putTouched  = isFinite(r.low)  && r.low  <= putStrike;
+    if (callTouched) overall.callTouches++;
+    if (putTouched)  overall.putTouches++;
+
+    if (r.close >= b.upper)      { overall.lossUp++; s.lossUp++; }
+    else if (r.close <= b.lower) { overall.lossDn++; s.lossDn++; }
+    else {
+      overall.wins++; s.wins++;
+      if (callTouched || putTouched) { overall.touched++;   s.touched++;   }
+      else                           { overall.cleanWins++; s.cleanWins++; }
+    }
+  }
+  return { overall, byRegime };
+}
+
+// ---- P&L engine (modelo conservador +150 / -600) -------------------------
+// Modelo simplificado: cada día ganador suma WIN_PNL, cada día perdedor resta LOSS_PNL.
+// No-trade days: P&L = 0. Break-even win rate: 80%.
+const WIN_PNL  = 150;
+const LOSS_PNL = -600;
+
+function computePnL(rows, bands, initialCapital) {
+  const trades = [];
+  let equity = initialCapital;
+  let peak = initialCapital;
+  let maxDD = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const b = bands[i];
+    const prev = rows[i - 1];
+    if (!b) continue;
+
+    const baseRow = {
+      date: r.date, prevClose: prev.close, close: r.close,
+      regime: b.regime, upper: b.upper, lower: b.lower,
+    };
+
+    if (!b.trade) {
+      trades.push({ ...baseRow, status: 'no-trade', distUp: null, distDn: null, pnl: 0, equity });
+      continue;
+    }
+
+    const distUp = (b.upper / prev.close - 1) * 100;
+    const distDn = (1 - b.lower / prev.close) * 100;
+
+    let pnl, status;
+    if (r.close >= b.upper)      { pnl = LOSS_PNL; status = 'loss-up'; }
+    else if (r.close <= b.lower) { pnl = LOSS_PNL; status = 'loss-dn'; }
+    else                         { pnl = WIN_PNL;  status = 'win';     }
+
+    equity += pnl;
+    if (equity > peak) peak = equity;
+    const dd = (peak - equity) / peak * 100;
+    if (dd > maxDD) maxDD = dd;
+
+    trades.push({ ...baseRow, status, distUp, distDn, pnl, equity });
+  }
+
+  return { trades, finalEquity: equity, peak, maxDD, initialCapital };
+}
+
+function pnlSummary(pnl) {
+  const traded = pnl.trades.filter(t => t.status !== 'no-trade');
+  const wins   = traded.filter(t => t.status === 'win');
+  const losses = traded.filter(t => t.status !== 'win');
+  const sumWins   = wins.reduce((a, t) => a + t.pnl, 0);
+  const sumLosses = losses.reduce((a, t) => a + Math.abs(t.pnl), 0);
+  const best  = traded.reduce((a, t) => t.pnl > (a?.pnl ?? -Infinity) ? t : a, null);
+  const worst = traded.reduce((a, t) => t.pnl < (a?.pnl ??  Infinity) ? t : a, null);
+  const totalPnL  = pnl.finalEquity - pnl.initialCapital;
+  const returnPct = totalPnL / pnl.initialCapital * 100;
+  const expectancy = traded.length ? totalPnL / traded.length : 0;
+  const profitFactor = sumLosses > 0 ? sumWins / sumLosses : Infinity;
+  return {
+    tradedDays: traded.length, wins: wins.length, losses: losses.length,
+    totalPnL, returnPct, expectancy, profitFactor,
+    best, worst, maxDD: pnl.maxDD, finalEquity: pnl.finalEquity,
+  };
+}
+
+// ---- Equity chart --------------------------------------------------------
+function drawEquityChart(pnl) {
+  const dates = pnl.trades.map(t => t.date);
+  const equity = pnl.trades.map(t => t.equity);
+
+  const lossUpX = [], lossUpY = [], lossDnX = [], lossDnY = [];
+  pnl.trades.forEach(t => {
+    if (t.status === 'loss-up') { lossUpX.push(t.date); lossUpY.push(t.equity); }
+    if (t.status === 'loss-dn') { lossDnX.push(t.date); lossDnY.push(t.equity); }
+  });
+
+  const traces = [
+    { x: dates, y: equity, mode: 'lines', name: 'Equity',
+      line: { color: '#143a64', width: 2.2 },
+      fill: 'tozeroy', fillcolor: 'rgba(44, 111, 163, 0.08)' },
+    { x: lossUpX, y: lossUpY, mode: 'markers', name: 'Loss (call hit)',
+      marker: { color: '#b73232', size: 9, symbol: 'x', line: { width: 1, color: '#fff' } } },
+    { x: lossDnX, y: lossDnY, mode: 'markers', name: 'Loss (put hit)',
+      marker: { color: '#c46a35', size: 9, symbol: 'x', line: { width: 1, color: '#fff' } } },
+  ];
+
+  const layout = {
+    margin: { t: 20, r: 20, b: 50, l: 70 },
+    paper_bgcolor: '#ffffff', plot_bgcolor: '#f3f8fc',
+    font: { family: 'Segoe UI, sans-serif', color: '#0c1f33' },
+    xaxis: { title: 'Date', type: 'date', gridcolor: '#dce7f1', linecolor: '#143a64' },
+    yaxis: {
+      title: 'Equity ($)', gridcolor: '#dce7f1', linecolor: '#143a64',
+      rangemode: 'tozero',
+    },
+    legend: { orientation: 'h', y: -0.22,
+              bgcolor: 'rgba(255,255,255,0.6)', bordercolor: '#cfe1f2', borderwidth: 1 },
+    hovermode: 'x unified',
+    hoverlabel: { bgcolor: '#0a2540', font: { color: '#fff' }, bordercolor: '#c9a227' },
+    shapes: [{
+      type: 'line', xref: 'paper', yref: 'y',
+      x0: 0, x1: 1, y0: pnl.initialCapital, y1: pnl.initialCapital,
+      line: { color: '#c9a227', width: 1.2, dash: 'dash' },
+    }],
+    annotations: [{
+      xref: 'paper', yref: 'y', x: 0, y: pnl.initialCapital,
+      xanchor: 'left', yanchor: 'bottom',
+      text: ` Capital inicial $${pnl.initialCapital.toFixed(0)} `,
+      font: { size: 10, color: '#8a6d10' },
+      bgcolor: 'rgba(255,255,255,0.7)', showarrow: false,
+    }],
+  };
+  safePlotly('equityChart', traces, layout, { responsive: true });
+}
+
+function renderEquityStats(s, pnl) {
+  const fmt   = v => (v >= 0 ? '+' : '−') + '$' + Math.abs(v).toFixed(2);
+  const fmtPc = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
+  const goodBad = v => v >= 0 ? 'good' : 'bad';
+  const bestStr  = s.best  ? `${fmt(s.best.pnl)} (${s.best.date})`   : '—';
+  const worstStr = s.worst ? `${fmt(s.worst.pnl)} (${s.worst.date})` : '—';
+
+  document.getElementById('equityStats').innerHTML = `
+    <div class="stats-card">
+      <h3>P&amp;L total</h3>
+      <div class="big ${goodBad(s.totalPnL)}">${fmt(s.totalPnL)}</div>
+      <div style="font-size:11px;color:#888;margin-top:4px">
+        Equity ${pnl.initialCapital} → <b>${pnl.finalEquity.toFixed(2)}</b> (${fmtPc(s.returnPct)})
+      </div>
+    </div>
+    <div class="stats-card" style="min-width:240px">
+      <h3>Métricas económicas</h3>
+      <div class="row"><span>Días operados</span><span><b>${s.tradedDays}</b></span></div>
+      <div class="row"><span>Expectancia / día</span><span class="${goodBad(s.expectancy)}"><b>${fmt(s.expectancy)}</b></span></div>
+      <div class="row"><span>Profit factor</span><span><b>${isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : '∞'}</b></span></div>
+      <div class="row"><span>Max drawdown</span><span class="bad"><b>−${s.maxDD.toFixed(2)}%</b></span></div>
+      <div class="row" style="border-top:1px solid #eee;margin-top:4px;padding-top:4px">
+        <span style="color:#080">Mejor día</span><span style="color:#080">${bestStr}</span>
+      </div>
+      <div class="row"><span class="loss-up">Peor día</span><span class="loss-up">${worstStr}</span></div>
+    </div>
+  `;
+}
+
+// ---- Trade log table -----------------------------------------------------
+function renderTradesTable(pnl) {
+  const status2label = {
+    'win':      '<span style="color:#1e7a4d">✓ Win</span>',
+    'loss-up':  '<span class="loss-up">✗ Call hit</span>',
+    'loss-dn':  '<span class="loss-dn">✗ Put hit</span>',
+    'no-trade': '<span style="color:#9b8a4b">— No-trade</span>',
+  };
+  const fmt$ = v => '$' + v.toFixed(2);
+  const rows = pnl.trades.map(t => `
+    <tr class="${t.status}">
+      <td>${t.date}</td>
+      <td>${t.prevClose.toFixed(2)}</td>
+      <td>${t.lower.toFixed(2)} – ${t.upper.toFixed(2)}</td>
+      <td>${t.distDn !== null ? '−'+t.distDn.toFixed(2)+'%' : '—'} / ${t.distUp !== null ? '+'+t.distUp.toFixed(2)+'%' : '—'}</td>
+      <td>${t.close.toFixed(2)}</td>
+      <td>${status2label[t.status]}</td>
+      <td class="pnl-${t.pnl >= 0 ? 'pos' : 'neg'}"><b>${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(0)}</b></td>
+      <td><b>${fmt$(t.equity)}</b></td>
+    </tr>
+  `).join('');
+
+  document.getElementById('tradesTable').innerHTML = `
+    <thead><tr>
+      <th>Date</th><th>Prev close</th><th>Bands (low–up)</th><th>Dist (put / call)</th>
+      <th>Close</th><th>Outcome</th><th>P&amp;L</th><th>Equity</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  `;
+}
+
+// ---- Quant Agent: optimizer ---------------------------------------------
+// Per-regime grid search. Each regime is independent because a given day
+// belongs to exactly one regime, so its params don't affect other regimes.
+// Score = expectancy (= +150 per win, −600 per loss) over the training window.
+const OPT_RANGE = { min: 0.5, max: 2.0, step: 0.1 };
+
+// Pre-computed grid array (way faster than re-iterating a generator each pass).
+const OPT_GRID = (() => {
+  const arr = [];
+  for (let v = OPT_RANGE.min; v <= OPT_RANGE.max + 1e-9; v += OPT_RANGE.step) {
+    arr.push(Math.round(v * 100) / 100);
+  }
+  return arr;
+})();
+const OPT_GRID_N = OPT_GRID.length;
+
+// Backwards-compat for the standalone Quant Agent (still uses gridValues).
+function* gridValues({ min, max, step }) {
+  for (let v = min; v <= max + 1e-9; v += step) yield Math.round(v * 100) / 100;
+}
+
+// Indexed access — no iterator object per call.
+// Applies asymmetric Ccall/Cput compression factors per side.
+function scoreParams(days, upperMult, lowerMult, k) {
+  let score = 0;
+  const n = days.length;
+  for (let i = 0; i < n; i++) {
+    const d = days[i];
+    const cf = compressionFactor(d.prev);
+    const upper = d.prev.close * (1 + cf.Ccall * k * upperMult * d.sigUp);
+    const lower = d.prev.close * (1 - cf.Cput  * k * lowerMult * d.sigDn);
+    if (d.row.close >= upper || d.row.close <= lower) score += LOSS_PNL;
+    else score += WIN_PNL;
+  }
+  return score;
+}
+
+function optimizeRegimes(rows, baseBands, baseRegimes, windowDays) {
+  const trainStart = Math.max(1, rows.length - windowDays);
+  // Group days by regime within the training window
+  const regimeDays = new Map();
+  for (let i = trainStart; i < rows.length; i++) {
+    const b = baseBands[i];
+    if (!b || !b.trade) continue;
+    if (!regimeDays.has(b.regime)) regimeDays.set(b.regime, []);
+    regimeDays.get(b.regime).push({
+      row: rows[i], prev: rows[i - 1], sigUp: b.sigUp, sigDn: b.sigDn,
+    });
+  }
+
+  const newRegimes = baseRegimes.map(r => ({ ...r }));
+  const perRegimeStats = [];
+
+  for (let regIdx = 0; regIdx < baseRegimes.length; regIdx++) {
+    const reg = baseRegimes[regIdx];
+    if (!reg.trade) {
+      perRegimeStats.push({ regIdx, sample: 0, baseScore: 0, optScore: 0 });
+      continue;
+    }
+    const days = regimeDays.get(reg) || [];
+    const baseScore = scoreParams(days, reg.upperMult, reg.lowerMult, reg.k);
+    if (days.length === 0) {
+      perRegimeStats.push({ regIdx, sample: 0, baseScore: 0, optScore: 0 });
+      continue;
+    }
+
+    let bestScore = baseScore;
+    let bestParams = { upperMult: reg.upperMult, lowerMult: reg.lowerMult, k: reg.k };
+    for (const u of gridValues(OPT_RANGE)) {
+      for (const l of gridValues(OPT_RANGE)) {
+        for (const k of gridValues(OPT_RANGE)) {
+          const s = scoreParams(days, u, l, k);
+          if (s > bestScore) {
+            bestScore = s;
+            bestParams = { upperMult: u, lowerMult: l, k };
+          }
+        }
+      }
+    }
+    Object.assign(newRegimes[regIdx], bestParams);
+    perRegimeStats.push({ regIdx, sample: days.length, baseScore, optScore: bestScore });
+  }
+
+  const totalSample = [...regimeDays.values()].reduce((a, d) => a + d.length, 0);
+  return {
+    newRegimes,
+    trainingStartDate: rows[trainStart].date,
+    trainingEndDate: rows[rows.length - 1].date,
+    totalSample,
+    perRegimeStats,
+  };
+}
+
+// Recompute bands for the full history with new regime params,
+// reusing pre-computed sigmas from the base bands (cheap, O(N)).
+function rebandWithNewRegimes(rows, baseBands, baseRegimes, newRegimes) {
+  const map = new Map();
+  baseRegimes.forEach((r, i) => map.set(r, newRegimes[i]));
+  return baseBands.map((b, i) => {
+    if (!b) return null;
+    const newReg = map.get(b.regime);
+    const prev = rows[i - 1];
+    const cf = compressionFactor(prev);
+    return {
+      ...b,
+      upper: prev.close * (1 + cf.Ccall * newReg.k * newReg.upperMult * b.sigUp),
+      lower: prev.close * (1 - cf.Cput  * newReg.k * newReg.lowerMult * b.sigDn),
+      regime: newReg, trade: newReg.trade,
+      Cbase: cf.base, Ccall: cf.Ccall, Cput: cf.Cput, trend: cf.trend,
+    };
+  });
+}
+
+// ---- Quant Agent: proposal rendering ------------------------------------
+const _proposalCache = new Map(); // periodKey → newRegimes (for Apply button)
+
+function inSampleStats(pnl, fromDate) {
+  const traded = pnl.trades.filter(t => t.date >= fromDate && t.status !== 'no-trade');
+  const wins   = traded.filter(t => t.status === 'win').length;
+  const total  = traded.length;
+  const sum    = traded.reduce((a, t) => a + t.pnl, 0);
+  return { wins, total, winRate: total ? wins / total * 100 : 0, pnl: sum };
+}
+
+function fullStats(pnl) {
+  const traded = pnl.trades.filter(t => t.status !== 'no-trade');
+  const wins   = traded.filter(t => t.status === 'win').length;
+  return { winRate: traded.length ? wins / traded.length * 100 : 0 };
+}
+
+function renderProposal(containerId, periodKey, periodLabel, baseRegimes, optResult, basePnL, optPnL) {
+  _proposalCache.set(periodKey, optResult.newRegimes);
+
+  const fromDate = optResult.trainingStartDate;
+  const inBase = inSampleStats(basePnL, fromDate);
+  const inOpt  = inSampleStats(optPnL,  fromDate);
+  const fullBase = fullStats(basePnL);
+  const fullOpt  = fullStats(optPnL);
+
+  const showWarn = optResult.totalSample < 30;
+  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const arrow = (a, b, betterIsHigher = true) => {
+    const diff = b - a;
+    if (Math.abs(diff) < 1e-6) return '<span class="arrow-eq">=</span>';
+    const isUp = diff > 0;
+    const isGood = (isUp && betterIsHigher) || (!isUp && !betterIsHigher);
+    return `<span class="arrow-${isUp ? 'up' : 'down'}-${isGood ? 'good' : 'bad'}">${isUp ? '▲' : '▼'}</span>`;
+  };
+
+  const paramRows = baseRegimes.map((r, i) => {
+    if (!r.trade) {
+      return `<tr class="notrade"><td>${regimeLabel(baseRegimes, i)}</td><td colspan="3" style="font-style:italic">no-trade · sin optimizar</td></tr>`;
+    }
+    const n = optResult.newRegimes[i];
+    const sampleStat = optResult.perRegimeStats[i] || { sample: 0 };
+    const sampleHint = sampleStat.sample === 0
+      ? '<div class="sample-warn">0 días en ventana</div>'
+      : `<div class="sample-hint">${sampleStat.sample} días</div>`;
+    return `<tr>
+      <td>${regimeLabel(baseRegimes, i)}${sampleHint}</td>
+      <td>${r.k.toFixed(2)} → <b>${n.k.toFixed(2)}</b> ${arrow(r.k, n.k, false)}</td>
+      <td>${r.upperMult.toFixed(2)} → <b>${n.upperMult.toFixed(2)}</b> ${arrow(r.upperMult, n.upperMult, false)}</td>
+      <td>${r.lowerMult.toFixed(2)} → <b>${n.lowerMult.toFixed(2)}</b> ${arrow(r.lowerMult, n.lowerMult, false)}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `
+    <h3>${periodLabel}</h3>
+    <div class="period-info">
+      <span><b>Training:</b> ${optResult.trainingStartDate} → ${optResult.trainingEndDate}</span>
+      <span><b>${optResult.totalSample}</b> trades en ventana</span>
+    </div>
+    ${showWarn ? `<div class="warn-box">⚠ Muestra pequeña (${optResult.totalSample} trades) — alto riesgo de sobreajuste.</div>` : ''}
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Win rate (in-sample)</div>
+        <div class="metric-value">
+          ${inBase.winRate.toFixed(1)}% → <b class="${inOpt.winRate >= inBase.winRate ? 'd-good' : 'd-bad'}">${inOpt.winRate.toFixed(1)}%</b>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">P&amp;L (in-sample)</div>
+        <div class="metric-value">
+          ${fmt$(inBase.pnl)} → <b class="${inOpt.pnl >= inBase.pnl ? 'd-good' : 'd-bad'}">${fmt$(inOpt.pnl)}</b>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Equity final (full history)</div>
+        <div class="metric-value">
+          $${basePnL.finalEquity.toFixed(0)} → <b class="${optPnL.finalEquity >= basePnL.finalEquity ? 'd-good' : 'd-bad'}">$${optPnL.finalEquity.toFixed(0)}</b>
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Win rate (full history)</div>
+        <div class="metric-value">
+          ${fullBase.winRate.toFixed(1)}% → <b class="${fullOpt.winRate >= fullBase.winRate ? 'd-good' : 'd-bad'}">${fullOpt.winRate.toFixed(1)}%</b>
+        </div>
+      </div>
+    </div>
+    <div class="params-block">
+      <div class="block-label">Parámetros propuestos por régimen</div>
+      <table class="agent-params">
+        <thead><tr><th>Régimen</th><th>k</th><th>Upper mult</th><th>Lower mult</th></tr></thead>
+        <tbody>${paramRows}</tbody>
+      </table>
+    </div>
+    <div class="equity-cmp" id="equity-cmp-${periodKey}"></div>
+    <button class="apply-btn" data-period="${periodKey}">Aplicar esta optimización</button>
+  `;
+
+  document.getElementById(containerId).innerHTML = html;
+  drawAgentEquity(`equity-cmp-${periodKey}`, basePnL, optPnL, optResult.trainingStartDate);
+}
+
+function drawAgentEquity(elementId, basePnL, optPnL, trainStart) {
+  const baseTrace = {
+    x: basePnL.trades.map(t => t.date),
+    y: basePnL.trades.map(t => t.equity),
+    mode: 'lines', name: 'Base',
+    line: { color: '#143a64', width: 2 },
+  };
+  const optTrace = {
+    x: optPnL.trades.map(t => t.date),
+    y: optPnL.trades.map(t => t.equity),
+    mode: 'lines', name: 'Agent',
+    line: { color: '#c9a227', width: 2.2 },
+  };
+  const lastDate = basePnL.trades[basePnL.trades.length - 1].date;
+  const layout = {
+    margin: { t: 14, r: 12, b: 44, l: 56 },
+    paper_bgcolor: '#ffffff', plot_bgcolor: '#f3f8fc',
+    font: { family: 'Segoe UI, sans-serif', color: '#0c1f33', size: 11 },
+    xaxis: { type: 'date', gridcolor: '#dce7f1' },
+    yaxis: { title: 'Equity ($)', gridcolor: '#dce7f1' },
+    legend: { orientation: 'h', y: -0.2, font: { size: 10 } },
+    hovermode: 'x unified',
+    hoverlabel: { bgcolor: '#0a2540', font: { color: '#fff' } },
+    shapes: [{
+      type: 'rect', xref: 'x', yref: 'paper',
+      x0: trainStart, x1: lastDate, y0: 0, y1: 1,
+      fillcolor: 'rgba(201, 162, 39, 0.14)',
+      line: { width: 0 }, layer: 'below',
+    }],
+    annotations: [{
+      xref: 'x', yref: 'paper', x: trainStart, y: 1,
+      xanchor: 'left', yanchor: 'top',
+      text: ' Training window ',
+      bgcolor: 'rgba(255,255,255,0.85)',
+      font: { size: 9, color: '#8a6d10' },
+      showarrow: false,
+    }],
+  };
+  safePlotly(elementId, [baseTrace, optTrace], layout, { responsive: true, displayModeBar: false });
+}
+
+// Trading-day window estimation (rough): 21 / 63 / 126 trading days
+const AGENT_PERIODS = [
+  { key: '1m', label: 'Mejora 1 — Último mes',     days:  21 },
+  { key: '3m', label: 'Mejora 2 — Últimos 3 meses', days:  63 },
+  { key: '6m', label: 'Mejora 3 — Últimos 6 meses', days: 126 },
+];
+
+function runAgent() {
+  if (!currentRows) return;
+  const lookback = parseInt(document.getElementById('lookback').value, 10);
+  const initialCapital = parseFloat(document.getElementById('initialCapital').value) || 1000;
+  const baseRegimes = readRegimes();
+  const { bands: baseBands } = computeBands(currentRows, baseRegimes, lookback);
+  const basePnL = computePnL(currentRows, baseBands, initialCapital);
+
+  const allProposals = [];
+  for (const period of AGENT_PERIODS) {
+    const optResult = optimizeRegimes(currentRows, baseBands, baseRegimes, period.days);
+    const optBands  = rebandWithNewRegimes(currentRows, baseBands, baseRegimes, optResult.newRegimes);
+    const optPnL    = computePnL(currentRows, optBands, initialCapital);
+    renderProposal(`proposal-${period.key}`, period.key, period.label, baseRegimes, optResult, basePnL, optPnL);
+    allProposals.push({ ...period, optResult, optPnL });
+  }
+
+  renderAgentLegend(currentRows, baseRegimes, basePnL, allProposals);
+}
+
+function renderAgentLegend(rows, baseRegimes, basePnL, proposals) {
+  const lastRow = rows[rows.length - 1];
+  const currentRegime = regimeFor(lastRow.vix, baseRegimes);
+  const currentRegimeIdx = baseRegimes.indexOf(currentRegime);
+  const currentRegimeLbl = regimeLabel(baseRegimes, currentRegimeIdx);
+
+  const ranked = proposals.map(p => ({
+    key: p.key, label: p.label, optResult: p.optResult, optPnL: p.optPnL,
+    finalEquity: p.optPnL.finalEquity,
+    deltaVsBase: p.optPnL.finalEquity - basePnL.finalEquity,
+  })).sort((a, b) => b.finalEquity - a.finalEquity);
+
+  const best = ranked[0];
+  const noneBeatBase = ranked.every(r => r.deltaVsBase <= 0);
+
+  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+
+  // Direction agreement check: count how many proposals push each parameter same direction
+  // (useful for the 1m-wins case to decide if it's robust or noise)
+  const agreementHint = (() => {
+    let agreeCount = 0, paramCount = 0;
+    baseRegimes.forEach((reg, i) => {
+      if (!reg.trade) return;
+      ['k', 'upperMult', 'lowerMult'].forEach(f => {
+        paramCount++;
+        const dirs = proposals.map(p => Math.sign(p.optResult.newRegimes[i][f] - reg[f]));
+        if (dirs.every(d => d === dirs[0]) && dirs[0] !== 0) agreeCount++;
+      });
+    });
+    return paramCount ? agreeCount / paramCount : 0;
+  })();
+
+  let recommendation = '';
+  if (noneBeatBase) {
+    recommendation = `<p>Ninguna de las tres propuestas mejora la equity histórica del modelo base.
+      <span class="pill">Mantener parámetros actuales</span>.
+      Esto puede indicar que tu config ya está bien calibrada, o que las tres ventanas
+      reflejan regímenes de mercado distintos y el agente no encuentra una mejora robusta común.</p>`;
+  } else if (best.key === '6m') {
+    recommendation = `<p>La propuesta de <b>6 meses</b> es la que más equity acumula en el histórico completo
+      (<b>${fmt$(best.deltaVsBase)}</b> vs base) y se basa en la muestra más amplia
+      (${best.optResult.totalSample} trades). Es la opción <b>más robusta estadísticamente</b>.
+      <span class="pill gold">Aplicar Mejora 3 (6m)</span></p>`;
+  } else if (best.key === '3m') {
+    const sixM = ranked.find(p => p.key === '6m');
+    recommendation = `<p>La propuesta de <b>3 meses</b> rinde mejor en histórico completo
+      (<b>${fmt$(best.deltaVsBase)}</b> vs base) que la de 6 meses
+      (${fmt$(sixM.deltaVsBase)}). Sugiere que el mercado <b>reciente</b> tiene un perfil distinto
+      al del semestre. <span class="pill gold">Aplicar Mejora 2 (3m)</span> y vigilar las próximas semanas.</p>`;
+  } else {
+    // 1m wins
+    const agreementHigh = agreementHint >= 0.6;
+    recommendation = `<p>La propuesta de <b>1 mes</b> es la más rentable
+      (<b>${fmt$(best.deltaVsBase)}</b> vs base), pero está entrenada con sólo
+      ${best.optResult.totalSample} trades — <b>alto riesgo de sobreajuste</b>.</p>
+      ${agreementHigh
+        ? `<p>Las tres propuestas coinciden bastante en la dirección de los cambios
+            (~${(agreementHint*100).toFixed(0)}% de los parámetros mueven en el mismo sentido),
+            así que el patrón parece real. <span class="pill gold">Puedes aplicar Mejora 1</span>,
+            pero monitoriza de cerca.</p>`
+        : `<p>Las propuestas discrepan bastante entre sí — sólo el ${(agreementHint*100).toFixed(0)}%
+            de los parámetros mueve en la misma dirección. El "ganador" es probablemente ruido del mes.
+            <span class="pill">Recomiendo aplicar Mejora 2 o 3 en su lugar</span>.</p>`}`;
+  }
+
+  const regimeNote = currentRegime.trade
+    ? `<p>El cierre más reciente es <b>VIX ${lastRow.vix.toFixed(2)}</b>, dentro del régimen
+       <b>${currentRegimeLbl}</b>. La próxima sesión se opera con los parámetros de ese régimen
+       — fíjate especialmente en cómo lo modifica cada propuesta.</p>`
+    : `<p>El cierre más reciente es <b>VIX ${lastRow.vix.toFixed(2)}</b>, en una zona
+       <b>${currentRegimeLbl} (no-trade)</b>. La próxima sesión no se opera, así que
+       cualquier ajuste sólo afectará cuando el VIX vuelva a una zona operable.</p>`;
+
+  document.getElementById('agentLegend').innerHTML = `
+    <h3>Cómo leer este panel</h3>
+
+    <div class="legend-section">
+      <div class="legend-title"><span class="badge">①</span>Trading window y franja dorada</div>
+      <p>Cada propuesta entrena los parámetros sobre una <b>ventana del histórico</b>:
+        <b>Mejora 1</b> usa los últimos 21 días de trading,
+        <b>Mejora 2</b> los últimos 63, y <b>Mejora 3</b> los últimos 126.</p>
+      <p>Esa ventana es la <b>franja dorada</b> que ves en el gráfico de equity. Dentro de la franja,
+        el agente <i>vio</i> los datos al optimizar — por eso la línea dorada (propuesta) suele
+        superar siempre a la navy (base) ahí.</p>
+      <p><b>Lo que importa de verdad es lo que pasa fuera de la franja</b>: ahí la línea dorada
+        está corriendo sobre datos que el agente nunca vio (validación <i>out-of-sample</i>).
+        Si la línea dorada sigue por encima de la navy fuera de la franja, la mejora es robusta.
+        Si se desploma, era curva-fitting del período.</p>
+    </div>
+
+    <div class="legend-section">
+      <div class="legend-title"><span class="badge">②</span>Modelo de optimización</div>
+      <p>Búsqueda exhaustiva por régimen (<b>grid search</b>) sobre k, upper mult y lower mult.
+        Maximiza expectancia con el modelo simplificado <b>+$150</b> por win / <b>−$600</b> por loss.</p>
+    </div>
+
+    <div class="legend-section">
+      <div class="legend-title"><span class="badge">③</span>Recomendación del agente</div>
+      ${recommendation}
+      ${regimeNote}
+    </div>
+  `;
+}
+
+function applyAgentProposal(periodKey) {
+  const newRegimes = _proposalCache.get(periodKey);
+  if (!newRegimes) return;
+  newRegimes.forEach((reg, i) => {
+    const set = (f, v) => {
+      const inp = document.querySelector(`#regimeTable input[data-i="${i}"][data-f="${f}"]`);
+      if (inp) inp.value = v;
+    };
+    set('upperMult', reg.upperMult);
+    set('lowerMult', reg.lowerMult);
+    set('k',         reg.k);
+  });
+  closeAgentModal();
+  recalc();
+}
+
+function openAgentModal()  { document.getElementById('agentModal').style.display = 'flex'; runAgent(); }
+function closeAgentModal() { document.getElementById('agentModal').style.display = 'none'; }
+
+// ==========================================================================
+// JEFE DE MESA — random-search optimizer constrained on avg strike distance
+// ==========================================================================
+// Generates random configurations, filters to those whose average strike
+// distance over the last 3 months matches the user's target (within tolerance),
+// then ranks the survivors by strict win rate.
+const JEFE_WINDOW_DAYS = 63; // ~3 months
+const _jefeCache = new Map(); // rank → config (for Apply button)
+
+function rand(a, b) { return a + Math.random() * (b - a); }
+function randStep(a, b, step) {
+  const v = rand(a, b);
+  return Math.round(v / step) * step;
+}
+
+// Generate a random configuration. Keeps regime maxVix and trade flags fixed
+// (we don't reclassify days), but varies k, upperMult, lowerMult per operable regime.
+function randomJefeConfig(baseRegimes) {
+  let Cmin = randStep(0.30, 0.55, 0.05);
+  let Cmax = randStep(0.55, 0.85, 0.05);
+  if (Cmax <= Cmin + 0.05) Cmax = Math.min(0.85, Cmin + 0.10);
+  return {
+    compressionParams: {
+      lambda:      randStep(0.5, 3.0, 0.25),
+      Cmin, Cmax,
+      Vref:        Math.round(rand(14, 22)),
+      shiftFactor: randStep(0, 0.45, 0.05),
+    },
+    compressionVars: [
+      { id: 'iv_hv',   active: Math.random() > 0.30, weight: randStep(0,    2.0, 0.25) },
+      { id: 'iv_rank', active: Math.random() > 0.55, weight: randStep(0,    1.5, 0.25) },
+      { id: 'iv_pctl', active: Math.random() > 0.55, weight: randStep(0,    1.5, 0.25) },
+      { id: 'vix',     active: Math.random() > 0.30, weight: randStep(0,    1.5, 0.25) },
+      { id: 'iv_chg',  active: Math.random() > 0.55, weight: randStep(0,    1.5, 0.25) },
+      { id: 'pcv',     active: Math.random() > 0.55, weight: randStep(0,    1.5, 0.25) },
+    ],
+    regimes: baseRegimes.map(reg => reg.trade ? {
+      ...reg,
+      k:         randStep(0.6, 1.8, 0.1),
+      upperMult: randStep(0.7, 1.8, 0.1),
+      lowerMult: randStep(0.7, 1.8, 0.1),
+    } : { ...reg }),
+  };
+}
+
+// Score a config inline over the last JEFE_WINDOW_DAYS days.
+// Returns avgDistCall, avgDistPut, win rate (strict), counts, etc.
+function scoreJefeConfig(rows, baseBands, config) {
+  const start = Math.max(1, rows.length - JEFE_WINDOW_DAYS);
+  const cp = config.compressionParams;
+  let cleanWins = 0, touched = 0, losses = 0;
+  let sumDistCall = 0, sumDistPut = 0, count = 0;
+
+  for (let i = start; i < rows.length; i++) {
+    const b = baseBands[i];
+    if (!b) continue;
+    const prev = rows[i - 1];
+    const r = rows[i];
+    const reg = regimeFor(prev.vix, config.regimes);
+    if (!isDayAccepted(r, reg)) continue;
+
+    // Z = Σ wᵢ × sᵢ
+    let Z = 0;
+    for (let j = 0; j < config.compressionVars.length; j++) {
+      const v = config.compressionVars[j];
+      if (!v.active) continue;
+      const s = standardizeVar(v.id, prev, cp);
+      if (s === null || !isFinite(s)) continue;
+      Z += v.weight * s;
+    }
+    const Craw = 1 / (1 + Math.exp(-cp.lambda * Z));
+    const base = Math.max(cp.Cmin, Math.min(cp.Cmax, Craw));
+    const delta = cp.shiftFactor * (cp.Cmax - cp.Cmin);
+    let Ccall = base, Cput = base;
+    if (prev.trend === 'up')        { Ccall = base + delta; Cput = base - delta; }
+    else if (prev.trend === 'down') { Ccall = base - delta; Cput = base + delta; }
+    Ccall = Math.max(cp.Cmin, Math.min(cp.Cmax, Ccall));
+    Cput  = Math.max(cp.Cmin, Math.min(cp.Cmax, Cput));
+
+    const upper = prev.close * (1 + Ccall * reg.k * reg.upperMult * b.sigUp);
+    const lower = prev.close * (1 - Cput  * reg.k * reg.lowerMult * b.sigDn);
+    const callStrike = Math.ceil(upper / 5) * 5;
+    const putStrike  = Math.floor(lower / 5) * 5;
+
+    sumDistCall += (callStrike - prev.close) / prev.close * 100;
+    sumDistPut  += (prev.close - putStrike)  / prev.close * 100;
+    count++;
+
+    const callTouched = isFinite(r.high) && r.high >= callStrike;
+    const putTouched  = isFinite(r.low)  && r.low  <= putStrike;
+    if (r.close >= upper)        losses++;
+    else if (r.close <= lower)   losses++;
+    else if (callTouched || putTouched) touched++;
+    else                         cleanWins++;
+  }
+  const total = cleanWins + touched + losses;
+  return {
+    cleanWins, touched, losses,
+    winRateStrict: total > 0 ? cleanWins / total * 100 : 0,
+    winRateClose:  total > 0 ? (cleanWins + touched) / total * 100 : 0,
+    avgDistCall:   count > 0 ? sumDistCall / count : 0,
+    avgDistPut:    count > 0 ? sumDistPut / count  : 0,
+    sampleCount:   count,
+  };
+}
+
+async function runJefeDeMesa() {
+  if (!currentRows) {
+    alert('Carga el CSV primero.');
+    return;
+  }
+  const btn = document.getElementById('jefeRunBtn');
+  const status = document.getElementById('jefeStatus');
+  const bar = document.getElementById('jefeProgressBar');
+  const fill = document.getElementById('jefeProgressFill');
+  const resultsEl = document.getElementById('jefeResults');
+
+  const targetCall = parseFloat(document.getElementById('jefeTargetCall').value);
+  const targetPut  = parseFloat(document.getElementById('jefeTargetPut').value);
+  const tolerance  = parseFloat(document.getElementById('jefeTolerance').value);
+  const samples    = Math.max(1000, parseInt(document.getElementById('jefeSamples').value, 10) || 10000);
+
+  if (!isFinite(targetCall) || !isFinite(targetPut) || !isFinite(tolerance)) {
+    alert('Revisa los valores numéricos del formulario.');
+    return;
+  }
+
+  btn.disabled = true;
+  bar.style.display = 'block';
+  fill.style.width = '0%';
+  resultsEl.innerHTML = '';
+  status.style.color = '';
+
+  try {
+    const lookback = parseInt(document.getElementById('lookback').value, 10);
+    const baseRegimes = readRegimes();
+    const { bands: baseBands } = computeBands(currentRows, baseRegimes, lookback);
+
+    // Always treat targets as positive magnitudes (handle if user types -1.80)
+    const targetCallAbs = Math.abs(targetCall);
+    const targetPutAbs  = Math.abs(targetPut);
+
+    const matches = [];
+    let minCall = Infinity, maxCall = -Infinity;
+    let minPut  = Infinity, maxPut  = -Infinity;
+    let bestNear = null, bestNearScore = Infinity;
+    const t0 = performance.now();
+
+    for (let i = 0; i < samples; i++) {
+      const cfg = randomJefeConfig(baseRegimes);
+      const stats = scoreJefeConfig(currentRows, baseBands, cfg);
+      if (stats.sampleCount === 0) continue;
+
+      // Range tracking
+      if (stats.avgDistCall < minCall) minCall = stats.avgDistCall;
+      if (stats.avgDistCall > maxCall) maxCall = stats.avgDistCall;
+      if (stats.avgDistPut  < minPut)  minPut  = stats.avgDistPut;
+      if (stats.avgDistPut  > maxPut)  maxPut  = stats.avgDistPut;
+
+      // Best near-match (combined distance to target)
+      const nearScore = Math.abs(stats.avgDistCall - targetCallAbs) + Math.abs(stats.avgDistPut - targetPutAbs);
+      if (nearScore < bestNearScore) { bestNearScore = nearScore; bestNear = { config: cfg, stats }; }
+
+      // Strict match
+      if (Math.abs(stats.avgDistCall - targetCallAbs) <= tolerance &&
+          Math.abs(stats.avgDistPut  - targetPutAbs)  <= tolerance) {
+        matches.push({ config: cfg, stats });
+      }
+      if (i % 500 === 0) {
+        fill.style.width = (i / samples * 100).toFixed(1) + '%';
+        status.textContent = `Probando ${i.toLocaleString()}/${samples.toLocaleString()} · ${matches.length} matches…`;
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    fill.style.width = '100%';
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+
+    if (matches.length === 0) {
+      // No exact match — show diagnostic + near-best
+      status.style.color = '#b06000';
+      status.textContent = `⚠ Ningún match exacto en ${elapsed}s. Mostrando la mejor aproximación.`;
+
+      _jefeCache.clear();
+      _jefeCache.set(0, bestNear.config);
+
+      const callDelta = bestNear.stats.avgDistCall - targetCallAbs;
+      const putDelta  = bestNear.stats.avgDistPut  - targetPutAbs;
+
+      resultsEl.innerHTML = `
+        <div style="grid-column:1/-1;background:#fff7df;border:1px solid var(--gold-500);border-left:4px solid var(--gold-500);border-radius:8px;padding:14px;margin-bottom:12px">
+          <h4 style="margin:0 0 8px;color:#6b5b2e">📊 Diagnóstico de la búsqueda</h4>
+          <div style="font-size:12px;line-height:1.7;color:#5a4a18">
+            <b>Targets pedidos</b>: call <b>+${targetCallAbs.toFixed(2)}%</b> · put <b>−${targetPutAbs.toFixed(2)}%</b> · tolerancia <b>±${tolerance.toFixed(2)}%</b><br>
+            <b>Rango factible probado</b>: call <b>+${minCall.toFixed(2)}% a +${maxCall.toFixed(2)}%</b> · put <b>−${minPut.toFixed(2)}% a −${maxPut.toFixed(2)}%</b><br>
+            ${(targetCallAbs < minCall || targetCallAbs > maxCall)
+              ? `<span style="color:#b73232">⚠ Tu target call está FUERA del rango factible</span><br>` : ''}
+            ${(targetPutAbs < minPut || targetPutAbs > maxPut)
+              ? `<span style="color:#b73232">⚠ Tu target put está FUERA del rango factible</span><br>` : ''}
+            <b>Mejor aproximación</b>: avg call <b>+${bestNear.stats.avgDistCall.toFixed(3)}%</b>
+            (${callDelta >= 0 ? '+' : ''}${callDelta.toFixed(3)} del target),
+            avg put <b>−${bestNear.stats.avgDistPut.toFixed(3)}%</b>
+            (${putDelta >= 0 ? '+' : ''}${putDelta.toFixed(3)} del target)
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:#6b5b2e">
+            <b>Sugerencias</b>:
+            ${(targetCallAbs < minCall || targetCallAbs > maxCall || targetPutAbs < minPut || targetPutAbs > maxPut)
+              ? `prueba targets dentro del rango factible (ej. <b>${((minCall + maxCall)/2).toFixed(2)}%</b> / <b>${((minPut + maxPut)/2).toFixed(2)}%</b>)`
+              : `aumenta tolerancia a <b>±${Math.max(0.15, bestNearScore.toFixed(2))}%</b> o sube las muestras a 25.000-50.000`}
+          </div>
+        </div>
+        ${renderJefeResult(bestNear, 0)}
+      `;
+      setTimeout(() => bar.style.display = 'none', 1500);
+      btn.disabled = false;
+      return;
+    }
+
+    // Sort by strict win rate (highest first)
+    matches.sort((a, b) => b.stats.winRateStrict - a.stats.winRateStrict);
+    const top = matches.slice(0, 5);
+    _jefeCache.clear();
+    top.forEach((m, i) => _jefeCache.set(i, m.config));
+
+    status.textContent = `✓ Completado en ${elapsed}s · ${matches.length} configs cumplen el target · top 5 ordenadas por win rate estricto`;
+    resultsEl.innerHTML = top.map((m, i) => renderJefeResult(m, i)).join('');
+    setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 1500);
+  } catch (err) {
+    console.error('Jefe de mesa error:', err);
+    status.style.color = '#b73232';
+    status.textContent = `✗ Error: ${err.message || err}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderJefeResult(m, rank) {
+  const s = m.stats;
+  const cp = m.config.compressionParams;
+  const activeVars = m.config.compressionVars.filter(v => v.active);
+  const isBest = rank === 0;
+  const fmtPct = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(3) + '%';
+
+  return `
+    <div class="jefe-result-card ${isBest ? 'best' : ''}">
+      <div class="jefe-rank">${isBest ? '🏆 #1 — MEJOR' : `#${rank + 1}`}</div>
+      <div class="jefe-metrics">
+        <div class="jefe-metric-card">
+          <div class="jefe-metric-lbl">Win rate (estricto)</div>
+          <div class="jefe-metric-val" style="color:var(--good)">${s.winRateStrict.toFixed(1)}%</div>
+        </div>
+        <div class="jefe-metric-card">
+          <div class="jefe-metric-lbl">Win rate (close)</div>
+          <div class="jefe-metric-val">${s.winRateClose.toFixed(1)}%</div>
+        </div>
+        <div class="jefe-metric-card">
+          <div class="jefe-metric-lbl">Dist call media</div>
+          <div class="jefe-metric-val">${fmtPct(s.avgDistCall)}</div>
+        </div>
+        <div class="jefe-metric-card">
+          <div class="jefe-metric-lbl">Dist put media</div>
+          <div class="jefe-metric-val">${fmtPct(-s.avgDistPut)}</div>
+        </div>
+        <div class="jefe-metric-card">
+          <div class="jefe-metric-lbl">Limpios / Tocados / Loss</div>
+          <div class="jefe-metric-val" style="font-size:12px">
+            <span style="color:var(--good)">${s.cleanWins}</span> ·
+            <span style="color:#b06000">${s.touched}</span> ·
+            <span style="color:var(--bad)">${s.losses}</span>
+          </div>
+        </div>
+        <div class="jefe-metric-card">
+          <div class="jefe-metric-lbl">Días en muestra</div>
+          <div class="jefe-metric-val">${s.sampleCount}</div>
+        </div>
+      </div>
+      <div class="threshold-block" style="margin-bottom:8px">
+        <div class="th-label">Compresión</div>
+        <div class="th-vals">
+          λ=${cp.lambda} · C<sub>min</sub>=${cp.Cmin} · C<sub>max</sub>=${cp.Cmax} · V<sub>ref</sub>=${cp.Vref} · Δ=${cp.shiftFactor}
+        </div>
+      </div>
+      <div class="threshold-block" style="margin-bottom:8px">
+        <div class="th-label">Variables (${activeVars.length}/6)</div>
+        <div class="th-vals" style="font-size:11px">
+          ${activeVars.length === 0 ? '<i>ninguna</i>' :
+            activeVars.map(v => `<b>${v.id}</b>=${v.weight}`).join(' · ')}
+        </div>
+      </div>
+      <div class="threshold-block" style="margin-bottom:8px">
+        <div class="th-label">Regímenes operables (k / up / lo)</div>
+        <table class="fav-regime-table" style="font-size:10px">
+          ${m.config.regimes.filter(r => r.trade).map(r =>
+            `<tr><td>VIX≤${r.maxVix}</td><td>${r.k.toFixed(1)}</td><td>${r.upperMult.toFixed(1)}</td><td>${r.lowerMult.toFixed(1)}</td></tr>`
+          ).join('')}
+        </table>
+      </div>
+      <button class="apply-btn" data-jefe-rank="${rank}">✓ Aplicar esta configuración</button>
+    </div>`;
+}
+
+function applyJefeConfig(rank) {
+  const cfg = _jefeCache.get(parseInt(rank, 10));
+  if (!cfg) return;
+  // Compression params
+  Object.assign(compressionParams, cfg.compressionParams);
+  document.getElementById('cParamLambda').value = cfg.compressionParams.lambda;
+  document.getElementById('cParamCmin').value   = cfg.compressionParams.Cmin;
+  document.getElementById('cParamCmax').value   = cfg.compressionParams.Cmax;
+  document.getElementById('cParamVref').value   = cfg.compressionParams.Vref;
+  document.getElementById('cParamShift').value  = cfg.compressionParams.shiftFactor;
+  // Compression vars
+  cfg.compressionVars.forEach((v, i) => {
+    if (compressionVars[i]) {
+      compressionVars[i].active = v.active;
+      compressionVars[i].weight = v.weight;
+    }
+  });
+  renderCompressionPanel();
+  // Regime k/up/lo
+  cfg.regimes.forEach((reg, i) => {
+    const set = (f, val) => {
+      const inp = document.querySelector(`#regimeTable input[data-i="${i}"][data-f="${f}"]`);
+      if (!inp) return;
+      if (inp.type === 'checkbox') inp.checked = !!val; else inp.value = val;
+    };
+    set('k', reg.k);
+    set('upperMult', reg.upperMult);
+    set('lowerMult', reg.lowerMult);
+  });
+  closeJefeModal();
+  recalc();
+}
+
+function openJefeModal()  { document.getElementById('jefeModal').style.display = 'flex'; }
+function closeJefeModal() { document.getElementById('jefeModal').style.display = 'none'; }
+
+// ==========================================================================
+// OPTION CHAINS — parse Barchart CSV, persist, and view stored chains
+// ==========================================================================
+const CHAINS_KEY = 'spx-vix-chains-v1';
+
+function loadChains() {
+  try { return JSON.parse(localStorage.getItem(CHAINS_KEY) || '{}'); }
+  catch (_) { return {}; }
+}
+function saveChains(chains) { localStorage.setItem(CHAINS_KEY, JSON.stringify(chains)); }
+
+// Flexible CSV parser — autodetects delimiter, headers, and column aliases.
+// Works with Barchart's wide format (Strike + Call cols + Put cols).
+function parseChainCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+  if (lines.length < 2) throw new Error('CSV vacío o sin filas de datos.');
+
+  // Detect delimiter
+  const delims = [',', ';', '\t'];
+  const delim = delims.reduce((b, d) => lines[0].split(d).length > lines[0].split(b).length ? d : b);
+
+  // CSV-split that respects quoted strings
+  const splitCSV = (line) => {
+    const out = [];
+    let cur = '', inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQuote = !inQuote; continue; }
+      if (ch === delim && !inQuote) { out.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    out.push(cur);
+    return out;
+  };
+
+  const headers = splitCSV(lines[0]).map(h => h.trim());
+  const norm = s => s.toLowerCase().replace(/[\s_\-\/]/g, '');
+  const findCol = (...aliases) => {
+    for (const a of aliases) {
+      const i = headers.findIndex(h => norm(h) === norm(a));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+
+  const idx = {
+    strike:   findCol('Strike', 'Strike Price', 'K'),
+    callBid:  findCol('Call Bid', 'CallBid', 'Bid Call', 'C Bid'),
+    callAsk:  findCol('Call Ask', 'CallAsk', 'Ask Call', 'C Ask'),
+    callMid:  findCol('Call Mid', 'CallMid'),
+    callLast: findCol('Call Last', 'CallLast', 'Last Call', 'Call'),
+    callIV:   findCol('Call IV', 'CallIV', 'IV Call', 'Call Implied Volatility', 'C IV'),
+    callVol:  findCol('Call Volume', 'CallVolume', 'Volume Call', 'C Vol'),
+    callOI:   findCol('Call Open Interest', 'CallOI', 'Call OI', 'C OI'),
+    callDelta:findCol('Call Delta', 'CallDelta', 'C Delta'),
+    putBid:   findCol('Put Bid', 'PutBid', 'Bid Put', 'P Bid'),
+    putAsk:   findCol('Put Ask', 'PutAsk', 'Ask Put', 'P Ask'),
+    putMid:   findCol('Put Mid', 'PutMid'),
+    putLast:  findCol('Put Last', 'PutLast', 'Last Put', 'Put'),
+    putIV:    findCol('Put IV', 'PutIV', 'IV Put', 'Put Implied Volatility', 'P IV'),
+    putVol:   findCol('Put Volume', 'PutVolume', 'Volume Put', 'P Vol'),
+    putOI:    findCol('Put Open Interest', 'PutOI', 'Put OI', 'P OI'),
+    putDelta: findCol('Put Delta', 'PutDelta', 'P Delta'),
+  };
+
+  if (idx.strike < 0) {
+    throw new Error(`No se encontró la columna "Strike". Headers: ${headers.join(' | ')}`);
+  }
+
+  const cleanNum = (s) => {
+    if (s === undefined) return NaN;
+    s = String(s).trim().replace(/[%$"\s]/g, '');
+    if (s === '' || s === '-' || s === 'N/A') return NaN;
+    if (s.includes(',') && s.includes('.')) s = s.replace(/,/g, '');
+    else if (s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
+    return parseFloat(s);
+  };
+  const get = (cells, i) => i < 0 ? NaN : cleanNum(cells[i]);
+
+  const strikes = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = splitCSV(lines[i]);
+    const strike = get(cells, idx.strike);
+    if (!isFinite(strike)) continue;
+    strikes.push({
+      strike,
+      callBid: get(cells, idx.callBid),  callAsk: get(cells, idx.callAsk),
+      callMid: get(cells, idx.callMid),  callLast: get(cells, idx.callLast),
+      callIV:  get(cells, idx.callIV),   callVol: get(cells, idx.callVol),
+      callOI:  get(cells, idx.callOI),   callDelta: get(cells, idx.callDelta),
+      putBid:  get(cells, idx.putBid),   putAsk:  get(cells, idx.putAsk),
+      putMid:  get(cells, idx.putMid),   putLast: get(cells, idx.putLast),
+      putIV:   get(cells, idx.putIV),    putVol:  get(cells, idx.putVol),
+      putOI:   get(cells, idx.putOI),    putDelta: get(cells, idx.putDelta),
+    });
+  }
+  if (strikes.length === 0) throw new Error('No se encontraron filas válidas con strike numérico.');
+  strikes.sort((a, b) => a.strike - b.strike);
+
+  // Detected columns (for showing the user what we found)
+  const detected = {};
+  for (const k of Object.keys(idx)) if (idx[k] >= 0) detected[k] = headers[idx[k]];
+
+  return { strikes, detectedHeaders: headers, detectedFields: detected };
+}
+
+// Find the strike closest to a target (for ATM detection).
+function strikeClosestTo(strikes, target) {
+  let best = null, bestDiff = Infinity;
+  for (const s of strikes) {
+    const d = Math.abs(s.strike - target);
+    if (d < bestDiff) { best = s; bestDiff = d; }
+  }
+  return best;
+}
+
+let _pendingChain = null;
+
+function handleChainUpload(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = parseChainCSV(reader.result);
+      _pendingChain = parsed;
+      renderChainPreview(parsed, file.name);
+    } catch (err) {
+      alert('Error al parsear el CSV:\n\n' + err.message);
+      console.error('[Chain CSV]', err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function renderChainPreview(parsed, filename) {
+  const preview = document.getElementById('chainPreview');
+  preview.style.display = '';
+
+  // Try to extract date from filename (formats: 2026-05-06 or 06-05-2026 or 06_05_2026 etc.)
+  let detectedDate = '';
+  const dateMatch = filename && filename.match(/(\d{4})[-_](\d{2})[-_](\d{2})|(\d{2})[-_](\d{2})[-_](\d{4})/);
+  if (dateMatch) {
+    if (dateMatch[1]) detectedDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+    else              detectedDate = `${dateMatch[6]}-${dateMatch[5]}-${dateMatch[4]}`;
+  }
+  if (!detectedDate) detectedDate = new Date().toISOString().slice(0, 10);
+
+  // Try to detect spot — use median strike as a rough fallback
+  const middleIdx = Math.floor(parsed.strikes.length / 2);
+  const detectedSpot = parsed.strikes[middleIdx]?.strike || '';
+
+  // Detected fields summary
+  const fieldList = Object.entries(parsed.detectedFields)
+    .map(([k, h]) => `<span style="background:var(--blue-50);border:1px solid var(--blue-200);padding:1px 6px;border-radius:3px;margin:0 3px 3px 0;display:inline-block;font-size:10px"><b>${k}</b>: ${h}</span>`)
+    .join('');
+
+  const sample = parsed.strikes.slice(0, 5).concat(parsed.strikes.slice(-5));
+  const sampleRows = sample.map(s => `
+    <tr>
+      <td>${s.strike}</td>
+      <td class="call-cell">${isFinite(s.callBid) ? s.callBid.toFixed(2) : '—'}</td>
+      <td class="call-cell">${isFinite(s.callAsk) ? s.callAsk.toFixed(2) : '—'}</td>
+      <td class="put-cell">${isFinite(s.putBid) ? s.putBid.toFixed(2) : '—'}</td>
+      <td class="put-cell">${isFinite(s.putAsk) ? s.putAsk.toFixed(2) : '—'}</td>
+    </tr>`).join('');
+
+  preview.innerHTML = `
+    <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:6px;color:var(--navy-700)">
+        ✓ ${parsed.strikes.length} strikes detectados
+      </div>
+      <div style="font-size:11px">${fieldList}</div>
+    </div>
+
+    <div class="chain-preview-grid">
+      <div>
+        <label>Fecha de la cadena</label>
+        <input type="date" id="chainPreviewDate" value="${detectedDate}">
+      </div>
+      <div>
+        <label>DTE</label>
+        <select id="chainPreviewDTE">
+          <option value="0DTE">0DTE (mismo día)</option>
+          <option value="1DTE">1DTE (siguiente sesión)</option>
+          <option value="2DTE">2DTE</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <div>
+        <label>Spot SPX</label>
+        <input type="number" id="chainPreviewSpot" step="0.01" value="${detectedSpot}">
+      </div>
+    </div>
+
+    <details style="margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:12px;color:var(--ink-soft)">Ver muestra (primeros y últimos 5 strikes)</summary>
+      <table class="chain-table" style="margin-top:8px">
+        <thead><tr>
+          <th>Strike</th>
+          <th>Call Bid</th><th>Call Ask</th>
+          <th>Put Bid</th><th>Put Ask</th>
+        </tr></thead>
+        <tbody>${sampleRows}</tbody>
+      </table>
+    </details>
+
+    <div class="chain-preview-actions">
+      <button class="chain-save-btn"  id="chainSaveBtn">💾 Guardar cadena</button>
+      <button class="chain-cancel-btn" id="chainCancelBtn">Cancelar</button>
+    </div>
+  `;
+
+  document.getElementById('chainSaveBtn').addEventListener('click', confirmSaveChain);
+  document.getElementById('chainCancelBtn').addEventListener('click', () => {
+    preview.style.display = 'none';
+    _pendingChain = null;
+    document.getElementById('chainCSV').value = '';
+  });
+}
+
+function confirmSaveChain() {
+  if (!_pendingChain) return;
+  const date = document.getElementById('chainPreviewDate').value;
+  const dte  = document.getElementById('chainPreviewDTE').value;
+  const spot = parseFloat(document.getElementById('chainPreviewSpot').value);
+  if (!date) { alert('Falta la fecha.'); return; }
+
+  const chains = loadChains();
+  if (chains[date] && !confirm(`Ya existe una cadena guardada para ${date}. ¿Sobrescribir?`)) return;
+
+  chains[date] = {
+    date, dte, spot: isFinite(spot) ? spot : null,
+    capturedAt: new Date().toISOString(),
+    strikes: _pendingChain.strikes,
+    detectedFields: _pendingChain.detectedFields,
+  };
+  saveChains(chains);
+  _pendingChain = null;
+  document.getElementById('chainPreview').style.display = 'none';
+  document.getElementById('chainCSV').value = '';
+  renderChainsList();
+}
+
+function renderChainsList() {
+  const chains = loadChains();
+  const dates = Object.keys(chains).sort().reverse();
+  const container = document.getElementById('chainSavedList');
+  if (dates.length === 0) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--ink-soft);font-style:italic">No hay cadenas guardadas todavía.</div>`;
+    return;
+  }
+  const rows = dates.map(d => {
+    const c = chains[d];
+    return `<tr>
+      <td><b>${d}</b></td>
+      <td>${c.dte || '—'}</td>
+      <td>${c.spot ? c.spot.toFixed(2) : '—'}</td>
+      <td>${c.strikes.length}</td>
+      <td>
+        <button class="view-btn" data-chain-date="${d}">👁 Ver</button>
+        <button class="del-btn" data-chain-date="${d}">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+  container.innerHTML = `
+    <div style="font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">
+      Cadenas guardadas (${dates.length})
+    </div>
+    <table class="chain-list-table">
+      <thead><tr>
+        <th>Fecha</th><th>DTE</th><th>Spot</th><th>Strikes</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function viewChain(date) {
+  const c = loadChains()[date];
+  if (!c) return;
+  // Build a full table view in the preview area
+  const preview = document.getElementById('chainPreview');
+  preview.style.display = '';
+  const spot = c.spot;
+  const rows = c.strikes.map(s => {
+    const isATM = spot && Math.abs(s.strike - spot) < 5;
+    const fmt = v => isFinite(v) ? v.toFixed(2) : '—';
+    const fmtIV = v => isFinite(v) ? (v * 100 < 100 ? (v * 100).toFixed(1) + '%' : v.toFixed(1) + '%') : '—';
+    return `<tr class="${isATM ? 'atm' : ''}">
+      <td>${s.strike}</td>
+      <td class="call-cell">${fmt(s.callBid)}</td>
+      <td class="call-cell">${fmt(s.callAsk)}</td>
+      <td class="call-cell">${fmtIV(s.callIV)}</td>
+      <td class="put-cell">${fmt(s.putBid)}</td>
+      <td class="put-cell">${fmt(s.putAsk)}</td>
+      <td class="put-cell">${fmtIV(s.putIV)}</td>
+    </tr>`;
+  }).join('');
+  preview.innerHTML = `
+    <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px">
+      <b>Cadena ${c.date}</b> · DTE: ${c.dte || '—'} · Spot: ${c.spot ? c.spot.toFixed(2) : '—'} · ${c.strikes.length} strikes
+    </div>
+    <table class="chain-table">
+      <thead><tr>
+        <th>Strike</th>
+        <th>Call Bid</th><th>Call Ask</th><th>Call IV</th>
+        <th>Put Bid</th><th>Put Ask</th><th>Put IV</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="chain-preview-actions">
+      <button class="chain-cancel-btn" id="chainCancelBtn">Cerrar vista</button>
+    </div>`;
+  document.getElementById('chainCancelBtn').addEventListener('click', () => {
+    preview.style.display = 'none';
+  });
+}
+
+function deleteChain(date) {
+  if (!confirm(`¿Eliminar la cadena del ${date}?`)) return;
+  const chains = loadChains();
+  delete chains[date];
+  saveChains(chains);
+  renderChainsList();
+}
+
+// ==========================================================================
+// FAVORITES — save/load/apply full configurations with summary stats
+// ==========================================================================
+const FAVORITES_KEY = 'spx-vix-favorites-v1';
+
+function loadFavorites() {
+  try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]'); }
+  catch (_) { return []; }
+}
+function saveFavorites(favs) { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); }
+
+// Capture EVERYTHING editable from the page into one config object.
+function captureCurrentConfig() {
+  return {
+    compressionParams: { ...compressionParams },
+    compressionVars: compressionVars.map(v => ({ id: v.id, active: v.active, weight: v.weight })),
+    regimes: readRegimes(),
+    initialCapital: parseFloat(document.getElementById('initialCapital').value) || 1000,
+    lookback:       parseInt(document.getElementById('lookback').value, 10) || 90,
+    displayWindow:  parseInt(document.getElementById('window').value, 10)   || 30,
+  };
+}
+
+// Compute summary stats at save time for the current bands (full history).
+function computeFavoriteStats(rows, bands) {
+  let wins = 0, losses = 0, noTrade = 0, totalPnL = 0;
+  // Last 3 months distance averages (~63 trading days)
+  const cutoff = Math.max(1, rows.length - 63);
+  let distSumCall = 0, distSumPut = 0, distCount = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const b = bands[i];
+    const r = rows[i];
+    const prev = rows[i - 1];
+    if (!b) continue;
+    if (!b.trade) { noTrade++; continue; }
+
+    const callStrike = Math.ceil(b.upper / 5) * 5;
+    const putStrike  = Math.floor(b.lower / 5) * 5;
+
+    if (i >= cutoff) {
+      distSumCall += (callStrike - prev.close) / prev.close * 100;
+      distSumPut  += (prev.close - putStrike)  / prev.close * 100;
+      distCount++;
+    }
+
+    if (r.close >= b.upper)      { losses++; totalPnL += LOSS_PNL; }
+    else if (r.close <= b.lower) { losses++; totalPnL += LOSS_PNL; }
+    else                         { wins++;   totalPnL += WIN_PNL;  }
+  }
+
+  const total = wins + losses;
+  return {
+    winRate: total > 0 ? wins / total * 100 : 0,
+    wins, losses, noTrade,
+    avgDistCallPct: distCount > 0 ? distSumCall / distCount : 0,
+    avgDistPutPct:  distCount > 0 ? distSumPut  / distCount : 0,
+    totalPnL,
+  };
+}
+
+function saveCurrentAsFavorite(name) {
+  if (!currentRows) {
+    alert('No hay datos cargados — carga el CSV primero.');
+    return;
+  }
+  const lookback = parseInt(document.getElementById('lookback').value, 10);
+  const regimes = readRegimes();
+  const { bands } = computeBands(currentRows, regimes, lookback);
+  const stats = computeFavoriteStats(currentRows, bands);
+
+  const fav = {
+    id: 'fav_' + Date.now(),
+    name: (name || '').trim() || `Config ${new Date().toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`,
+    date: new Date().toISOString().slice(0, 10),
+    config: captureCurrentConfig(),
+    stats,
+  };
+  const favs = loadFavorites();
+  favs.unshift(fav); // newest first
+  saveFavorites(favs);
+  document.getElementById('newFavName').value = '';
+  renderFavoritesList();
+  updateFavoritesCardCount();
+}
+
+function deleteFavorite(id) {
+  if (!confirm('¿Eliminar esta configuración guardada?')) return;
+  saveFavorites(loadFavorites().filter(f => f.id !== id));
+  renderFavoritesList();
+  updateFavoritesCardCount();
+}
+
+function renameFavorite(id, newName) {
+  const favs = loadFavorites();
+  const fav = favs.find(f => f.id === id);
+  if (fav) {
+    fav.name = newName.trim() || fav.name;
+    saveFavorites(favs);
+  }
+}
+
+function applyFavorite(id) {
+  const fav = loadFavorites().find(f => f.id === id);
+  if (!fav) return;
+  const c = fav.config;
+
+  // Compression params (state + DOM inputs)
+  Object.assign(compressionParams, c.compressionParams);
+  document.getElementById('cParamLambda').value = c.compressionParams.lambda;
+  document.getElementById('cParamCmin').value   = c.compressionParams.Cmin;
+  document.getElementById('cParamCmax').value   = c.compressionParams.Cmax;
+  document.getElementById('cParamVref').value   = c.compressionParams.Vref;
+  document.getElementById('cParamShift').value  = c.compressionParams.shiftFactor || 0.25;
+
+  // Compression variables (active flags + weights)
+  c.compressionVars.forEach((v, i) => {
+    if (compressionVars[i]) {
+      compressionVars[i].active = v.active;
+      compressionVars[i].weight = v.weight;
+    }
+  });
+
+  // Regime parameters → re-render the table with saved values, then write to DOM inputs
+  c.regimes.forEach((reg, i) => {
+    const set = (f, val) => {
+      const inp = document.querySelector(`#regimeTable input[data-i="${i}"][data-f="${f}"]`);
+      if (!inp) return;
+      if (inp.type === 'checkbox') inp.checked = !!val;
+      else inp.value = val;
+    };
+    set('maxVix',    reg.maxVix);
+    set('upperMult', reg.upperMult);
+    set('lowerMult', reg.lowerMult);
+    set('k',         reg.k);
+    set('trade',     reg.trade);
+  });
+
+  // Other params
+  document.getElementById('initialCapital').value = c.initialCapital;
+  document.getElementById('lookback').value       = c.lookback;
+  document.getElementById('window').value         = c.displayWindow;
+
+  closeFavoritesModal();
+  renderCompressionPanel();
+  recalc();
+}
+
+function renderFavoritesList() {
+  const container = document.getElementById('favoritesList');
+  const favs = loadFavorites();
+  if (favs.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center;padding:40px;color:var(--ink-soft)">
+        <div style="font-size:36px">⭐</div>
+        <div style="margin-top:8px;font-size:14px">Aún no has guardado ninguna configuración.</div>
+        <div style="font-size:11px;margin-top:6px">Usa el formulario de arriba para guardar la configuración actual.</div>
+      </div>`;
+    return;
+  }
+  container.innerHTML = favs.map(renderFavoriteCard).join('');
+}
+
+function renderFavoriteCard(fav) {
+  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const wrColor = fav.stats.winRate >= 80 ? 'var(--good)' : 'var(--bad)';
+  const pnlColor = fav.stats.totalPnL >= 0 ? 'var(--good)' : 'var(--bad)';
+  return `
+    <div class="favorite-card" data-id="${fav.id}">
+      <div class="fav-header">
+        <span class="fav-star">⭐</span>
+        <input type="text" class="fav-name" value="${fav.name.replace(/"/g, '&quot;')}" data-id="${fav.id}">
+        <span class="fav-date">${fav.date}</span>
+        <button class="fav-apply"  data-id="${fav.id}">✓ Aplicar</button>
+        <button class="fav-delete" data-id="${fav.id}">🗑</button>
+      </div>
+      <div class="fav-stats">
+        <div class="fav-stat">
+          <div class="fav-stat-lbl">Win rate</div>
+          <div class="fav-stat-val" style="color:${wrColor}">${fav.stats.winRate.toFixed(1)}%</div>
+        </div>
+        <div class="fav-stat">
+          <div class="fav-stat-lbl">Operaciones</div>
+          <div class="fav-stat-val" style="font-size:12px">
+            <span style="color:var(--good)">${fav.stats.wins} W</span> ·
+            <span style="color:var(--bad)">${fav.stats.losses} L</span> ·
+            <span style="color:var(--ink-soft)">${fav.stats.noTrade} NT</span>
+          </div>
+        </div>
+        <div class="fav-stat">
+          <div class="fav-stat-lbl">Dist media (3m)</div>
+          <div class="fav-stat-val" style="font-size:12px">
+            <span style="color:var(--good)">+${fav.stats.avgDistCallPct.toFixed(2)}%</span> /
+            <span style="color:var(--bad)">−${fav.stats.avgDistPutPct.toFixed(2)}%</span>
+          </div>
+        </div>
+        <div class="fav-stat">
+          <div class="fav-stat-lbl">P&amp;L total</div>
+          <div class="fav-stat-val" style="color:${pnlColor}">${fmt$(fav.stats.totalPnL)}</div>
+        </div>
+      </div>
+      <button class="fav-expand" data-id="${fav.id}">▼ Ver todas las variables</button>
+      <div class="fav-details" id="fav-details-${fav.id}" style="display:none">${renderFavoriteDetails(fav)}</div>
+    </div>`;
+}
+
+function renderFavoriteDetails(fav) {
+  const cp = fav.config.compressionParams;
+  const vars = fav.config.compressionVars;
+  const regs = fav.config.regimes;
+  const activeVars = vars.filter(v => v.active);
+  return `
+    <div class="fav-detail-block">
+      <div class="fav-detail-title">Compression params</div>
+      λ = ${cp.lambda} · C<sub>min</sub> = ${cp.Cmin} · C<sub>max</sub> = ${cp.Cmax} · V<sub>ref</sub> = ${cp.Vref} · Δ<sub>trend</sub> = ${cp.shiftFactor || 0.25}
+    </div>
+    <div class="fav-detail-block">
+      <div class="fav-detail-title">Variables activas (${activeVars.length}/${vars.length})</div>
+      ${activeVars.length === 0
+        ? '<i style="color:var(--ink-soft)">Ninguna</i>'
+        : activeVars.map(v => `<b>${v.id}</b>=${v.weight}`).join(' · ')}
+      ${vars.filter(v => !v.active).length > 0
+        ? `<div style="margin-top:3px;font-size:10px;color:var(--ink-soft)">Inactivas: ${vars.filter(v => !v.active).map(v => v.id).join(', ')}</div>`
+        : ''}
+    </div>
+    <div class="fav-detail-block">
+      <div class="fav-detail-title">Regímenes</div>
+      <table class="fav-regime-table">
+        <thead><tr><th>VIX≤</th><th>k</th><th>Up</th><th>Low</th><th>Trade</th></tr></thead>
+        <tbody>${regs.map(r => `<tr><td>${r.maxVix}</td><td>${r.k}</td><td>${r.upperMult}</td><td>${r.lowerMult}</td><td>${r.trade ? '✓' : '✗'}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div class="fav-detail-block">
+      <div class="fav-detail-title">Otros</div>
+      Capital inicial = $${fav.config.initialCapital} · Lookback σ = ${fav.config.lookback}d · Display window = ${fav.config.displayWindow}d
+    </div>`;
+}
+
+function updateFavoritesCardCount() {
+  const n = loadFavorites().length;
+  const el = document.getElementById('favoritesCount');
+  if (el) el.textContent = n === 0 ? 'Sin guardar' : `${n} guardada${n === 1 ? '' : 's'}`;
+}
+
+function openFavoritesModal()  {
+  document.getElementById('favoritesModal').style.display = 'flex';
+  renderFavoritesList();
+}
+function closeFavoritesModal() {
+  document.getElementById('favoritesModal').style.display = 'none';
+}
+
+// ==========================================================================
+// VOL ANALYST AGENT
+// ==========================================================================
+const EVENTS_UPCOMING_KEY  = 'spx-vix-events-upcoming-v1';
+const EVENTS_HISTORICAL_KEY = 'spx-vix-events-historical-v1';
+const EVENT_DISMISSED_KEY  = 'spx-vix-event-dismissed-v1';
+
+function loadEvents(key)  {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+  catch (_) { return []; }
+}
+function saveEvents(key, events) { localStorage.setItem(key, JSON.stringify(events)); }
+
+// CSV parser for events: date,event,category,importance
+function parseEventsCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const idx = {
+    date: headers.indexOf('date'),
+    event: headers.indexOf('event'),
+    category: headers.indexOf('category'),
+    importance: headers.indexOf('importance'),
+  };
+  const events = [];
+  for (let i = 1; i < lines.length; i++) {
+    const c = lines[i].split(',').map(s => s.trim());
+    if (!c[idx.date]) continue;
+    events.push({
+      date: c[idx.date],
+      event: c[idx.event] || '',
+      category: c[idx.category] || '',
+      importance: (c[idx.importance] || 'medium').toLowerCase(),
+    });
+  }
+  events.sort((a, b) => a.date.localeCompare(b.date));
+  return events;
+}
+
+// ---- Tab 1: VIX chart for analyst (full history) ------------------------
+function drawVixAnalystChart() {
+  if (!currentRows) return;
+  const lookback = parseInt(document.getElementById('lookback').value, 10);
+  const regimes = readRegimes();
+  const { bands } = computeBands(currentRows, regimes, lookback);
+
+  const dates = currentRows.map(r => r.date);
+  const vix   = currentRows.map(r => r.vix);
+
+  const lossX = [], lossY = [];
+  for (let i = 1; i < currentRows.length; i++) {
+    const b = bands[i];
+    if (!b || !b.trade) continue;
+    const r = currentRows[i];
+    if (r.close >= b.upper || r.close <= b.lower) {
+      lossX.push(r.date); lossY.push(r.vix);
+    }
+  }
+
+  const vMax = Math.max(...vix, ...regimes.map(r => r.maxVix < 998 ? r.maxVix : 0)) * 1.05;
+  const shapes = [];
+  regimes.forEach(reg => {
+    if (reg.maxVix >= 998) return;
+    shapes.push({
+      type: 'line', xref: 'paper', yref: 'y',
+      x0: 0, x1: 1, y0: reg.maxVix, y1: reg.maxVix,
+      line: { color: '#c9a227', width: 1, dash: 'dot' },
+    });
+  });
+  for (let i = 0; i < regimes.length; i++) {
+    if (regimes[i].trade) continue;
+    const yLo = i > 0 ? regimes[i - 1].maxVix : 0;
+    const yHi = regimes[i].maxVix < 998 ? regimes[i].maxVix : vMax;
+    shapes.push({
+      type: 'rect', xref: 'paper', yref: 'y',
+      x0: 0, x1: 1, y0: yLo, y1: yHi,
+      fillcolor: 'rgba(201, 162, 39, 0.13)',
+      line: { width: 0 }, layer: 'below',
+    });
+  }
+
+  const annotations = regimes.filter(r => r.maxVix < 998).map(reg => ({
+    xref: 'paper', yref: 'y', x: 1, y: reg.maxVix,
+    xanchor: 'right', yanchor: 'bottom',
+    text: ` ≤ ${reg.maxVix} `,
+    font: { size: 10, color: '#8a6d10' },
+    bgcolor: 'rgba(255,255,255,0.7)', showarrow: false,
+  }));
+
+  const traces = [
+    { x: dates, y: vix, mode: 'lines', name: 'VIX',
+      line: { color: '#143a64', width: 1.8 } },
+    { x: lossX, y: lossY, mode: 'markers', name: 'Pérdidas',
+      marker: { color: '#b73232', size: 10, symbol: 'x', line: { width: 1, color: '#fff' } } },
+  ];
+  safePlotly('vixAnalystChart', traces, {
+    margin: { t: 20, r: 20, b: 50, l: 60 },
+    paper_bgcolor: '#ffffff', plot_bgcolor: '#f3f8fc',
+    font: { family: 'Segoe UI, sans-serif', color: '#0c1f33' },
+    xaxis: { title: 'Date', type: 'date', gridcolor: '#dce7f1' },
+    yaxis: { title: 'VIX', gridcolor: '#dce7f1', range: [Math.max(0, Math.min(...vix) * 0.9), vMax] },
+    legend: { orientation: 'h', y: -0.18 },
+    hovermode: 'x unified',
+    hoverlabel: { bgcolor: '#0a2540', font: { color: '#fff' } },
+    shapes, annotations,
+  }, { responsive: true });
+}
+
+// ---- Tab 2: Upcoming events list + main-page banner --------------------
+function renderUpcomingEvents() {
+  const events = loadEvents(EVENTS_UPCOMING_KEY);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const future = events.filter(e => new Date(e.date) >= today);
+
+  const cls = imp => imp === 'high' ? 'imp-high' : imp === 'medium' ? 'imp-medium' : 'imp-low';
+  const isImminent = (date) => {
+    const d = new Date(date); d.setHours(0,0,0,0);
+    const diff = (d - today) / 86400000;
+    return diff >= 0 && diff <= 1;
+  };
+
+  const rowsHtml = future.length === 0
+    ? '<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:20px">No hay eventos próximos cargados.</td></tr>'
+    : future.slice(0, 50).map(e => `
+        <tr class="${isImminent(e.date) ? 'imminent' : ''}">
+          <td><b>${e.date}</b></td>
+          <td>${e.event}</td>
+          <td>${e.category}</td>
+          <td class="${cls(e.importance)}">${e.importance.toUpperCase()}</td>
+        </tr>
+      `).join('');
+
+  document.getElementById('upcomingEventsList').innerHTML = `
+    <table class="events-table">
+      <thead><tr><th>Date</th><th>Event</th><th>Category</th><th>Importance</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:8px">
+      ${future.length} eventos cargados. Las filas resaltadas son hoy o mañana.
+    </div>
+  `;
+
+  // Update tab badge
+  const imminent = future.filter(e => isImminent(e.date));
+  const badge = document.getElementById('upcomingBadge');
+  if (imminent.length > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = imminent.length;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function checkEventBanner() {
+  const events = loadEvents(EVENTS_UPCOMING_KEY);
+  if (!events.length) { document.getElementById('eventBanner').style.display = 'none'; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const dismissed = new Set(JSON.parse(localStorage.getItem(EVENT_DISMISSED_KEY) || '[]'));
+
+  const todayISO = today.toISOString().slice(0, 10);
+  const tomorrowISO = tomorrow.toISOString().slice(0, 10);
+  const imminent = events.filter(e =>
+    (e.date === todayISO || e.date === tomorrowISO) &&
+    e.importance === 'high' &&
+    !dismissed.has(`${e.date}|${e.event}`)
+  );
+
+  const banner = document.getElementById('eventBanner');
+  if (imminent.length === 0) { banner.style.display = 'none'; return; }
+
+  const list = imminent.map(e => `<b>${e.date === todayISO ? 'HOY' : 'MAÑANA'}</b>: ${e.event} (${e.category})`).join(' &nbsp;·&nbsp; ');
+  banner.style.display = 'flex';
+  banner.className = 'event-banner';
+  banner.innerHTML = `
+    <div class="icon">⚠</div>
+    <div class="body">
+      <div class="title">Evento macro de alta importancia</div>
+      <div class="desc">${list} — Esperar volatilidad superior a la media.</div>
+    </div>
+    <button class="dismiss" type="button">Descartar</button>
+  `;
+  banner.querySelector('.dismiss').onclick = () => {
+    imminent.forEach(e => dismissed.add(`${e.date}|${e.event}`));
+    localStorage.setItem(EVENT_DISMISSED_KEY, JSON.stringify([...dismissed]));
+    banner.style.display = 'none';
+  };
+}
+
+// ---- Tab 3: Historical correlation (loss days vs macro events) ---------
+function renderHistoricalCorrelation() {
+  const events = loadEvents(EVENTS_HISTORICAL_KEY);
+  const container = document.getElementById('historicalCorrelation');
+
+  if (!events.length) {
+    container.innerHTML = `<div style="color:var(--ink-soft);text-align:center;padding:20px">
+      Carga el CSV histórico de eventos macro para analizar la correlación con tus días de pérdida.</div>`;
+    return;
+  }
+  if (!currentRows) return;
+
+  const lookback = parseInt(document.getElementById('lookback').value, 10);
+  const initialCapital = parseFloat(document.getElementById('initialCapital').value) || 1000;
+  const regimes = readRegimes();
+  const { bands } = computeBands(currentRows, regimes, lookback);
+  const pnl = computePnL(currentRows, bands, initialCapital);
+  const losses = pnl.trades.filter(t => t.status === 'loss-up' || t.status === 'loss-dn');
+
+  const eventByDate = new Map();
+  events.forEach(e => eventByDate.set(e.date, e));
+
+  const shiftDays = (iso, n) => { const d = new Date(iso); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+
+  // For each loss, look ±1 day
+  let withEvent = 0;
+  const eventCounter = new Map();
+  losses.forEach(loss => {
+    const candidates = [shiftDays(loss.date, -1), loss.date, shiftDays(loss.date, 1)];
+    let nearest = null;
+    for (const dt of candidates) {
+      if (eventByDate.has(dt)) { nearest = eventByDate.get(dt); break; }
+    }
+    if (nearest) {
+      withEvent++;
+      const key = `${nearest.event} (${nearest.category})`;
+      eventCounter.set(key, (eventCounter.get(key) || 0) + 1);
+    }
+  });
+
+  const pct = losses.length ? (withEvent / losses.length * 100).toFixed(1) : '—';
+  const topEvents = [...eventCounter.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  const eventsRows = topEvents.length === 0
+    ? '<tr><td colspan="2" style="color:var(--ink-soft);text-align:center">Ningún evento del histórico coincide con días de pérdida.</td></tr>'
+    : topEvents.map(([name, n]) => `<tr><td>${name}</td><td><b>${n}</b></td></tr>`).join('');
+
+  container.innerHTML = `
+    <div class="corr-summary">
+      <div class="corr-card">
+        <div class="lbl">Pérdidas totales</div>
+        <div class="val bad">${losses.length}</div>
+      </div>
+      <div class="corr-card">
+        <div class="lbl">Coincidieron con evento (±1 día)</div>
+        <div class="val">${withEvent}</div>
+      </div>
+      <div class="corr-card">
+        <div class="lbl">% pérdidas con evento</div>
+        <div class="val">${pct}%</div>
+      </div>
+      <div class="corr-card">
+        <div class="lbl">Eventos cargados</div>
+        <div class="val">${events.length}</div>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <div style="font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">
+        Eventos que más coinciden con pérdidas
+      </div>
+      <table class="events-table">
+        <thead><tr><th>Evento</th><th>Veces que coincidió</th></tr></thead>
+        <tbody>${eventsRows}</tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:8px">
+      Ventana de correlación: el día del evento o ±1 día respecto al día de la pérdida.
+    </div>
+  `;
+}
+
+// ---- Tab 4: MIX iterative optimizer (Quant ↔ Vol Analyst) -------------
+function rebandWithNewThresholds(rows, baseBands, regimes) {
+  return baseBands.map((b, i) => {
+    if (!b) return null;
+    const prev = rows[i - 1];
+    const newReg = regimeFor(prev.vix, regimes);
+    const cf = compressionFactor(prev);
+    return {
+      ...b,
+      upper: prev.close * (1 + cf.Ccall * newReg.k * newReg.upperMult * b.sigUp),
+      lower: prev.close * (1 - cf.Cput  * newReg.k * newReg.lowerMult * b.sigDn),
+      regime: newReg, trade: newReg.trade,
+      Cbase: cf.base, Ccall: cf.Ccall, Cput: cf.Cput, trend: cf.trend,
+    };
+  });
+}
+
+function scorePnLOnWindow(rows, bands, windowDays) {
+  const start = Math.max(1, rows.length - windowDays);
+  let score = 0;
+  for (let i = start; i < rows.length; i++) {
+    const b = bands[i];
+    if (!b || !b.trade) continue;
+    if (rows[i].close >= b.upper || rows[i].close <= b.lower) score += LOSS_PNL;
+    else score += WIN_PNL;
+  }
+  return score;
+}
+
+// Inline scorer — computes upper/lower on the fly with no allocations,
+// and inlines regimeFor (called millions of times during threshold search).
+function scoreRegimesOnWindow(rows, baseBands, regimes, windowDays) {
+  const start = Math.max(1, rows.length - windowDays);
+  const N = rows.length;
+  const regN = regimes.length;
+  let score = 0;
+  for (let i = start; i < N; i++) {
+    const b = baseBands[i];
+    if (!b) continue;
+    const prev = rows[i - 1];
+    const vix = prev.vix;
+
+    let reg = regimes[regN - 1];
+    for (let j = 0; j < regN; j++) {
+      if (vix <= regimes[j].maxVix) { reg = regimes[j]; break; }
+    }
+    if (!isDayAccepted(rows[i], reg)) continue;
+
+    const cf = compressionFactor(prev);
+    const upper = prev.close * (1 + cf.Ccall * reg.k * reg.upperMult * b.sigUp);
+    const lower = prev.close * (1 - cf.Cput  * reg.k * reg.lowerMult * b.sigDn);
+    if (rows[i].close >= upper || rows[i].close <= lower) score += LOSS_PNL;
+    else score += WIN_PNL;
+  }
+  return score;
+}
+
+// Re-bucket days by regime using the CURRENT regimes (handles threshold changes).
+// Also respects gap-rejected days.
+function bucketDaysForRegimes(rows, baseBands, regimes, windowDays) {
+  const start = Math.max(1, rows.length - windowDays);
+  const buckets = new Map();
+  for (let i = start; i < rows.length; i++) {
+    const b = baseBands[i];
+    if (!b) continue;
+    const reg = regimeFor(rows[i - 1].vix, regimes);
+    if (!isDayAccepted(rows[i], reg)) continue;
+    if (!buckets.has(reg)) buckets.set(reg, []);
+    buckets.get(reg).push({ row: rows[i], prev: rows[i - 1], sigUp: b.sigUp, sigDn: b.sigDn });
+  }
+  return buckets;
+}
+
+// MIX-aware mult optimizer: re-buckets each call so it works after threshold changes.
+// Uses indexed loops over the pre-computed grid (no generators).
+function optimizeMultsForMix(rows, baseBands, regimes, windowDays) {
+  const buckets = bucketDaysForRegimes(rows, baseBands, regimes, windowDays);
+  const newRegimes = regimes.map(r => ({ ...r }));
+  const G = OPT_GRID_N;
+  for (let i = 0; i < regimes.length; i++) {
+    const reg = regimes[i];
+    if (!reg.trade) continue;
+    const days = buckets.get(reg) || [];
+    if (days.length === 0) continue;
+    let bestS = scoreParams(days, reg.upperMult, reg.lowerMult, reg.k);
+    let bestU = reg.upperMult, bestL = reg.lowerMult, bestK = reg.k;
+    for (let ui = 0; ui < G; ui++) {
+      const u = OPT_GRID[ui];
+      for (let li = 0; li < G; li++) {
+        const l = OPT_GRID[li];
+        for (let ki = 0; ki < G; ki++) {
+          const k = OPT_GRID[ki];
+          const s = scoreParams(days, u, l, k);
+          if (s > bestS) { bestS = s; bestU = u; bestL = l; bestK = k; }
+        }
+      }
+    }
+    newRegimes[i].upperMult = bestU;
+    newRegimes[i].lowerMult = bestL;
+    newRegimes[i].k = bestK;
+  }
+  return newRegimes;
+}
+
+// Optimize VIX thresholds via COORDINATE DESCENT:
+//   For each threshold (T1,T2,T3,T4) in turn, find the best value while
+//   holding the others fixed. Repeat until a full pass produces no change.
+// ~150 evaluations vs ~3000 for full grid — converges in milliseconds.
+function optimizeThresholds(rows, baseBands, regimes, windowDays) {
+  const innerRegimes = regimes.filter(r => r.maxVix < 998);
+  const N = innerRegimes.length;
+  if (N === 0) return { newRegimes: regimes.map(r => ({ ...r })), score: 0 };
+
+  const STEP = 0.5;
+  const SPAN = 2.5;
+
+  const work = regimes.map(r => ({ ...r }));
+  const current = innerRegimes.map(r => r.maxVix);
+  let bestScore = scoreRegimesOnWindow(rows, baseBands, work, windowDays);
+
+  const MAX_ROUNDS = 6;
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    let changed = false;
+    for (let idx = 0; idx < N; idx++) {
+      const lower = idx > 0     ? current[idx - 1] + 0.1 : -Infinity;
+      const upper = idx < N - 1 ? current[idx + 1] - 0.1 :  Infinity;
+      const original = innerRegimes[idx].maxVix;
+      let bestV = current[idx];
+
+      for (let v = original - SPAN; v <= original + SPAN + 1e-9; v += STEP) {
+        const vR = Math.round(v * 10) / 10;
+        if (vR < lower || vR > upper) continue;
+        work[idx].maxVix = vR;
+        const score = scoreRegimesOnWindow(rows, baseBands, work, windowDays);
+        if (score > bestScore) { bestScore = score; bestV = vR; }
+      }
+
+      if (Math.abs(bestV - current[idx]) > 1e-6) {
+        current[idx] = bestV;
+        changed = true;
+      }
+      work[idx].maxVix = current[idx]; // ensure committed
+    }
+    if (!changed) break;
+  }
+
+  const newRegimes = regimes.map((r, i) => i < N ? { ...r, maxVix: current[i] } : { ...r });
+  return { newRegimes, score: bestScore };
+}
+
+// Iterative: alternate Quant (mults+k) ↔ VolAnalyst (thresholds) until no improvement.
+// Uses inline scoring throughout — no allocations during the search.
+async function runMixIteration(rows, baseRegimes, windowDays, maxIters, onProgress) {
+  const lookback = parseInt(document.getElementById('lookback').value, 10);
+  const baseBands = computeBands(rows, baseRegimes, lookback).bands;
+
+  let regimes = baseRegimes.map(r => ({ ...r }));
+  let lastScore = scoreRegimesOnWindow(rows, baseBands, regimes, windowDays);
+  let actualIters = 0;
+
+  for (let iter = 1; iter <= maxIters; iter++) {
+    actualIters = iter;
+
+    onProgress && onProgress({ stage: 'quant', iter });
+    await new Promise(r => setTimeout(r, 0));
+    regimes = optimizeMultsForMix(rows, baseBands, regimes, windowDays);
+
+    onProgress && onProgress({ stage: 'vol', iter });
+    await new Promise(r => setTimeout(r, 0));
+    const volResult = optimizeThresholds(rows, baseBands, regimes, windowDays);
+    regimes = volResult.newRegimes;
+
+    if (volResult.score <= lastScore + 1e-6) break;
+    lastScore = volResult.score;
+  }
+
+  // One-shot rebanding for the final equity comparison & PnL display
+  const finalBands = rebandWithNewThresholds(rows, baseBands, regimes);
+  return { finalRegimes: regimes, finalBands, finalScore: lastScore, iters: actualIters };
+}
+
+async function runMix() {
+  if (!currentRows) return;
+  const btn = document.getElementById('mixRunBtn');
+  const status = document.getElementById('mixStatus');
+  const bar = document.getElementById('mixProgressBar');
+  const fill = document.getElementById('mixProgressFill');
+  btn.disabled = true;
+  bar.style.display = 'block';
+  fill.style.width = '0%';
+  status.style.color = '';
+
+  try {
+    const lookback = parseInt(document.getElementById('lookback').value, 10);
+    const initialCapital = parseFloat(document.getElementById('initialCapital').value) || 1000;
+    const baseRegimes = readRegimes();
+    const { bands: baseBands } = computeBands(currentRows, baseRegimes, lookback);
+    const basePnL = computePnL(currentRows, baseBands, initialCapital);
+
+    const periods = [
+      { key: '1m', label: 'Mejora 1 — 1 mes',   days: 21  },
+      { key: '3m', label: 'Mejora 2 — 3 meses', days: 63  },
+      { key: '6m', label: 'Mejora 3 — 6 meses', days: 126 },
+    ];
+
+    document.getElementById('mixResults').innerHTML = '';
+
+    const MAX_ITERS = 8;
+    const totalSlots = periods.length * MAX_ITERS * 2;
+    let consumedSlots = 0;
+    const setProgress = (pct, label) => {
+      fill.style.width = Math.min(99, pct).toFixed(1) + '%';
+      if (label) status.textContent = label;
+    };
+
+    const t0 = performance.now();
+    const results = [];
+    for (let pIdx = 0; pIdx < periods.length; pIdx++) {
+      const p = periods[pIdx];
+      const tWin = performance.now();
+      const baseSlot = pIdx * MAX_ITERS * 2;
+      const onProgress = ({ stage, iter }) => {
+        consumedSlots = baseSlot + (iter - 1) * 2 + (stage === 'vol' ? 1 : 0) + 1;
+        const pct = consumedSlots / totalSlots * 100;
+        setProgress(pct, `[${pIdx + 1}/3 · ${p.label}] iter ${iter} · ${stage === 'quant' ? 'Quant (mults+k)' : 'Vol (umbrales)'}`);
+      };
+      const mix = await runMixIteration(currentRows, baseRegimes, p.days, MAX_ITERS, onProgress);
+      const finalPnL = computePnL(currentRows, mix.finalBands, initialCapital);
+      results.push({ period: p, mix, finalPnL });
+
+      consumedSlots = (pIdx + 1) * MAX_ITERS * 2;
+      setProgress(consumedSlots / totalSlots * 100,
+        `${p.label} listo (${((performance.now() - tWin) / 1000).toFixed(1)}s, ${mix.iters} iter).`);
+
+      renderMixCard(p, baseRegimes, mix, basePnL, finalPnL);
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    renderMixSummary(basePnL, results);
+    fill.style.width = '100%';
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    status.textContent = `✓ Completado en ${elapsed}s · iteraciones (1m/3m/6m): ${results.map(r => r.mix.iters).join(' / ')}`;
+    setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 1800);
+  } catch (err) {
+    console.error('runMix error:', err);
+    status.style.color = '#b73232';
+    status.textContent = `✗ Error: ${err.message || err}`;
+    fill.style.background = '#b73232';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderMixCard(period, baseRegimes, mix, basePnL, finalPnL) {
+  const container = document.getElementById('mixResults');
+  const card = document.createElement('div');
+  card.className = 'mix-card';
+
+  const trainStart = currentRows[Math.max(1, currentRows.length - period.days)].date;
+  const inBase = inSampleStats(basePnL, trainStart);
+  const inOpt  = inSampleStats(finalPnL, trainStart);
+  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+
+  // Threshold changes
+  const baseTh = baseRegimes.filter(r => r.maxVix < 998).map(r => r.maxVix);
+  const optTh  = mix.finalRegimes.filter(r => r.maxVix < 998).map(r => r.maxVix);
+  const thHtml = baseTh.map((t, i) => {
+    const changed = Math.abs(t - optTh[i]) > 1e-6;
+    return `<span class="${changed ? 'changed' : ''}">${t} → ${optTh[i]}</span>`;
+  }).join(' &nbsp;|&nbsp; ');
+
+  // Param changes per regime
+  const paramRows = baseRegimes.map((r, i) => {
+    if (!r.trade) return `<tr class="notrade"><td>${regimeLabel(baseRegimes, i)}</td><td colspan="3" style="font-style:italic">no-trade</td></tr>`;
+    const n = mix.finalRegimes[i];
+    const arrow = (a, b) => Math.abs(a - b) < 1e-6 ? '<span class="arrow-eq">=</span>' :
+      b > a ? '<span class="arrow-up-bad">▲</span>' : '<span class="arrow-down-good">▼</span>';
+    return `<tr>
+      <td>${regimeLabel(baseRegimes, i)}</td>
+      <td>${r.k.toFixed(2)} → <b>${n.k.toFixed(2)}</b> ${arrow(r.k, n.k)}</td>
+      <td>${r.upperMult.toFixed(2)} → <b>${n.upperMult.toFixed(2)}</b> ${arrow(r.upperMult, n.upperMult)}</td>
+      <td>${r.lowerMult.toFixed(2)} → <b>${n.lowerMult.toFixed(2)}</b> ${arrow(r.lowerMult, n.lowerMult)}</td>
+    </tr>`;
+  }).join('');
+
+  const iters = mix.iters;
+  const chartId = `mix-chart-${period.key}`;
+  card.innerHTML = `
+    <h4>${period.label}</h4>
+    <div class="iter-info">
+      <span>Convergió en <b>${iters} iteración${iters === 1 ? '' : 'es'}</b></span>
+      <span>P&L in-sample: ${fmt$(inBase.pnl)} → <b>${fmt$(inOpt.pnl)}</b></span>
+    </div>
+    <div class="threshold-block">
+      <div class="th-label">Umbrales VIX (base → optimizado)</div>
+      <div class="th-vals">${thHtml}</div>
+    </div>
+    <table class="agent-params">
+      <thead><tr><th>Régimen</th><th>k</th><th>Upper</th><th>Lower</th></tr></thead>
+      <tbody>${paramRows}</tbody>
+    </table>
+    <div class="equity-cmp" id="${chartId}"></div>
+    <button class="apply-btn" data-mix-period="${period.key}">Aplicar esta optimización</button>
+  `;
+  container.appendChild(card);
+
+  // Cache for Apply button
+  _mixCache.set(period.key, mix.finalRegimes);
+
+  drawAgentEquity(chartId, basePnL, finalPnL, trainStart);
+}
+
+const _mixCache = new Map();
+
+function applyMixProposal(periodKey) {
+  const newRegimes = _mixCache.get(periodKey);
+  if (!newRegimes) return;
+  newRegimes.forEach((reg, i) => {
+    const set = (f, v) => {
+      const inp = document.querySelector(`#regimeTable input[data-i="${i}"][data-f="${f}"]`);
+      if (inp) inp.value = v;
+    };
+    set('maxVix', reg.maxVix);
+    set('upperMult', reg.upperMult);
+    set('lowerMult', reg.lowerMult);
+    set('k', reg.k);
+  });
+  closeAnalystModal();
+  recalc();
+}
+
+function renderMixSummary(basePnL, results) {
+  const container = document.getElementById('mixResults');
+  const card = document.createElement('div');
+  card.className = 'mix-card summary';
+
+  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const ranked = results.map(r => ({
+    key: r.period.key, label: r.period.label,
+    finalEquity: r.finalPnL.finalEquity,
+    delta: r.finalPnL.finalEquity - basePnL.finalEquity,
+  })).sort((a, b) => b.finalEquity - a.finalEquity);
+
+  const best = ranked[0];
+  const noneBeats = ranked.every(r => r.delta <= 0);
+
+  let recommendation;
+  if (noneBeats) {
+    recommendation = `<p>Ninguna optimización iterativa supera la base en equity histórica completa.
+      <span class="pill">Mantener parámetros actuales</span>.</p>`;
+  } else if (best.key === '6m') {
+    recommendation = `<p>La iteración a <b>6 meses</b> es la que más equity histórica acumula
+      (${fmt$(best.delta)} vs base) y la más robusta.
+      <span class="pill gold">Aplicar Mejora 3 (MIX 6m)</span></p>`;
+  } else if (best.key === '3m') {
+    recommendation = `<p>La iteración a <b>3 meses</b> rinde mejor que la de 6 meses (${fmt$(best.delta)} vs base).
+      Sugiere que el mercado reciente tiene un perfil distinto.
+      <span class="pill gold">Aplicar Mejora 2 (MIX 3m)</span></p>`;
+  } else {
+    recommendation = `<p>La iteración a <b>1 mes</b> es la mejor en cifras pero usa muestra muy pequeña
+      → riesgo alto de sobreajuste. <span class="pill">Recomendado: contrastar con MIX 3m antes de aplicar</span></p>`;
+  }
+
+  card.innerHTML = `
+    <h4>📌 Recomendación del análisis combinado</h4>
+    <div style="font-size:12px;line-height:1.5">
+      ${recommendation}
+      <p style="font-size:11px;color:var(--ink-soft);margin-top:8px">
+        El MIX optimiza <b>al mismo tiempo</b> los multiplicadores y los umbrales del VIX,
+        alternando Quant ↔ Analista hasta convergencia. Comparado con el Quant solo,
+        suele encontrar una mejora extra ajustando dónde caen las fronteras de régimen.
+      </p>
+    </div>
+  `;
+  container.appendChild(card);
+}
+
+// ---- CSV upload handlers (events) ---------------------------------------
+function wireEventUpload(inputId, storageKey, onDone) {
+  document.getElementById(inputId).addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const events = parseEventsCSV(reader.result);
+      saveEvents(storageKey, events);
+      onDone();
+    };
+    reader.readAsText(file);
+  });
+}
+
+// ---- Modal handlers -----------------------------------------------------
+function openAnalystModal() {
+  document.getElementById('analystModal').style.display = 'flex';
+  // Render whichever tab is active (default = vix)
+  setTimeout(() => {
+    drawVixAnalystChart();
+    renderUpcomingEvents();
+    renderHistoricalCorrelation();
+  }, 50);
+}
+function closeAnalystModal() { document.getElementById('analystModal').style.display = 'none'; }
+
+function regimeLabel(regimes, idx) {
+  const cur = regimes[idx];
+  const prev = idx > 0 ? regimes[idx - 1].maxVix : null;
+  if (cur.maxVix >= 998) return `VIX > ${prev}`;
+  if (prev === null)     return `VIX ≤ ${cur.maxVix}`;
+  return `VIX ${prev}–${cur.maxVix}`;
+}
+
+function renderStats(stats, regimes) {
+  const o = stats.overall;
+  const winRateClose  = o.total ? (o.wins / o.total * 100) : 0;
+  const winRateStrict = o.total ? (o.cleanWins / o.total * 100) : 0;
+  const lossRate = o.total ? ((o.lossUp + o.lossDn) / o.total * 100) : 0;
+  const period = (o.firstDate && o.lastDate) ? `${o.firstDate} → ${o.lastDate}` : '—';
+
+  const rowsHtml = regimes.map((reg, i) => {
+    const s = stats.byRegime.get(reg) || { total: 0, wins: 0, lossUp: 0, lossDn: 0, cleanWins: 0, touched: 0 };
+    const wrStrict = s.total ? (s.cleanWins / s.total * 100).toFixed(1) + '%' : '—';
+    const cls = reg.trade ? '' : ' class="notrade"';
+    return `<tr${cls}>
+      <td>${regimeLabel(regimes, i)}${reg.trade ? '' : ' (no-trade)'}</td>
+      <td>${s.total}</td>
+      <td>${s.cleanWins || 0}</td>
+      <td style="color:#b06000">${s.touched || 0}</td>
+      <td class="loss-up">${s.lossUp}</td>
+      <td class="loss-dn">${s.lossDn}</td>
+      <td><b>${wrStrict}</b></td>
+    </tr>`;
+  }).join('');
+
+  // Compute next-day strikes from the latest band
+  let strikesHtml = `
+    <div class="stats-card" id="strikesCard">
+      <h3>Next-day strikes</h3>
+      <div style="font-size:12px;color:var(--ink-soft)">Esperando datos…</div>
+    </div>`;
+  if (window._lastNextBand && window._lastPrevRow) {
+    const nb = window._lastNextBand;
+    const prev = window._lastPrevRow;
+    const sellCallStrike = Math.ceil(nb.upper / 5) * 5;   // outside-rounded
+    const sellPutStrike  = Math.floor(nb.lower / 5) * 5;
+    const distCall = (sellCallStrike - prev.close) / prev.close * 100;
+    const distPut  = (prev.close - sellPutStrike) / prev.close * 100;
+    const tradeFlag = nb.trade
+      ? '<span style="color:var(--good)">✓ TRADE</span>'
+      : '<span class="loss-up">✗ NO-TRADE</span>';
+    strikesHtml = `
+      <div class="stats-card" id="strikesCard">
+        <h3>Next-day strikes</h3>
+        <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px">
+          Cierre previo: <b>${prev.close.toFixed(2)}</b> · ${tradeFlag}
+        </div>
+        <div class="row">
+          <span style="color:var(--good)"><b>↑ Vender CALL</b></span>
+          <span><b>${sellCallStrike}</b> <small style="color:var(--ink-soft)">(banda ${nb.upper.toFixed(2)})</small></span>
+        </div>
+        <div class="row">
+          <span style="color:var(--ink-soft)">Distancia</span>
+          <span><b>+${distCall.toFixed(3)}%</b></span>
+        </div>
+        <div class="row" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px">
+          <span class="loss-dn"><b>↓ Vender PUT</b></span>
+          <span><b>${sellPutStrike}</b> <small style="color:var(--ink-soft)">(banda ${nb.lower.toFixed(2)})</small></span>
+        </div>
+        <div class="row">
+          <span style="color:var(--ink-soft)">Distancia</span>
+          <span><b>−${distPut.toFixed(3)}%</b></span>
+        </div>
+        <div style="font-size:10px;color:var(--ink-soft);margin-top:6px;font-style:italic">
+          Strikes redondeados al múltiplo de $5 más cercano hacia OUTSIDE
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('stats').innerHTML = `
+    ${strikesHtml}
+    <div class="stats-card">
+      <h3>Win rate (full history)</h3>
+      <div class="big ${winRateStrict >= 80 ? '' : 'bad'}">${winRateStrict.toFixed(1)}%</div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:2px"><b>estricto</b> (sin toques intradía)</div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:6px">
+        Close: <b>${winRateClose.toFixed(1)}%</b>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:4px">${period}</div>
+    </div>
+    <div class="stats-card" style="min-width:240px">
+      <h3>Trade outcomes</h3>
+      <div class="row"><span>Trading days</span><span><b>${o.total}</b></span></div>
+      <div class="row"><span style="color:var(--good)">✓ Limpios</span><span style="color:var(--good)"><b>${o.cleanWins}</b></span></div>
+      <div class="row"><span style="color:#b06000">⚠ Tocados (recuperaron)</span><span style="color:#b06000"><b>${o.touched}</b></span></div>
+      <div class="row"><span class="loss-up">✗ Loss — close &gt; upper</span><span class="loss-up"><b>${o.lossUp}</b></span></div>
+      <div class="row"><span class="loss-dn">✗ Loss — close &lt; lower</span><span class="loss-dn"><b>${o.lossDn}</b></span></div>
+      <div class="row" style="border-top:1px solid #eee;margin-top:4px;padding-top:4px">
+        <span>Fallos estrictos</span><span><b>${o.touched + o.lossUp + o.lossDn}</b> (${(100 - winRateStrict).toFixed(1)}%)</span>
+      </div>
+      <div class="row"><span style="font-size:11px;color:var(--ink-soft)">Toques: ${o.callTouches} call · ${o.putTouches} put</span><span></span></div>
+      <div class="row"><span>No-trade days</span><span>${o.noTrade}</span></div>
+    </div>
+    <div class="stats-card">
+      <h3>Breakdown by regime</h3>
+      <table class="regbreak">
+        <thead><tr>
+          <th>Regime</th><th>Días</th>
+          <th style="color:#5dc080">✓</th>
+          <th style="color:#b06000">⚠</th>
+          <th class="loss-up">↑</th><th class="loss-dn">↓</th>
+          <th>WR estricto</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ---- Plotting -------------------------------------------------------------
+function drawChart(rows, bands, nextBand, windowDays) {
+  const start = Math.max(1, rows.length - windowDays);
+  const slice = rows.slice(start);
+  const sliceBands = bands.slice(start);
+
+  const dates  = slice.map(r => r.date);
+  const closes = slice.map(r => r.close);
+  const upper  = sliceBands.map(b => b ? b.upper : null);
+  const lower  = sliceBands.map(b => b ? b.lower : null);
+  // Palette — keep in sync with index.html :root vars
+  const NAVY = '#143a64', GOLD = '#c9a227', BLUE = '#2c6fa3',
+        BAD = '#b73232',  BAD_SOFT = '#c46a35', MUTED = '#9aa9bb';
+  const closeColors = sliceBands.map(b => b && !b.trade ? MUTED : NAVY);
+
+  // Losses for the iron condor: close outside the band on a trading day.
+  // Skip no-trade days (they don't count as losses since we wouldn't open a position).
+  const lossUpX = [], lossUpY = [], lossDnX = [], lossDnY = [];
+  slice.forEach((r, i) => {
+    const b = sliceBands[i];
+    if (!b || !b.trade) return;
+    if (r.close >= b.upper) { lossUpX.push(r.date); lossUpY.push(r.close); }
+    if (r.close <= b.lower) { lossDnX.push(r.date); lossDnY.push(r.close); }
+  });
+
+  // Background shading on no-trade days (merge consecutive runs)
+  const shapes = [];
+  let runStart = null;
+  for (let i = 0; i <= slice.length; i++) {
+    const noTrade = i < slice.length && sliceBands[i] && !sliceBands[i].trade;
+    if (noTrade && runStart === null) runStart = i;
+    if (!noTrade && runStart !== null) {
+      shapes.push({
+        type: 'rect', xref: 'x', yref: 'paper',
+        x0: shiftDate(slice[runStart].date, -0.5),
+        x1: shiftDate(slice[i - 1].date,    +0.5),
+        y0: 0, y1: 1,
+        fillcolor: 'rgba(201, 162, 39, 0.12)', line: { width: 0 },
+        layer: 'below',
+      });
+      runStart = null;
+    }
+  }
+
+  // Next-day extension (dashed)
+  const lastStr = slice[slice.length - 1].date;
+  const nextStr = shiftDate(lastStr, +1);
+  const lastUpper = upper[upper.length - 1];
+  const lastLower = lower[lower.length - 1];
+
+  const traces = [
+    { x: dates, y: closes, mode: 'lines+markers', name: 'Close',
+      line: { color: NAVY, width: 2.2 },
+      marker: { color: closeColors, size: 6, line: { color: NAVY, width: 1 } } },
+    { x: dates, y: upper, mode: 'lines', name: 'Upper band',
+      line: { color: GOLD, width: 1.8 } },
+    { x: dates, y: lower, mode: 'lines', name: 'Lower band',
+      line: { color: BLUE, width: 1.8 },
+      fill: 'tonexty', fillcolor: 'rgba(44, 111, 163, 0.07)' },
+    { x: lossUpX, y: lossUpY, mode: 'markers', name: 'Loss — close > upper',
+      marker: { color: BAD, size: 12, symbol: 'x', line: { width: 1, color: '#fff' } } },
+    { x: lossDnX, y: lossDnY, mode: 'markers', name: 'Loss — close < lower',
+      marker: { color: BAD_SOFT, size: 12, symbol: 'x', line: { width: 1, color: '#fff' } } },
+  ];
+
+  if (nextBand) {
+    traces.push({
+      x: [lastStr, nextStr], y: [lastUpper, nextBand.upper],
+      mode: 'lines+markers', name: 'Next upper',
+      line: { color: GOLD, width: 1.8, dash: 'dash' }, marker: { size: 9, color: GOLD },
+    });
+    traces.push({
+      x: [lastStr, nextStr], y: [lastLower, nextBand.lower],
+      mode: 'lines+markers', name: 'Next lower',
+      line: { color: BLUE, width: 1.8, dash: 'dash' }, marker: { size: 9, color: BLUE },
+    });
+  }
+
+  const layout = {
+    margin: { t: 20, r: 20, b: 50, l: 60 },
+    paper_bgcolor: '#ffffff',
+    plot_bgcolor: '#f3f8fc',
+    font: { family: 'Segoe UI, sans-serif', color: '#0c1f33' },
+    xaxis: {
+      title: 'Date', type: 'date',
+      gridcolor: '#dce7f1', linecolor: '#143a64', zerolinecolor: '#dce7f1',
+    },
+    yaxis: {
+      title: 'SPX',
+      gridcolor: '#dce7f1', linecolor: '#143a64', zerolinecolor: '#dce7f1',
+    },
+    legend: {
+      orientation: 'h', y: -0.2,
+      bgcolor: 'rgba(255,255,255,0.6)', bordercolor: '#cfe1f2', borderwidth: 1,
+    },
+    hovermode: 'x unified',
+    hoverlabel: { bgcolor: '#0a2540', font: { color: '#fff' }, bordercolor: '#c9a227' },
+    shapes,
+  };
+  safePlotly('chart', traces, layout, { responsive: true });
+
+  // Info panel — uses Number.isFinite (strict) to avoid null→0 coercion bugs
+  const tradeLabel = nextBand && nextBand.trade ? 'TRADE' : 'NO-TRADE';
+  const reg = nextBand ? nextBand.regime : null;
+  const lastRow = rows[rows.length - 1];
+  const safe = (v, dec) => Number.isFinite(v) ? v.toFixed(dec) : '—';
+  const safePct = (v, dec) => Number.isFinite(v) ? (v * 100).toFixed(dec) + '%' : '—';
+  const ivHvNote = (Number.isFinite(lastRow.iv) && Number.isFinite(lastRow.hv))
+    ? `IV=${safe(lastRow.iv, 3)} · HV=${safe(lastRow.hv, 3)} · `
+    : `<span style="color:#ffb39b">IV/HV no introducidos</span> · `;
+  const trendArrow = { up: '↑', down: '↓', flat: '↔' };
+  const trendLabel = nextBand && nextBand.trend
+    ? `${trendArrow[nextBand.trend]} ${nextBand.trend === 'up' ? 'Alcista' : nextBand.trend === 'down' ? 'Bajista' : 'Rango'}`
+    : '—';
+  const ctNote = nextBand
+    ? (nextBand.Ccall !== nextBand.Cput
+        ? `<b style="color:#e8cf78">C<sub>call</sub>=${(nextBand.Ccall*100).toFixed(1)}% · C<sub>put</sub>=${(nextBand.Cput*100).toFixed(1)}%</b>`
+        : `<b style="color:#e8cf78">C<sub>t</sub>=${(nextBand.Ccall*100).toFixed(1)}%</b>`)
+    : '';
+  document.getElementById('info').innerHTML = nextBand
+    ? `Showing last ${slice.length} days. ` +
+      `Next-day (${nextStr}) — VIX<sub>prev</sub>=${safe(lastRow.vix, 2)} · ` +
+      ivHvNote +
+      `Tendencia: <b>${trendLabel}</b> · ` +
+      ctNote + ` · ` +
+      `σ<sub>high</sub>=${safePct(nextBand.sigUp, 2)} · ` +
+      `σ<sub>low</sub>=${safePct(nextBand.sigDn, 2)} · ` +
+      `k=${reg ? reg.k : '—'} · mults (${reg ? reg.upperMult : '—'}/${reg ? reg.lowerMult : '—'}) → ` +
+      `<b>Upper ${safe(nextBand.upper, 2)} · Lower ${safe(nextBand.lower, 2)}</b> · ` +
+      `<span style="color:${nextBand.trade ? '#7fdca8' : '#ffb39b'}"><b>${tradeLabel}</b></span>`
+    : 'No data — not enough history for the chosen lookback yet.';
+}
+
+// ---- VIX context chart ----------------------------------------------------
+function drawVixChart(rows, bands, regimes, windowDays) {
+  const start = Math.max(1, rows.length - windowDays);
+  const slice = rows.slice(start);
+  const sliceBands = bands.slice(start);
+
+  const dates = slice.map(r => r.date);
+  const vix   = slice.map(r => r.vix);
+
+  // Loss days, plotted at their VIX value (so you see "this loss happened with VIX=X")
+  const lossUpX = [], lossUpY = [], lossDnX = [], lossDnY = [];
+  slice.forEach((r, i) => {
+    const b = sliceBands[i];
+    if (!b || !b.trade) return;
+    if (r.close >= b.upper) { lossUpX.push(r.date); lossUpY.push(r.vix); }
+    if (r.close <= b.lower) { lossDnX.push(r.date); lossDnY.push(r.vix); }
+  });
+
+  // Y-axis range with a little headroom; cap "open-ended" no-trade band against this.
+  const vMax = Math.max(...vix, ...regimes.map(r => r.maxVix < 998 ? r.maxVix : 0)) * 1.08;
+
+  const shapes = [];
+  // Threshold lines (every regime's upper bound except the open-ended last)
+  regimes.forEach(reg => {
+    if (reg.maxVix >= 998) return;
+    shapes.push({
+      type: 'line', xref: 'paper', yref: 'y',
+      x0: 0, x1: 1, y0: reg.maxVix, y1: reg.maxVix,
+      line: { color: '#c9a227', width: 1, dash: 'dot' },
+    });
+  });
+  // Shade no-trade VIX bands across the whole width
+  for (let i = 0; i < regimes.length; i++) {
+    if (regimes[i].trade) continue;
+    const yLo = i > 0 ? regimes[i - 1].maxVix : 0;
+    const yHi = regimes[i].maxVix < 998 ? regimes[i].maxVix : vMax;
+    shapes.push({
+      type: 'rect', xref: 'paper', yref: 'y',
+      x0: 0, x1: 1, y0: yLo, y1: yHi,
+      fillcolor: 'rgba(201, 162, 39, 0.13)',
+      line: { width: 0 }, layer: 'below',
+    });
+  }
+
+  // Annotations for thresholds (right edge, small)
+  const annotations = regimes
+    .filter(reg => reg.maxVix < 998)
+    .map(reg => ({
+      xref: 'paper', yref: 'y',
+      x: 1, y: reg.maxVix,
+      xanchor: 'right', yanchor: 'bottom',
+      text: ` ≤ ${reg.maxVix} `,
+      font: { size: 10, color: '#8a6d10' },
+      bgcolor: 'rgba(255,255,255,0.7)',
+      showarrow: false,
+    }));
+
+  const traces = [
+    { x: dates, y: vix, mode: 'lines+markers', name: 'VIX',
+      line: { color: '#143a64', width: 2 },
+      marker: { color: '#143a64', size: 5 } },
+    { x: lossUpX, y: lossUpY, mode: 'markers', name: 'Loss (close > upper)',
+      marker: { color: '#b73232', size: 11, symbol: 'x', line: { width: 1, color: '#fff' } } },
+    { x: lossDnX, y: lossDnY, mode: 'markers', name: 'Loss (close < lower)',
+      marker: { color: '#c46a35', size: 11, symbol: 'x', line: { width: 1, color: '#fff' } } },
+  ];
+
+  const layout = {
+    margin: { t: 20, r: 20, b: 50, l: 60 },
+    paper_bgcolor: '#ffffff',
+    plot_bgcolor: '#f3f8fc',
+    font: { family: 'Segoe UI, sans-serif', color: '#0c1f33' },
+    xaxis: {
+      title: 'Date', type: 'date',
+      gridcolor: '#dce7f1', linecolor: '#143a64',
+    },
+    yaxis: {
+      title: 'VIX',
+      gridcolor: '#dce7f1', linecolor: '#143a64',
+      range: [Math.max(0, Math.min(...vix) * 0.9), vMax],
+    },
+    legend: {
+      orientation: 'h', y: -0.25,
+      bgcolor: 'rgba(255,255,255,0.6)', bordercolor: '#cfe1f2', borderwidth: 1,
+    },
+    hovermode: 'x unified',
+    hoverlabel: { bgcolor: '#0a2540', font: { color: '#fff' }, bordercolor: '#c9a227' },
+    shapes, annotations,
+  };
+  safePlotly('vixChart', traces, layout, { responsive: true });
+}
+
+// Shift an ISO date string by N days (fractional allowed)
+function shiftDate(iso, days) {
+  const d = new Date(iso);
+  d.setDate(d.getDate() + Math.floor(days));
+  const frac = days - Math.floor(days);
+  if (frac) d.setHours(d.getHours() + frac * 24);
+  return d.toISOString().slice(0, frac ? 19 : 10);
+}
+
+// ---- Gap analysis (opening gap vs prev close) ---------------------------
+const GAP_BUCKETS = [
+  { label: '< -1.0%',         min: -Infinity, max: -1.0,    color: '#b73232' },
+  { label: '-1.0% a -0.5%',   min: -1.0,      max: -0.5,    color: '#c46a35' },
+  { label: '-0.5% a -0.2%',   min: -0.5,      max: -0.2,    color: '#d9a455' },
+  { label: '-0.2% a +0.2%',   min: -0.2,      max: 0.2,     color: '#888',      isCenter: true },
+  { label: '+0.2% a +0.5%',   min: 0.2,       max: 0.5,     color: '#7dc77d' },
+  { label: '+0.5% a +1.0%',   min: 0.5,       max: 1.0,     color: '#3d7a3d' },
+  { label: '> +1.0%',         min: 1.0,       max: Infinity, color: '#1a5a2a' },
+];
+const GAP_PANEL_KEY = 'spx-vix-gap-panel-collapsed-v1';
+const GAP_REJECTED_KEY = 'spx-vix-gap-rejected-v1';
+
+// Cached set of rejected bucket indices (rebuilt on storage change)
+let _gapRejectedSet = null;
+function getGapRejectedSet() {
+  if (_gapRejectedSet === null) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(GAP_REJECTED_KEY) || '[]');
+      _gapRejectedSet = new Set(arr.map(Number));
+    } catch (_) { _gapRejectedSet = new Set(); }
+  }
+  return _gapRejectedSet;
+}
+function setGapRejected(arrOfIndices) {
+  _gapRejectedSet = new Set(arrOfIndices.map(Number));
+  try { localStorage.setItem(GAP_REJECTED_KEY, JSON.stringify([..._gapRejectedSet])); } catch (_) {}
+}
+function gapBucketIndexOf(gap) {
+  if (!isFinite(gap)) return -1;
+  for (let i = 0; i < GAP_BUCKETS.length; i++) {
+    if (gap >= GAP_BUCKETS[i].min && gap < GAP_BUCKETS[i].max) return i;
+  }
+  return -1;
+}
+
+// Single source of truth: a day is "tradable" only if BOTH the regime allows it
+// AND the day's opening gap isn't in a user-rejected bucket. For the next-day
+// band (no future row available), we fall back to regime.trade only.
+function isDayAccepted(todayRow, regime) {
+  if (!regime || !regime.trade) return false;
+  if (!todayRow || !isFinite(todayRow.gap)) return true;
+  const idx = gapBucketIndexOf(todayRow.gap);
+  if (idx < 0) return true;
+  return !getGapRejectedSet().has(idx);
+}
+
+function computeGapAnalysis(rows, bands) {
+  const buckets = GAP_BUCKETS.map(b => ({ ...b, days: 0, wins: 0, touched: 0, losses: 0 }));
+  let withoutGap = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const b = bands[i];
+    if (!b || !b.trade) continue;
+    if (!isFinite(r.gap)) { withoutGap++; continue; }
+
+    const bucket = buckets.find(bk => r.gap >= bk.min && r.gap < bk.max);
+    if (!bucket) continue;
+    bucket.days++;
+
+    const callStrike = Math.ceil(b.upper / 5) * 5;
+    const putStrike  = Math.floor(b.lower / 5) * 5;
+    const callTouched = isFinite(r.high) && r.high >= callStrike;
+    const putTouched  = isFinite(r.low)  && r.low  <= putStrike;
+    if (r.close >= b.upper)         bucket.losses++;
+    else if (r.close <= b.lower)    bucket.losses++;
+    else if (callTouched || putTouched) bucket.touched++;
+    else                            bucket.wins++;
+  }
+  return { buckets, withoutGap };
+}
+
+function renderGapAnalysis() {
+  const body = document.getElementById('gapPanelBody');
+  if (!body) return;
+  if (!currentRows) {
+    body.innerHTML = `<div style="padding:14px;text-align:center;color:var(--ink-soft)">Sin datos cargados.</div>`;
+    return;
+  }
+
+  const lookback = parseInt(document.getElementById('lookback').value, 10);
+  const regimes = readRegimes();
+  const { bands } = computeBands(currentRows, regimes, lookback);
+  const { buckets, withoutGap } = computeGapAnalysis(currentRows, bands);
+
+  const totalDays = buckets.reduce((s, b) => s + b.days, 0);
+  if (totalDays === 0) {
+    body.innerHTML = `
+      <div style="padding:14px;background:#fff7df;border:1px solid var(--gold-500);border-left:4px solid var(--gold-500);border-radius:5px;font-size:12px;color:#5a4a18">
+        <b>⚠ No hay datos de gap calculables.</b><br>
+        Asegúrate de que el CSV tiene la columna <code>Open</code> con valores numéricos.
+        Filas sin Open: <b>${withoutGap}</b>
+      </div>`;
+    return;
+  }
+
+  const totalWins   = buckets.reduce((s, b) => s + b.wins, 0);
+  const overallWR   = totalDays > 0 ? totalWins / totalDays * 100 : 0;
+  const overallLoss = (buckets.reduce((s, b) => s + b.losses, 0)) / totalDays * 100;
+
+  const rejectedSet = getGapRejectedSet();
+  const rowsHtml = buckets.map((bk, idx) => {
+    const isRejected = rejectedSet.has(idx);
+    const checkbox = `<input type="checkbox" class="gap-accept-cb" data-bucket="${idx}" ${isRejected ? '' : 'checked'} title="Si está marcado, los días con gap en este rango se OPERAN. Desmárcalo para SALTARLOS." style="cursor:pointer">`;
+
+    if (bk.days === 0) {
+      return `<tr style="opacity:0.5">
+        <td>${checkbox} <span style="color:${bk.color}">${bk.label}</span></td>
+        <td colspan="5" style="text-align:center;font-style:italic;color:var(--ink-soft)">sin muestras</td>
+      </tr>`;
+    }
+    const wr = bk.wins / bk.days * 100;
+    const lossRate = bk.losses / bk.days * 100;
+    const wrColor = wr < overallWR - 10 ? 'var(--bad)' :
+                    wr > overallWR + 5  ? 'var(--good)' : 'var(--ink)';
+    const lowSample = bk.days < 5;
+    const flag = (wr < overallWR - 10 && bk.days >= 5) ? ' ⚠' :
+                 (lossRate > overallLoss + 10 && bk.days >= 5) ? ' ⚠' : '';
+    const sampleNote = lowSample ? ` <span style="color:var(--bad-soft);font-size:10px">(pocos)</span>` : '';
+    return `<tr class="${bk.isCenter ? 'center-row' : ''} ${isRejected ? 'rejected-row' : ''}">
+      <td>${checkbox} <span style="color:${bk.color};font-weight:700">${bk.label}</span></td>
+      <td><b>${bk.days}</b>${sampleNote}</td>
+      <td style="color:var(--good)"><b>${bk.wins}</b></td>
+      <td style="color:#b06000"><b>${bk.touched}</b></td>
+      <td style="color:var(--bad)"><b>${bk.losses}</b></td>
+      <td style="color:${wrColor};font-weight:700">${wr.toFixed(1)}%${flag}</td>
+    </tr>`;
+  }).join('');
+
+  // Findings
+  const findings = [];
+  buckets.forEach(bk => {
+    if (bk.days < 5) return;
+    const wr = bk.wins / bk.days * 100;
+    if (wr < overallWR - 10) {
+      findings.push(`<b style="color:${bk.color}">${bk.label}</b>: WR ${wr.toFixed(1)}% (vs ${overallWR.toFixed(1)}% global, ${(wr - overallWR).toFixed(1)}pp peor) — posible señal de día malo`);
+    } else if (wr > overallWR + 8) {
+      findings.push(`<b style="color:${bk.color}">${bk.label}</b>: WR ${wr.toFixed(1)}% (vs ${overallWR.toFixed(1)}% global, +${(wr - overallWR).toFixed(1)}pp mejor) — entorno favorable`);
+    }
+  });
+
+  const rejectedCount = rejectedSet.size;
+  const acceptedDays = buckets.reduce((s, bk, i) => s + (rejectedSet.has(i) ? 0 : bk.days), 0);
+  const acceptedWins = buckets.reduce((s, bk, i) => s + (rejectedSet.has(i) ? 0 : bk.wins), 0);
+  const filteredWR = acceptedDays > 0 ? acceptedWins / acceptedDays * 100 : 0;
+
+  body.innerHTML = `
+    <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+      Distribución de outcomes según el gap entre el cierre previo y la apertura del día.
+      WR global: <b>${overallWR.toFixed(1)}%</b> sobre <b>${totalDays}</b> días con gap calculable.
+      ${withoutGap > 0 ? `<br><span style="color:var(--bad-soft);font-size:11px">⚠ ${withoutGap} días sin valor de Open en el CSV — quedan excluidos del análisis</span>` : ''}
+      ${rejectedCount > 0 ? `<br><span style="color:#6b5b2e;font-size:12px"><b>🚫 ${rejectedCount} bucket${rejectedCount === 1 ? '' : 's'} rechazado${rejectedCount === 1 ? '' : 's'}</b> · días filtrados: ${totalDays - acceptedDays} · WR del histórico SI sólo operas los buckets aceptados: <b style="color:var(--good)">${filteredWR.toFixed(1)}%</b></span>` : ''}
+    </div>
+    <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;font-style:italic">
+      ✓ marcado = se opera ese día · ☐ desmarcado = se trata como NO-TRADE en todo el sistema
+    </div>
+    <table class="gap-analysis-table">
+      <thead><tr>
+        <th>✓ / Gap apertura</th>
+        <th>Días</th>
+        <th style="color:#a8d8a8">Wins</th>
+        <th style="color:#e8cf78">Touched</th>
+        <th style="color:#f5b8b8">Losses</th>
+        <th>WR estricto</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    ${findings.length > 0 ? `
+      <div style="margin-top:12px;background:#fff7df;border-left:3px solid var(--gold-500);padding:10px 14px;border-radius:4px;font-size:12px;color:#5a4a18;line-height:1.6">
+        <b>🔍 Hallazgos:</b><br>${findings.join('<br>')}
+      </div>` : `
+      <div style="margin-top:12px;font-size:11px;color:var(--ink-soft);font-style:italic">
+        No se detectan correlaciones fuertes entre gap y outcome (todos los buckets están dentro de ±10pp del WR global). Revisa de nuevo cuando acumules más datos.
+      </div>`}
+  `;
+}
+
+function setGapPanelCollapsed(collapsed) {
+  const body = document.getElementById('gapPanelBody');
+  const btn  = document.getElementById('gapPanelToggle');
+  if (!body || !btn) return;
+  body.style.display = collapsed ? 'none' : '';
+  btn.textContent    = collapsed ? '▲ Mostrar' : '▼ Minimizar';
+  try { localStorage.setItem(GAP_PANEL_KEY, collapsed ? '1' : '0'); } catch (_) {}
+}
+function loadGapPanelState() {
+  const collapsed = localStorage.getItem(GAP_PANEL_KEY) === '1';
+  setGapPanelCollapsed(collapsed);
+}
+
+// ---- Trend C/P indicator ------------------------------------------------
+// Compares mean(close last 20) vs mean(close last 20–40 ago).
+// > +0.5% → Alcista; < −0.5% → Bajista; en medio → Rango.
+// (TREND_WINDOW and TREND_THRESHOLD declared near MIN_SAMPLES at top of file)
+
+function computeTrend(rows) {
+  if (!rows || rows.length < TREND_WINDOW * 2) return null;
+  const recent = rows.slice(-TREND_WINDOW);
+  const prev   = rows.slice(-TREND_WINDOW * 2, -TREND_WINDOW);
+  const meanClose = arr => {
+    const valid = arr.filter(r => isFinite(r.close));
+    return valid.length ? valid.reduce((s, r) => s + r.close, 0) / valid.length : NaN;
+  };
+  const recentMean = meanClose(recent);
+  const prevMean   = meanClose(prev);
+  if (!isFinite(recentMean) || !isFinite(prevMean) || prevMean === 0) return null;
+  const diffPct = (recentMean - prevMean) / prevMean * 100;
+  let label, kind, arrow;
+  if (diffPct >  TREND_THRESHOLD) { label = 'Alcista'; kind = 'up';   arrow = '↑'; }
+  else if (diffPct < -TREND_THRESHOLD) { label = 'Bajista'; kind = 'down'; arrow = '↓'; }
+  else                                 { label = 'Rango';   kind = 'flat'; arrow = '↔'; }
+  return { recentMean, prevMean, diffPct, label, kind, arrow,
+           recentRange: [recent[0].date, recent[recent.length-1].date],
+           prevRange:   [prev[0].date,   prev[prev.length-1].date] };
+}
+
+function renderTrendCard() {
+  const card = document.getElementById('trendCard');
+  if (!card) return;
+  console.log('[Trend] renderTrendCard · currentRows:', currentRows ? currentRows.length : 'null');
+  try {
+    if (!currentRows || currentRows.length === 0) {
+      card.innerHTML = `
+        <div class="trend-title">Tendencia C/P</div>
+        <div style="font-size:11px;color:var(--ink-soft);text-align:center;margin-top:8px">
+          Sin datos cargados
+        </div>`;
+      window._lastTrend = null;
+      return;
+    }
+    if (currentRows.length < TREND_WINDOW * 2) {
+      card.innerHTML = `
+        <div class="trend-title">Tendencia C/P</div>
+        <div style="font-size:11px;color:var(--ink-soft);text-align:center;margin-top:8px">
+          ${currentRows.length}/${TREND_WINDOW * 2} días<br>(insuficientes)
+        </div>`;
+      window._lastTrend = null;
+      return;
+    }
+    const t = computeTrend(currentRows);
+    console.log('[Trend] computeTrend result:', t);
+    if (!t) {
+      card.innerHTML = `<div class="trend-title">Tendencia C/P</div>
+        <div style="font-size:11px;color:var(--bad);text-align:center;margin-top:8px">
+          Error en cálculo (cierres no numéricos)
+        </div>`;
+      window._lastTrend = null;
+      return;
+    }
+    window._lastTrend = t;
+    const sign = t.diffPct >= 0 ? '+' : '';
+    card.innerHTML = `
+      <div class="trend-title">Tendencia C/P</div>
+      <div class="trend-label ${t.kind}">${t.arrow} ${t.label}</div>
+      <div class="trend-detail">${sign}${t.diffPct.toFixed(2)}% (20d)</div>
+      <div class="trend-means">
+        μ<sub>20d</sub> = ${t.recentMean.toFixed(0)}<br>
+        μ<sub>20-40d</sub> = ${t.prevMean.toFixed(0)}
+      </div>`;
+  } catch (err) {
+    console.error('[Trend] renderTrendCard error:', err);
+    card.innerHTML = `<div class="trend-title">Tendencia C/P</div>
+      <div style="font-size:11px;color:var(--bad)">Error: ${err.message}</div>`;
+  }
+}
+
+// ---- Compression panel UI -----------------------------------------------
+function readCompressionParamsFromUI() {
+  compressionParams.lambda      = parseFloat(document.getElementById('cParamLambda').value) || 1.5;
+  compressionParams.Cmin        = parseFloat(document.getElementById('cParamCmin').value)   || 0.5;
+  compressionParams.Cmax        = parseFloat(document.getElementById('cParamCmax').value)   || 0.95;
+  compressionParams.Vref        = parseFloat(document.getElementById('cParamVref').value)   || 18;
+  const shift                   = parseFloat(document.getElementById('cParamShift').value);
+  compressionParams.shiftFactor = isFinite(shift) ? shift : 0.25;
+}
+function readCompressionVarsFromUI() {
+  document.querySelectorAll('#compressionTable input').forEach(inp => {
+    const i = +inp.dataset.i, f = inp.dataset.f;
+    if (f === 'active') compressionVars[i].active = inp.checked;
+    if (f === 'weight') compressionVars[i].weight = parseFloat(inp.value) || 0;
+  });
+}
+function renderCompressionPanel() {
+  const lastPrev = currentRows && currentRows.length ? currentRows[currentRows.length - 1] : null;
+  const tbody = document.querySelector('#compressionTable tbody');
+  tbody.innerHTML = compressionVars.map((v, i) => {
+    const std = lastPrev ? standardizeVar(v.id, lastPrev, compressionParams) : null;
+    const stdStr = (std === null || !isFinite(std)) ? '<span style="color:#b73232">no data</span>' : std.toFixed(3);
+    const ws    = (std === null || !isFinite(std)) ? '—' : (v.weight * std).toFixed(3);
+    const groupClass = `group-tag ${v.group}`;
+    const groupTitle = COMPRESSION_GROUP_LABEL[v.group] || '';
+    return `<tr title="${v.desc}">
+      <td><input type="checkbox" data-i="${i}" data-f="active" ${v.active ? 'checked' : ''}></td>
+      <td><b>${v.label}</b></td>
+      <td><span class="${groupClass}" title="${groupTitle}">${v.group}</span></td>
+      <td><input type="number" step="0.05" data-i="${i}" data-f="weight" value="${v.weight}"></td>
+      <td>${stdStr}</td>
+      <td>${ws}</td>
+    </tr>`;
+  }).join('');
+
+  // Show breakdown of Z and Ccall/Cput for the latest day
+  if (lastPrev) {
+    const bd = compressionBreakdown(lastPrev);
+    const pieces = bd.terms.map(t => {
+      if (t.missing) return `<span class="breakdown-pill" style="color:#b73232">${t.label}: n/a</span>`;
+      const sign = t.weighted >= 0 ? '+' : '−';
+      return `<span class="breakdown-pill"><b>${t.label}</b>: ${sign}${Math.abs(t.weighted).toFixed(3)}</span>`;
+    }).join(' ');
+    const trendLbl = bd.trend ? (bd.trend === 'up' ? '↑ Alcista' : bd.trend === 'down' ? '↓ Bajista' : '↔ Rango') : '—';
+    const trendColor = bd.trend === 'up' ? 'var(--good)' : bd.trend === 'down' ? 'var(--bad)' : 'var(--ink-soft)';
+    const shiftNote = (bd.trend === 'up' || bd.trend === 'down')
+      ? `, desplazamiento Δ = ±${bd.delta.toFixed(3)}`
+      : '';
+    document.getElementById('cOptBreakdown').innerHTML = `
+      <b>Cierre más reciente (${lastPrev.date}):</b>
+      ${pieces}<br>
+      Z = ${bd.Z.toFixed(3)} →
+      sigmoid(λ·Z) = ${bd.C_raw.toFixed(3)} →
+      C<sub>base</sub> = ${bd.base.toFixed(3)}
+      &nbsp;·&nbsp; Tendencia: <b style="color:${trendColor}">${trendLbl}</b>${shiftNote} →
+      <b style="color:var(--gold-500)">C<sub>call</sub> = ${bd.Ccall.toFixed(3)} · C<sub>put</sub> = ${bd.Cput.toFixed(3)}</b>
+    `;
+  } else {
+    document.getElementById('cOptBreakdown').innerHTML = '';
+  }
+}
+
+// "Run Optimization" — coordinate descent on weights of active variables.
+// Maximizes total P&L (= win_rate × WIN + loss_rate × LOSS over trading days).
+async function runCompressionOptimization() {
+  if (!currentRows) return;
+  const btn = document.getElementById('cRunOpt');
+  const status = document.getElementById('cOptStatus');
+  btn.disabled = true;
+  status.style.color = '';
+  const t0 = performance.now();
+  try {
+    readCompressionParamsFromUI();
+    readCompressionVarsFromUI();
+    const active = compressionVars.filter(v => v.active);
+    if (active.length === 0) {
+      status.style.color = '#b73232';
+      status.textContent = '✗ Activa al menos una variable.';
+      btn.disabled = false; return;
+    }
+
+    const lookback = parseInt(document.getElementById('lookback').value, 10);
+    const initCap = parseFloat(document.getElementById('initialCapital').value) || 1000;
+    const regimes = readRegimes();
+
+    const scoreCurrent = () => {
+      const { bands } = computeBands(currentRows, regimes, lookback);
+      const pnl = computePnL(currentRows, bands, initCap);
+      return pnl.finalEquity - initCap;
+    };
+
+    let bestScore = scoreCurrent();
+    const WEIGHTS = [0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, -0.5, -1.0];
+    const MAX_ROUNDS = 4;
+
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      let changed = false;
+      for (const v of active) {
+        const orig = v.weight;
+        let bestW = orig;
+        for (const w of WEIGHTS) {
+          v.weight = w;
+          const s = scoreCurrent();
+          if (s > bestScore) { bestScore = s; bestW = w; }
+        }
+        v.weight = bestW;
+        if (Math.abs(bestW - orig) > 1e-6) changed = true;
+        status.textContent = `Optimizando ${v.label}…`;
+        await new Promise(r => setTimeout(r, 0));
+      }
+      if (!changed) break;
+    }
+
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    status.textContent = `✓ Completado en ${elapsed}s · score: $${bestScore.toFixed(0)}`;
+    renderCompressionPanel();
+    recalc();
+  } catch (err) {
+    console.error(err);
+    status.style.color = '#b73232';
+    status.textContent = `✗ Error: ${err.message || err}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---- Regime table UI -----------------------------------------------------
+function renderRegimeTable() {
+  const tbody = document.querySelector('#regimeTable tbody');
+  tbody.innerHTML = '';
+  DEFAULT_REGIMES.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    if (!r.trade) tr.className = 'notrade';
+    tr.innerHTML = `
+      <td><input type="number" step="0.1" data-i="${i}" data-f="maxVix"    value="${r.maxVix}"></td>
+      <td><input type="number" step="0.1" data-i="${i}" data-f="upperMult" value="${r.upperMult}"></td>
+      <td><input type="number" step="0.1" data-i="${i}" data-f="lowerMult" value="${r.lowerMult}"></td>
+      <td><input type="number" step="0.1" data-i="${i}" data-f="k"         value="${r.k}"></td>
+      <td><input type="checkbox"          data-i="${i}" data-f="trade"     ${r.trade ? 'checked' : ''}></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function readRegimes() {
+  const regimes = DEFAULT_REGIMES.map(r => ({ ...r }));
+  document.querySelectorAll('#regimeTable input').forEach(inp => {
+    const i = +inp.dataset.i, f = inp.dataset.f;
+    regimes[i][f] = inp.type === 'checkbox' ? inp.checked : parseFloat(inp.value);
+  });
+  return regimes;
+}
+
+// ---- CSV cache (so the user doesn't have to re-pick it on every refresh) -
+const CSV_CACHE_KEY = 'spx-vix-csv-cache-v1';
+
+function saveCSVCache(text, filename) {
+  try {
+    localStorage.setItem(CSV_CACHE_KEY, JSON.stringify({
+      text, filename, savedAt: Date.now(), bytes: text.length,
+    }));
+    return true;
+  } catch (e) {
+    console.warn('No se pudo cachear el CSV (¿localStorage lleno?):', e);
+    return false;
+  }
+}
+function loadCSVCache() {
+  try { return JSON.parse(localStorage.getItem(CSV_CACHE_KEY) || 'null'); }
+  catch (_) { return null; }
+}
+function clearCSVCache() { localStorage.removeItem(CSV_CACHE_KEY); }
+
+function updateCacheStatus() {
+  const status = document.getElementById('csvCacheStatus');
+  if (!status) return;
+  const cache = loadCSVCache();
+  if (!cache) {
+    status.innerHTML = '';
+    return;
+  }
+  const ageDays = Math.floor((Date.now() - cache.savedAt) / 86400000);
+  const ageLabel = ageDays === 0 ? 'hoy' : ageDays === 1 ? 'ayer' : `hace ${ageDays}d`;
+  const rowsCount = currentRows ? currentRows.length : '?';
+  status.innerHTML = `<span style="color:var(--good)">✓</span> en caché: <b>${cache.filename || 'csv'}</b> (${rowsCount} filas, ${ageLabel}) <button id="clearCsvCacheBtn" type="button" title="Borrar caché y obligar a re-subir CSV" style="background:transparent;border:1px solid var(--blue-200);color:var(--ink-soft);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;margin-left:6px">✕ limpiar</button>`;
+  const btn = document.getElementById('clearCsvCacheBtn');
+  if (btn) btn.addEventListener('click', () => {
+    if (!confirm('¿Borrar el CSV cacheado? Tendrás que volver a subirlo para ver los datos.')) return;
+    clearCSVCache();
+    currentRows = null;
+    recalc();
+    updateCacheStatus();
+  });
+}
+
+// ---- Manual entries (persisted in localStorage) --------------------------
+// Stored as { 'YYYY-MM-DD': {close, high, low, vix} }. Overlaid on top of CSV.
+const STORAGE_KEY = 'spx-vix-entries-v1';
+
+function loadEntries() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch (_) { return {}; }
+}
+function saveEntries(entries) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+
+function applyEntries(rows, entries) {
+  const byDate = new Map(rows.map(r => [r.date, r]));
+  for (const [date, vals] of Object.entries(entries)) {
+    // JSON.stringify convierte NaN → null, JSON.parse no lo devuelve a NaN.
+    // Reconvertimos los nulls a NaN para que isFinite() funcione correctamente.
+    const cleaned = {};
+    for (const [k, v] of Object.entries(vals)) {
+      cleaned[k] = (v === null) ? NaN : v;
+    }
+    byDate.set(date, { date, ...cleaned });
+  }
+  const merged = Array.from(byDate.values()).sort((a, b) => new Date(a.date) - new Date(b.date));
+  enrichRows(merged);
+  return merged;
+}
+
+function upsertRow(row) {
+  const entries = loadEntries();
+  entries[row.date] = {
+    open: row.open,
+    close: row.close, high: row.high, low: row.low, vix: row.vix,
+    iv: row.iv, hv: row.hv,
+    ivRank: row.ivRank, ivPctl: row.ivPctl, ivChg: row.ivChg,
+    pcv: row.pcv,
+  };
+  saveEntries(entries);
+  if (!currentRows) {
+    currentRows = [row];
+  } else {
+    const i = currentRows.findIndex(r => r.date === row.date);
+    if (i >= 0) currentRows[i] = row;
+    else currentRows.push(row);
+    currentRows.sort((a, b) => new Date(a.date) - new Date(b.date));
+  }
+  enrichRows(currentRows);
+  recalc();
+}
+
+// ---- Missing-day detection -----------------------------------------------
+// Weekdays between (last data date + 1) and yesterday that aren't in the data.
+// Holidays will get falsely flagged — user can dismiss them with "Skip".
+function detectMissing(rows) {
+  if (!rows || rows.length === 0) return [];
+  const dataDates = new Set(rows.map(r => r.date));
+  const skipped = new Set(JSON.parse(localStorage.getItem('spx-vix-skip-v1') || '[]'));
+  const last = new Date(rows[rows.length - 1].date);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const missing = [];
+  const d = new Date(last);
+  while (true) {
+    d.setDate(d.getDate() + 1);
+    if (d >= today) break;
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) continue;
+    const iso = d.toISOString().slice(0, 10);
+    if (!dataDates.has(iso) && !skipped.has(iso)) missing.push(iso);
+  }
+  return missing;
+}
+
+function dismissMissing(date) {
+  const skipped = new Set(JSON.parse(localStorage.getItem('spx-vix-skip-v1') || '[]'));
+  skipped.add(date);
+  localStorage.setItem('spx-vix-skip-v1', JSON.stringify([...skipped]));
+}
+
+function renderMissingBanner(missing) {
+  const banner = document.getElementById('missingBanner');
+  if (missing.length === 0) { banner.style.display = 'none'; return; }
+  banner.style.display = '';
+  document.getElementById('missingTitle').textContent =
+    `⚠ ${missing.length} sesión${missing.length === 1 ? '' : 'es'} sin datos`;
+  const rows = missing.map(date => `
+    <tr data-date="${date}">
+      <td><b>${date}</b></td>
+      <td><input type="number" step="0.01"  data-f="open"   placeholder="Open"></td>
+      <td><input type="number" step="0.01"  data-f="close"  placeholder="Close"></td>
+      <td><input type="number" step="0.01"  data-f="high"   placeholder="High"></td>
+      <td><input type="number" step="0.01"  data-f="low"    placeholder="Low"></td>
+      <td><input type="number" step="0.01"  data-f="vix"    placeholder="VIX"></td>
+      <td><input type="number" step="0.001" data-f="iv"     placeholder="IV"></td>
+      <td><input type="number" step="0.001" data-f="hv"     placeholder="HV"></td>
+      <td><input type="number" step="0.1"   data-f="ivRank" placeholder="IVR"></td>
+      <td><input type="number" step="0.1"   data-f="ivPctl" placeholder="IVP"></td>
+      <td><input type="number" step="0.001" data-f="ivChg"  placeholder="IVCHG"></td>
+      <td><input type="number" step="0.01"  data-f="pcv"    placeholder="PCV"></td>
+      <td>
+        <button class="add" type="button">Add</button>
+        <button class="skip" type="button" title="Mark as non-trading day (e.g. holiday)">Skip</button>
+      </td>
+    </tr>
+  `).join('');
+  document.getElementById('missingContent').innerHTML = `
+    <div style="font-size:12px;color:#6b5b2e;margin-bottom:6px">
+      Días laborables entre el último cierre y hoy que no están en los datos.
+      <b>IV/HV/IVR/IVP/IVCHG/PCV son opcionales</b> — déjalos vacíos si no los tienes y se omiten del cálculo.
+      Si alguno fue festivo de mercado, pulsa <b>Skip</b> para ignorarlo.
+    </div>
+    <table class="missing">
+      <thead><tr>
+        <th>Date</th><th>Open</th><th>Close</th><th>High</th><th>Low</th><th>VIX</th>
+        <th>IV</th><th>HV</th><th>IVR</th><th>IVP</th><th>IVCHG</th><th>PCV</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+// ---- Wire up --------------------------------------------------------------
+let currentRows = null;
+
+function recalc() {
+  const info = document.getElementById('info');
+  if (!currentRows) {
+    info.textContent = 'No data loaded yet — pick a CSV file with the "CSV file" selector above.';
+    info.style.color = '#b00';
+    renderTrendCard(); // also update on the empty case
+    return;
+  }
+  info.style.color = '#444';
+  // ALWAYS render the trend card first — it has its own try/catch and depends only on currentRows.
+  // If anything later in recalc throws, at least the trend is updated.
+  renderTrendCard();
+  try {
+    _recalcInner();
+  } catch (err) {
+    console.error('[recalc] error en pipeline:', err);
+    info.style.color = '#b00';
+    info.textContent = `⚠ Error en recalc: ${err.message} (revisa F12 Console)`;
+  }
+}
+
+function _recalcInner() {
+  const displayWindow = parseInt(document.getElementById('window').value, 10);
+  const lookback      = parseInt(document.getElementById('lookback').value, 10);
+  const regimes = readRegimes();
+  const { bands, nextBand } = computeBands(currentRows, regimes, lookback);
+  // Cache next-day band + prev row for the strikes panel
+  window._lastNextBand = nextBand;
+  window._lastPrevRow  = currentRows[currentRows.length - 1];
+
+  const stats = computeStats(currentRows, bands);
+  renderStats(stats, regimes);
+  drawChart(currentRows, bands, nextBand, displayWindow);
+  drawVixChart(currentRows, bands, regimes, displayWindow);
+
+  const initialCapital = parseFloat(document.getElementById('initialCapital').value) || 1000;
+  const pnl = computePnL(currentRows, bands, initialCapital);
+  drawEquityChart(pnl);
+  renderEquityStats(pnlSummary(pnl), pnl);
+  // Only re-render the (potentially huge) trades table if it's visible
+  if (document.getElementById('tradesPanel').style.display !== 'none') {
+    renderTradesTable(pnl);
+  }
+  window._lastPnL = pnl; // cache for the toggle handler
+
+  renderMissingBanner(detectMissing(currentRows));
+  prefillNextDate();
+  checkEventBanner();
+  renderCompressionPanel();
+  renderTrendCard();
+  renderGapAnalysis();
+  updateCacheStatus();
+  // Auto-refresh desglose if visible
+  if (document.getElementById('desglosePanel').style.display !== 'none') {
+    renderDesglose();
+  }
+}
+
+// Pre-fill the entry-form date with the next missing weekday (or today).
+function prefillNextDate() {
+  const dateInput = document.getElementById('entryDate');
+  if (!dateInput || dateInput.value) return; // don't overwrite user's pick
+  const missing = detectMissing(currentRows || []);
+  if (missing.length) {
+    dateInput.value = missing[0];
+  } else if (currentRows && currentRows.length) {
+    const last = new Date(currentRows[currentRows.length - 1].date);
+    do { last.setDate(last.getDate() + 1); }
+    while (last.getDay() === 0 || last.getDay() === 6);
+    dateInput.value = last.toISOString().slice(0, 10);
+  }
+}
+
+renderRegimeTable();
+renderCompressionPanel();
+renderTrendCard();
+updateFavoritesCardCount();
+
+// Gap panel toggle (collapse/expand) — persists state in localStorage
+loadGapPanelState();
+document.getElementById('gapPanelToggle').addEventListener('click', () => {
+  const isHidden = document.getElementById('gapPanelBody').style.display === 'none';
+  setGapPanelCollapsed(!isHidden);
+});
+
+// Gap acceptance checkboxes — toggle bucket → recompute everything
+document.getElementById('gapPanelBody').addEventListener('change', (e) => {
+  if (!e.target.classList.contains('gap-accept-cb')) return;
+  const idx = parseInt(e.target.dataset.bucket, 10);
+  const accepted = e.target.checked;
+  const set = new Set(getGapRejectedSet());
+  if (accepted) set.delete(idx);
+  else          set.add(idx);
+  setGapRejected([...set]);
+  recalc(); // re-render everything with new filter
+});
+
+document.getElementById('csvFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    saveCSVCache(reader.result, file.name);
+    currentRows = applyEntries(parseCSV(reader.result), loadEntries());
+    recalc();
+    updateCacheStatus();
+  };
+  reader.readAsText(file);
+});
+
+// ---- Yahoo Finance fetch (for auto-fill of Open) ------------------------
+// Returns {open, high, low, close} for a given date and symbol.
+// Tries direct fetch first, falls back to a CORS proxy.
+async function fetchYahooOHLC(symbol, dateStr) {
+  const date = new Date(dateStr + 'T00:00:00Z');
+  const period1 = Math.floor(date.getTime() / 1000) - 5 * 86400;
+  const period2 = Math.floor(date.getTime() / 1000) + 86400;
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${period1}&period2=${period2}&interval=1d`;
+
+  let data;
+  try {
+    const r = await fetch(yahooUrl);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    data = await r.json();
+  } catch (e) {
+    console.log('[Yahoo] direct fetch failed, trying proxy:', e.message);
+    const r = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(yahooUrl));
+    if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
+    data = await r.json();
+  }
+
+  if (data.chart && data.chart.error) throw new Error(data.chart.error.description || 'Error de Yahoo');
+  const result = data.chart && data.chart.result && data.chart.result[0];
+  if (!result) throw new Error('Respuesta vacía de Yahoo');
+  const ts = result.timestamp || [];
+  const q  = result.indicators && result.indicators.quote && result.indicators.quote[0];
+  if (!q) throw new Error('Sin datos OHLC');
+
+  for (let i = 0; i < ts.length; i++) {
+    const d = new Date(ts[i] * 1000).toISOString().slice(0, 10);
+    if (d === dateStr) {
+      return { open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] };
+    }
+  }
+  // Find closest before
+  for (let i = ts.length - 1; i >= 0; i--) {
+    const d = new Date(ts[i] * 1000).toISOString().slice(0, 10);
+    if (d <= dateStr) {
+      return { open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i],
+               actualDate: d, requested: dateStr };
+    }
+  }
+  throw new Error('No hay datos para ' + dateStr + ' (¿es fin de semana o festivo?)');
+}
+
+// ---- Top-right "Add session data" form ----------------------------------
+document.getElementById('entryForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const fb = document.getElementById('entryFeedback');
+  const num = id => {
+    const v = document.getElementById(id).value;
+    return v === '' ? NaN : parseFloat(v);
+  };
+  const row = {
+    date:   document.getElementById('entryDate').value,
+    open:   num('entryOpen'),
+    close:  num('entryClose'),
+    high:   num('entryHigh'),
+    low:    num('entryLow'),
+    vix:    num('entryVix'),
+    iv:     num('entryIv'),
+    hv:     num('entryHv'),
+    ivRank: num('entryIvr'),
+    ivPctl: num('entryIvp'),
+    ivChg:  num('entryIvchg'),
+    pcv:    num('entryPcv'),
+  };
+  if (!row.date || [row.close, row.high, row.low, row.vix].some(v => !isFinite(v))) {
+    fb.className = 'feedback err'; fb.textContent = 'Faltan campos básicos o no son numéricos (IV/HV/IVR/IVP/IVCHG/PCV son opcionales).';
+    return;
+  }
+  if (row.high < row.low) {
+    fb.className = 'feedback err'; fb.textContent = 'High < Low — revisa los valores.';
+    return;
+  }
+  upsertRow(row);
+  const optionals = [];
+  if (isFinite(row.iv))     optionals.push('IV');
+  if (isFinite(row.hv))     optionals.push('HV');
+  if (isFinite(row.ivRank)) optionals.push('IVR');
+  if (isFinite(row.ivPctl)) optionals.push('IVP');
+  if (isFinite(row.ivChg))  optionals.push('IVCHG');
+  if (isFinite(row.pcv))    optionals.push('PCV');
+  const note = optionals.length ? ` · con ${optionals.join(' + ')}` : ' · sin variables opcionales';
+  fb.className = 'feedback'; fb.textContent = `✓ ${row.date} guardado${note}.`;
+  ['entryOpen','entryClose','entryHigh','entryLow','entryVix','entryIv','entryHv','entryIvr','entryIvp','entryIvchg','entryPcv']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('entryDate').value = '';
+  prefillNextDate();
+});
+
+// ---- Inline fill buttons in the missing-days banner ---------------------
+document.getElementById('missingBanner').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-date]');
+  if (!tr) return;
+  const date = tr.dataset.date;
+  if (e.target.classList.contains('add')) {
+    const get = f => {
+      const v = tr.querySelector(`input[data-f="${f}"]`).value;
+      return v === '' ? NaN : parseFloat(v);
+    };
+    const row = {
+      date,
+      open: get('open'),
+      close: get('close'), high: get('high'), low: get('low'), vix: get('vix'),
+      iv:     get('iv'),     hv:     get('hv'),
+      ivRank: get('ivRank'), ivPctl: get('ivPctl'), ivChg: get('ivChg'),
+      pcv:    get('pcv'),
+    };
+    if ([row.close, row.high, row.low, row.vix].some(v => !isFinite(v))) {
+      tr.style.background = 'rgba(180, 50, 50, 0.15)';
+      setTimeout(() => tr.style.background = '', 800);
+      return;
+    }
+    upsertRow(row);
+  } else if (e.target.classList.contains('skip')) {
+    dismissMissing(date);
+    recalc();
+  }
+});
+
+// Auto-fetch Open from Yahoo Finance
+document.getElementById('fetchOpenBtn').addEventListener('click', async () => {
+  const dateInput = document.getElementById('entryDate');
+  const date = dateInput.value;
+  const fb = document.getElementById('entryFeedback');
+  if (!date) {
+    fb.className = 'feedback err';
+    fb.textContent = 'Selecciona primero una fecha.';
+    return;
+  }
+  const btn = document.getElementById('fetchOpenBtn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '⏳';
+  fb.className = 'feedback';
+  fb.textContent = 'Consultando Yahoo Finance…';
+  try {
+    const ohlc = await fetchYahooOHLC('^GSPC', date);
+    if (!isFinite(ohlc.open)) throw new Error('Open no disponible');
+    document.getElementById('entryOpen').value = ohlc.open.toFixed(2);
+    if (ohlc.actualDate && ohlc.actualDate !== date) {
+      fb.className = 'feedback err';
+      fb.textContent = `⚠ ${date} no tiene datos (¿festivo?). Usado el más reciente: ${ohlc.actualDate} → Open ${ohlc.open.toFixed(2)}`;
+    } else {
+      fb.textContent = `✓ Open de ${date} obtenido de Yahoo: ${ohlc.open.toFixed(2)}`;
+    }
+  } catch (e) {
+    console.error('[Yahoo fetch]', e);
+    fb.className = 'feedback err';
+    fb.textContent = `✗ ${e.message}. Métela manualmente desde Barchart.`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
+
+document.getElementById('reload').addEventListener('click', recalc);
+// Auto-recalc when any regime input changes
+document.getElementById('regimeTable').addEventListener('change', recalc);
+document.getElementById('initialCapital').addEventListener('change', recalc);
+
+// Compression panel: any change → read state → recalc
+document.getElementById('compressionTable').addEventListener('change', () => {
+  readCompressionVarsFromUI();
+  recalc();
+});
+['cParamLambda','cParamCmin','cParamCmax','cParamVref','cParamShift'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    readCompressionParamsFromUI();
+    recalc();
+  });
+});
+document.getElementById('cRunOpt').addEventListener('click', runCompressionOptimization);
+
+// Data view modal
+function openDataModal() {
+  const modal = document.getElementById('dataModal');
+  if (!modal) {
+    console.error('[Data view] #dataModal not found in DOM!');
+    alert('Error: el modal #dataModal no existe. Probablemente caché del navegador. Pulsa Ctrl+F5.');
+    return;
+  }
+  console.log('[Data view] Modal element found, currentRows:', currentRows ? currentRows.length + ' filas' : 'null');
+  modal.style.display = 'flex';
+  renderDataView();
+}
+function closeDataModal() {
+  const modal = document.getElementById('dataModal');
+  if (modal) modal.style.display = 'none';
+}
+function renderDataView() {
+  const content = document.getElementById('dataModalContent');
+  const countEl = document.getElementById('dataModalCount');
+  try {
+    _renderDataViewInner(content, countEl);
+  } catch (err) {
+    console.error('[Data view] FATAL render error:', err);
+    content.innerHTML = `
+      <div style="background:#fee2e2;color:#7a1010;padding:16px;border:2px solid #b73232;border-radius:6px;font-family:monospace;font-size:12px">
+        <b style="font-size:14px">❌ Error al renderizar la tabla:</b><br><br>
+        <b>${err.name}:</b> ${err.message}<br><br>
+        <b>Stack:</b>
+        <pre style="white-space:pre-wrap;background:#fff;padding:10px;border-radius:3px;margin-top:6px;font-size:10px">${err.stack || '(sin stack)'}</pre>
+      </div>`;
+    countEl.textContent = `Error: ${err.message}`;
+  }
+}
+
+function _renderDataViewInner(content, countEl) {
+  console.log('[Data view] renderDataView called');
+  console.log('[Data view] typeof currentRows:', typeof currentRows);
+  console.log('[Data view] currentRows is null?', currentRows === null);
+  console.log('[Data view] currentRows length:', currentRows ? currentRows.length : 'N/A');
+  if (currentRows && currentRows.length > 0) {
+    console.log('[Data view] First row:', currentRows[0]);
+    console.log('[Data view] Last row:', currentRows[currentRows.length - 1]);
+  }
+
+  const manual = loadEntries();
+
+  // ALWAYS show a diagnostic banner so we can see the state regardless
+  const diag = `
+    <div style="padding:10px 14px;background:#fff7df;color:#5a4a18;border:1px solid #c9a227;border-radius:5px;margin-bottom:10px;font-size:12px">
+      <b>📊 Estado:</b>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px">currentRows = ${currentRows === null ? 'null' : (currentRows === undefined ? 'undefined' : currentRows.length + ' filas')}</code> ·
+      <code style="background:#fff;padding:1px 5px;border-radius:3px">localStorage = ${Object.keys(manual).length} entradas manuales</code>
+    </div>
+  `;
+
+  if (!currentRows || currentRows.length === 0) {
+    let extra = '';
+    if (Object.keys(manual).length > 0) {
+      extra = `
+        <div style="margin-top:14px;padding:12px;background:#e8f1fa;border-radius:5px;font-size:12px;color:#0c1f33">
+          <b>Tienes ${Object.keys(manual).length} entradas guardadas en localStorage:</b>
+          <pre style="margin-top:6px;white-space:pre-wrap;font-size:11px;background:#fff;padding:8px;border-radius:3px;max-height:300px;overflow:auto">${JSON.stringify(manual, null, 2)}</pre>
+        </div>
+      `;
+    }
+    content.innerHTML = diag + `
+      <div style="padding:30px;text-align:center;color:#444;background:#fff;border-radius:5px">
+        <div style="font-size:30px">📭</div>
+        <div style="margin-top:6px;font-size:14px"><b>currentRows está vacío.</b></div>
+        <div style="font-size:12px;margin-top:6px;color:#666">Esto significa que el CSV no se ha cargado en memoria, aunque las entradas manuales sigan guardadas en el navegador.</div>
+        <div style="font-size:12px;margin-top:6px;color:#666">Recarga la página y vuelve a seleccionar el CSV con el selector "CSV file" en Controls.</div>
+      </div>
+      ${extra}`;
+    countEl.textContent = '0 filas';
+    return;
+  }
+
+  const filter = document.getElementById('dataModalFilter').value;
+  const lastDate = currentRows[currentRows.length - 1].date;
+  const cutoffDate = new Date(lastDate); cutoffDate.setDate(cutoffDate.getDate() - 30);
+  const cutoffISO = cutoffDate.toISOString().slice(0, 10);
+  console.log('[Data view] filter:', filter, '· cutoff:', cutoffISO);
+
+  let rows = currentRows.slice().reverse();
+  if (filter === 'recent')        rows = rows.filter(r => r.date >= cutoffISO);
+  else if (filter === 'manual')   rows = rows.filter(r => manual[r.date]);
+  else if (filter === 'missing')  rows = rows.filter(r =>
+    !isFinite(r.iv) || !isFinite(r.hv) || !isFinite(r.ivPctl) || !isFinite(r.ivChg) || !isFinite(r.pcv));
+  console.log('[Data view] rows after filter:', rows.length);
+
+  const total = currentRows.length;
+  const shown = rows.length;
+  const manualCount = Object.keys(manual).length;
+  countEl.textContent = `${shown} de ${total} filas mostradas · ${manualCount} entradas manuales`;
+
+  if (rows.length === 0) {
+    content.innerHTML = diag + `
+      <div style="padding:30px;text-align:center;color:#444;background:#fff;border-radius:5px">
+        <div style="font-size:30px">🔎</div>
+        <div style="margin-top:6px">El filtro <b>"${filter}"</b> no devuelve ninguna fila.</div>
+        <div style="font-size:11px;margin-top:6px;color:#666">Cambia a "Todas las filas" para ver el dataset completo.</div>
+      </div>`;
+    return;
+  }
+
+  const cell = (v, dec = 2) => {
+    // Defensive: coerce strings/null/undefined to number safely
+    const num = (v === null || v === undefined || v === '') ? NaN : Number(v);
+    return isFinite(num)
+      ? `<td style="background:inherit;color:#000;padding:3px 8px;border-bottom:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums">${num.toFixed(dec)}</td>`
+      : `<td style="background:inherit;color:#bbb;padding:3px 8px;border-bottom:1px solid #ddd;text-align:right">—</td>`;
+  };
+
+  const bodyParts = [];
+  let badRows = 0;
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const r = rows[i];
+      if (!r || typeof r !== 'object') {
+        badRows++;
+        console.error('[Data view] Row', i, 'is not an object:', r);
+        continue;
+      }
+      const isManual = !!manual[r.date];
+      const num = v => (v === null || v === undefined || v === '') ? NaN : Number(v);
+      const hasMissing = !isFinite(num(r.iv)) || !isFinite(num(r.hv)) || !isFinite(num(r.ivPctl)) || !isFinite(num(r.ivChg)) || !isFinite(num(r.pcv));
+      const rowBg = isManual ? '#fff7df' : (hasMissing ? '#fdf3ec' : '#fff');
+      const dateColor = isManual ? '#8a6d10' : '#0c1f33';
+      const editBtn = isManual
+        ? ` <button class="edit-entry-btn" data-date="${r.date}" style="margin-left:6px;background:#c9a227;color:#0a0a0a;border:none;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;font-weight:600">✏️ Editar</button>`
+        : '';
+      bodyParts.push(`<tr style="background:${rowBg}">
+        <td style="background:${rowBg};color:${dateColor};padding:3px 8px;border-bottom:1px solid #ddd;font-weight:500">${r.date || '(sin fecha)'}${isManual ? ' ✎' : ''}${editBtn}</td>
+        ${cell(r.close)}${cell(r.high)}${cell(r.low)}${cell(r.vix)}
+        ${cell(r.iv, 3)}${cell(r.hv, 3)}
+        ${cell(r.ivRank, 1)}${cell(r.ivPctl, 1)}${cell(r.ivChg, 4)}
+        ${cell(r.pcv, 2)}
+      </tr>`);
+    } catch (rowErr) {
+      badRows++;
+      console.error('[Data view] Error rendering row', i, ':', rowErr, rows[i]);
+    }
+  }
+  const body = bodyParts.join('');
+  console.log('[Data view] Rendered', bodyParts.length, 'rows ·', badRows, 'bad rows skipped · body length:', body.length);
+
+  const errBanner = badRows > 0
+    ? `<div style="padding:8px 12px;background:#fee2e2;color:#7a1010;border:1px solid #b73232;border-radius:5px;margin-bottom:8px;font-size:12px">⚠ ${badRows} filas no pudieron renderizarse — ver consola.</div>`
+    : '';
+
+  content.innerHTML = diag + errBanner + `
+    <table style="border-collapse:separate;border-spacing:0;width:100%;font-size:12px;background:#fff">
+      <thead>
+        <tr>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:left;position:sticky;top:0">Date</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">Close</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">High</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">Low</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">VIX</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">IV</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">HV</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">IVR</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">IVP</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">IVCHG</th>
+          <th style="background:#143a64;color:#fff;padding:6px 8px;text-align:right;position:sticky;top:0">PCV</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+}
+// Pre-fill the entry form with an existing manual entry, ready for edit.
+function populateFormFromEntry(date) {
+  const entries = loadEntries();
+  const entry = entries[date];
+  if (!entry) {
+    console.warn('[Edit] No entry found for', date);
+    return;
+  }
+  const setVal = (id, v) => {
+    document.getElementById(id).value = isFinite(v) ? v : '';
+  };
+  document.getElementById('entryDate').value = date;
+  setVal('entryOpen',   entry.open);
+  setVal('entryClose',  entry.close);
+  setVal('entryHigh',   entry.high);
+  setVal('entryLow',    entry.low);
+  setVal('entryVix',    entry.vix);
+  setVal('entryIv',     entry.iv);
+  setVal('entryHv',     entry.hv);
+  setVal('entryIvr',    entry.ivRank);
+  setVal('entryIvp',    entry.ivPctl);
+  setVal('entryIvchg',  entry.ivChg);
+  setVal('entryPcv',    entry.pcv);
+  // Visual feedback
+  const fb = document.getElementById('entryFeedback');
+  fb.className = 'feedback';
+  fb.textContent = `✏️ Editando ${date}. Modifica y pulsa Add para guardar (sobrescribe).`;
+  // Scroll header into view in case the user is far down
+  document.querySelector('header').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Event delegation — robust against any DOM-loading order issues
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#openDataView')) {
+    console.log('[Data view] Click detected, opening modal');
+    openDataModal();
+    return;
+  }
+  if (e.target.closest('#dataModalClose')) {
+    closeDataModal();
+    return;
+  }
+  if (e.target.closest('.edit-entry-btn')) {
+    const btn = e.target.closest('.edit-entry-btn');
+    populateFormFromEntry(btn.dataset.date);
+    closeDataModal();
+    return;
+  }
+  if (e.target.id === 'dataModal') {
+    closeDataModal();
+  }
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'dataModalFilter') renderDataView();
+});
+
+// Quant Agent handlers
+document.getElementById('agentCard').addEventListener('click', openAgentModal);
+document.getElementById('agentModalClose').addEventListener('click', closeAgentModal);
+
+// Vol Analyst handlers
+document.getElementById('analystCard').addEventListener('click', openAnalystModal);
+document.getElementById('analystModalClose').addEventListener('click', closeAnalystModal);
+
+// Option chain CSV upload
+document.getElementById('chainCSV').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) handleChainUpload(file);
+});
+document.getElementById('chainSavedList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-chain-date]');
+  if (!btn) return;
+  const date = btn.dataset.chainDate;
+  if (btn.classList.contains('view-btn')) viewChain(date);
+  if (btn.classList.contains('del-btn'))  deleteChain(date);
+});
+
+// Render the saved chains list at startup
+renderChainsList();
+
+// Favorites handlers
+document.getElementById('favoritesCard').addEventListener('click', openFavoritesModal);
+document.getElementById('favoritesModalClose').addEventListener('click', closeFavoritesModal);
+document.getElementById('saveFavBtn').addEventListener('click', () => {
+  const name = document.getElementById('newFavName').value;
+  saveCurrentAsFavorite(name);
+});
+document.getElementById('newFavName').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    saveCurrentAsFavorite(e.target.value);
+  }
+});
+document.getElementById('favoritesModal').addEventListener('click', (e) => {
+  if (e.target.id === 'favoritesModal') closeFavoritesModal();
+  if (e.target.classList.contains('fav-apply'))   applyFavorite(e.target.dataset.id);
+  if (e.target.classList.contains('fav-delete'))  deleteFavorite(e.target.dataset.id);
+  if (e.target.classList.contains('fav-expand')) {
+    const id = e.target.dataset.id;
+    const det = document.getElementById('fav-details-' + id);
+    const isHidden = det.style.display === 'none';
+    det.style.display = isHidden ? '' : 'none';
+    e.target.textContent = isHidden ? '▲ Ocultar variables' : '▼ Ver todas las variables';
+  }
+});
+document.getElementById('favoritesModal').addEventListener('change', (e) => {
+  if (e.target.classList.contains('fav-name')) renameFavorite(e.target.dataset.id, e.target.value);
+});
+
+// Jefe de mesa handlers
+document.getElementById('jefeCard').addEventListener('click', openJefeModal);
+document.getElementById('jefeModalClose').addEventListener('click', closeJefeModal);
+document.getElementById('jefeRunBtn').addEventListener('click', runJefeDeMesa);
+document.getElementById('jefeModal').addEventListener('click', (e) => {
+  if (e.target.id === 'jefeModal') closeJefeModal();
+  if (e.target.classList.contains('apply-btn') && e.target.dataset.jefeRank !== undefined) {
+    applyJefeConfig(e.target.dataset.jefeRank);
+  }
+});
+
+// Compressor Analyst handlers
+document.getElementById('compressorCard').addEventListener('click', openCompressorModal);
+document.getElementById('compressorModalClose').addEventListener('click', closeCompressorModal);
+document.getElementById('compressorRunBtn').addEventListener('click', runCompressorAgent);
+document.getElementById('compressorModal').addEventListener('click', (e) => {
+  if (e.target.id === 'compressorModal') closeCompressorModal();
+  if (e.target.classList.contains('apply-btn') && e.target.dataset.compressorPeriod) {
+    applyCompressorProposal(e.target.dataset.compressorPeriod);
+  }
+});
+document.getElementById('analystModal').addEventListener('click', (e) => {
+  if (e.target.id === 'analystModal') closeAnalystModal();
+  if (e.target.classList.contains('apply-btn') && e.target.dataset.mixPeriod) {
+    applyMixProposal(e.target.dataset.mixPeriod);
+  }
+});
+// Tab navigation
+document.querySelectorAll('.modal-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.modal-tab').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.dataset.tab === tab));
+    if (tab === 'vix') drawVixAnalystChart();
+  });
+});
+// MIX run button
+document.getElementById('mixRunBtn').addEventListener('click', runMix);
+// CSV uploads
+wireEventUpload('upcomingCSV',   EVENTS_UPCOMING_KEY,   () => { renderUpcomingEvents(); checkEventBanner(); });
+wireEventUpload('historicalCSV', EVENTS_HISTORICAL_KEY, () => { renderHistoricalCorrelation(); });
+// Esc closes whichever modal is open
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('analystModal').style.display === 'flex')    closeAnalystModal();
+  if (document.getElementById('dataModal').style.display === 'flex')       closeDataModal();
+  if (document.getElementById('compressorModal').style.display === 'flex') closeCompressorModal();
+  if (document.getElementById('favoritesModal').style.display === 'flex')  closeFavoritesModal();
+  if (document.getElementById('jefeModal').style.display === 'flex')       closeJefeModal();
+});
+document.getElementById('agentModal').addEventListener('click', (e) => {
+  if (e.target.id === 'agentModal') closeAgentModal();
+  if (e.target.classList.contains('apply-btn')) applyAgentProposal(e.target.dataset.period);
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('agentModal').style.display === 'flex') closeAgentModal();
+});
+
+// Render the desglose table — historical operations with strikes & outcome.
+function renderDesglose() {
+  const table = document.getElementById('desgloseTable');
+  const summary = document.getElementById('desgloseSummary');
+  if (!currentRows) {
+    table.innerHTML = '';
+    summary.textContent = 'No hay datos cargados.';
+    return;
+  }
+
+  const lookback = parseInt(document.getElementById('lookback').value, 10);
+  const regimes = readRegimes();
+  const { bands, nextBand } = computeBands(currentRows, regimes, lookback);
+
+  const rows = [];
+  let cleanWins = 0, touched = 0, losses = 0, noTrade = 0;
+
+  // Historical operations
+  for (let i = 1; i < currentRows.length; i++) {
+    const b = bands[i];
+    const r = currentRows[i];
+    const prev = currentRows[i - 1];
+    if (!b) continue;
+
+    const callStrike = Math.ceil(b.upper / 5) * 5;
+    const putStrike  = Math.floor(b.lower / 5) * 5;
+    const distCall = (callStrike - prev.close) / prev.close * 100;
+    const distPut  = (prev.close - putStrike)  / prev.close * 100;
+    const callTouched = isFinite(r.high) && r.high >= callStrike;
+    const putTouched  = isFinite(r.low)  && r.low  <= putStrike;
+
+    let cls, status;
+    if (!b.trade) { cls = 'notrade-row'; status = 'NO-TRADE'; noTrade++; }
+    else if (r.close >= b.upper) { cls = 'loss-row'; status = '✗ Call hit'; losses++; }
+    else if (r.close <= b.lower) { cls = 'loss-row'; status = '✗ Put hit';  losses++; }
+    else if (callTouched && putTouched) { cls = 'touched-row'; status = '⚠ Tocó ambos'; touched++; }
+    else if (callTouched)               { cls = 'touched-row'; status = '⚠ Tocó call';  touched++; }
+    else if (putTouched)                { cls = 'touched-row'; status = '⚠ Tocó put';   touched++; }
+    else                                { cls = 'win-row';     status = '✓ Limpio';     cleanWins++; }
+
+    rows.push({ cls, date: r.date, prevClose: prev.close, callStrike, distCall, putStrike, distPut, close: r.close, status,
+                callTouched, putTouched });
+  }
+
+  // Pending next-day operation
+  let pendingHtml = '';
+  if (nextBand && nextBand.trade) {
+    const last = currentRows[currentRows.length - 1];
+    const callStrike = Math.ceil(nextBand.upper / 5) * 5;
+    const putStrike  = Math.floor(nextBand.lower / 5) * 5;
+    const distCall = (callStrike - last.close) / last.close * 100;
+    const distPut  = (last.close - putStrike)  / last.close * 100;
+    // Compute "tomorrow" date (next weekday for display)
+    const d = new Date(last.date); do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+    const tomorrow = d.toISOString().slice(0, 10);
+    pendingHtml = `<tr class="pending-row">
+      <td><b>${tomorrow}</b> ⏳</td>
+      <td>${last.close.toFixed(2)}</td>
+      <td class="strike-call">${callStrike}</td>
+      <td>+${distCall.toFixed(3)}%</td>
+      <td class="strike-put">${putStrike}</td>
+      <td>−${distPut.toFixed(3)}%</td>
+      <td><i>pendiente</i></td>
+      <td><i>pendiente</i></td>
+    </tr>`;
+  }
+
+  // Render newest first (excluding pending which goes on top)
+  rows.reverse();
+  const bodyRows = rows.map(r => `
+    <tr class="${r.cls}">
+      <td>${r.date}</td>
+      <td>${r.prevClose.toFixed(2)}</td>
+      <td class="strike-call">${r.callStrike}</td>
+      <td>+${r.distCall.toFixed(3)}%</td>
+      <td class="strike-put">${r.putStrike}</td>
+      <td>−${r.distPut.toFixed(3)}%</td>
+      <td>${r.close.toFixed(2)}</td>
+      <td>${r.status}</td>
+    </tr>`).join('');
+
+  table.innerHTML = `
+    <thead><tr>
+      <th>Fecha</th>
+      <th>Cierre anterior</th>
+      <th>Call vendida</th>
+      <th>% dist call</th>
+      <th>Put vendida</th>
+      <th>% dist put</th>
+      <th>Cierre día</th>
+      <th>Resultado</th>
+    </tr></thead>
+    <tbody>${pendingHtml}${bodyRows}</tbody>`;
+
+  const totalOp = cleanWins + touched + losses;
+  const wrStrict = totalOp > 0 ? (cleanWins / totalOp * 100).toFixed(1) : '—';
+  const wrClose  = totalOp > 0 ? ((cleanWins + touched) / totalOp * 100).toFixed(1) : '—';
+  summary.innerHTML = `
+    <b>${rows.length}</b> días totales ·
+    <b style="color:var(--good)">${cleanWins} limpios</b> ·
+    <b style="color:#b06000">${touched} tocados</b> ·
+    <b style="color:var(--bad)">${losses} losses</b> ·
+    <b>${noTrade} no-trade</b> ·
+    WR estricto: <b>${wrStrict}%</b> · WR close: <b>${wrClose}%</b>
+    ${pendingHtml ? '· operación pendiente para próxima sesión arriba en amarillo' : ''}
+  `;
+}
+
+// Toggle handler for the desglose panel
+document.getElementById('toggleDesglose').addEventListener('click', () => {
+  const panel = document.getElementById('desglosePanel');
+  const btn = document.getElementById('toggleDesglose');
+  if (panel.style.display === 'none') {
+    panel.style.display = '';
+    btn.textContent = '📋 Ocultar desglose de operaciones';
+    renderDesglose();
+  } else {
+    panel.style.display = 'none';
+    btn.textContent = '📋 Mostrar desglose de operaciones';
+  }
+});
+
+// Toggle for trade log
+document.getElementById('toggleTrades').addEventListener('click', () => {
+  const panel = document.getElementById('tradesPanel');
+  const btn   = document.getElementById('toggleTrades');
+  if (panel.style.display === 'none') {
+    panel.style.display = '';
+    btn.textContent = 'Hide trade log';
+    if (window._lastPnL) renderTradesTable(window._lastPnL);
+  } else {
+    panel.style.display = 'none';
+    btn.textContent = 'Show trade log';
+  }
+});
+
+// ==========================================================================
+// COMPRESSOR ANALYST — exhaustive search of compression model parameters
+// ==========================================================================
+// Grid (deterministic order):
+//   λ:    [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]                     6 values
+//   Cmin: [0.3, 0.4, 0.5, 0.6]                               4 values (≥ 0.3)
+//   Cmax: [0.55, 0.65, 0.75, 0.85]                           4 values (≤ 0.85)
+//   Vref: [14, 16, 18, 20, 22]                               5 values
+//   Variable subsets: 2^6 = 64 (binary mask, bit i = COMPRESSION_VARS[i])
+// With Cmax > Cmin constraint: ≈ 21,000 combinations per window.
+const COMPRESSOR_GRID = {
+  lambda: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
+  cmin:   [0.3, 0.4, 0.5, 0.6],
+  cmax:   [0.55, 0.65, 0.75, 0.85],
+  vref:   [14, 16, 18, 20, 22],
+};
+
+// Score a single (λ, Cmin, Cmax, Vref, mask) config on a window.
+// Inline, no allocations. Reads sigmas from baseBands and current weights from compressionVars.
+function scoreCompressorConfig(rows, baseBands, baseRegimes, windowDays, lambda, cmin, cmax, vref, mask) {
+  const start = Math.max(1, rows.length - windowDays);
+  const N = rows.length;
+  let score = 0;
+  for (let i = start; i < N; i++) {
+    const b = baseBands[i];
+    if (!b) continue;
+    const prev = rows[i - 1];
+    const reg = regimeFor(prev.vix, baseRegimes);
+    if (!isDayAccepted(rows[i], reg)) continue;
+
+    // Compute Z over active variables (per mask)
+    let Z = 0;
+    if (mask & 1) {  // iv_hv
+      if (isFinite(prev.iv) && isFinite(prev.hv) && prev.iv > 0 && prev.hv > 0) {
+        Z += compressionVars[0].weight * Math.log(prev.iv / prev.hv);
+      }
+    }
+    if (mask & 2) {  // iv_rank
+      if (isFinite(prev.ivRank)) Z += compressionVars[1].weight * (prev.ivRank - 50) / 50;
+    }
+    if (mask & 4) {  // iv_pctl
+      if (isFinite(prev.ivPctl)) Z += compressionVars[2].weight * (prev.ivPctl - 50) / 50;
+    }
+    if (mask & 8) {  // vix
+      if (isFinite(prev.vix)) Z += compressionVars[3].weight * (vref - prev.vix) / vref;
+    }
+    if (mask & 16) {  // iv_chg
+      if (isFinite(prev.ivChg)) Z += compressionVars[4].weight * prev.ivChg;
+    }
+    if (mask & 32) {  // pcv
+      if (isFinite(prev.pcv) && prev.pcv > 0) Z += compressionVars[5].weight * Math.log(prev.pcv);
+    }
+
+    const Craw = 1 / (1 + Math.exp(-lambda * Z));
+    const base = Math.max(cmin, Math.min(cmax, Craw));
+    const delta = compressionParams.shiftFactor * (cmax - cmin);
+    let Ccall = base, Cput = base;
+    if (prev.trend === 'up')        { Ccall = base + delta; Cput = base - delta; }
+    else if (prev.trend === 'down') { Ccall = base - delta; Cput = base + delta; }
+    Ccall = Math.max(cmin, Math.min(cmax, Ccall));
+    Cput  = Math.max(cmin, Math.min(cmax, Cput));
+
+    const upper = prev.close * (1 + Ccall * reg.k * reg.upperMult * b.sigUp);
+    const lower = prev.close * (1 - Cput  * reg.k * reg.lowerMult * b.sigDn);
+    if (rows[i].close >= upper || rows[i].close <= lower) score += LOSS_PNL;
+    else score += WIN_PNL;
+  }
+  return score;
+}
+
+async function searchCompressorWindow(rows, baseBands, baseRegimes, windowDays, baselineScore, onProgress) {
+  let bestScore = baselineScore;
+  let bestConfig = null;
+  const Lg = COMPRESSOR_GRID.lambda, Mg = COMPRESSOR_GRID.cmin, Xg = COMPRESSOR_GRID.cmax, Vg = COMPRESSOR_GRID.vref;
+  const totalOuter = Lg.length * Mg.length * Xg.length * Vg.length;
+  let outerDone = 0;
+
+  for (const lambda of Lg) {
+    for (const cmin of Mg) {
+      for (const cmax of Xg) {
+        if (cmax <= cmin + 0.04) { outerDone += Vg.length; continue; }
+        for (const vref of Vg) {
+          for (let mask = 0; mask < 64; mask++) {
+            const s = scoreCompressorConfig(rows, baseBands, baseRegimes, windowDays, lambda, cmin, cmax, vref, mask);
+            if (s > bestScore) { bestScore = s; bestConfig = { lambda, cmin, cmax, vref, mask }; }
+          }
+          outerDone++;
+        }
+        if (onProgress) onProgress(outerDone / totalOuter);
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+  }
+  return { bestScore, bestConfig };
+}
+
+async function runCompressorAgent() {
+  if (!currentRows) return;
+  const btn = document.getElementById('compressorRunBtn');
+  const status = document.getElementById('compressorStatus');
+  const bar = document.getElementById('compressorProgressBar');
+  const fill = document.getElementById('compressorProgressFill');
+  btn.disabled = true;
+  bar.style.display = 'block';
+  fill.style.width = '0%';
+  status.style.color = '';
+
+  try {
+    const lookback = parseInt(document.getElementById('lookback').value, 10);
+    const baseRegimes = readRegimes();
+    const { bands: baseBands } = computeBands(currentRows, baseRegimes, lookback);
+
+    // Baseline (current state) per window
+    const baseScore = (windowDays) => {
+      const start = Math.max(1, currentRows.length - windowDays);
+      let s = 0;
+      for (let i = start; i < currentRows.length; i++) {
+        const b = baseBands[i];
+        if (!b || !b.trade) continue;
+        if (currentRows[i].close >= b.upper || currentRows[i].close <= b.lower) s += LOSS_PNL;
+        else s += WIN_PNL;
+      }
+      return s;
+    };
+
+    const periods = [
+      { key: '1m', label: 'Mejora 1 — 1 mes',   days: 21  },
+      { key: '3m', label: 'Mejora 2 — 3 meses', days: 63  },
+      { key: '6m', label: 'Mejora 3 — 6 meses', days: 126 },
+    ];
+
+    document.getElementById('compressorResults').innerHTML = '';
+    _compressorCache.clear();
+
+    const t0 = performance.now();
+    for (let pIdx = 0; pIdx < periods.length; pIdx++) {
+      const p = periods[pIdx];
+      const windowBaseline = baseScore(p.days);
+      status.textContent = `[${pIdx + 1}/3 · ${p.label}] explorando ~21.500 combos…`;
+      const tWin = performance.now();
+      const result = await searchCompressorWindow(
+        currentRows, baseBands, baseRegimes, p.days, windowBaseline,
+        (pct) => {
+          const overall = (pIdx + pct) / periods.length * 100;
+          fill.style.width = overall.toFixed(1) + '%';
+        }
+      );
+      const elapsed = ((performance.now() - tWin) / 1000).toFixed(1);
+      status.textContent = `${p.label} listo (${elapsed}s, mejor: $${result.bestScore.toFixed(0)} vs base $${windowBaseline.toFixed(0)})`;
+      renderCompressorCard(p, windowBaseline, result);
+      await new Promise(r => setTimeout(r, 0));
+    }
+    fill.style.width = '100%';
+    status.textContent = `✓ Completado en ${((performance.now() - t0) / 1000).toFixed(1)}s.`;
+    setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 1800);
+  } catch (err) {
+    console.error('runCompressorAgent error:', err);
+    status.style.color = '#b73232';
+    status.textContent = `✗ Error: ${err.message || err}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+const _compressorCache = new Map();
+
+function renderCompressorCard(period, baselineScore, result) {
+  const container = document.getElementById('compressorResults');
+  const card = document.createElement('div');
+  card.className = 'mix-card';
+
+  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+
+  if (!result.bestConfig) {
+    card.innerHTML = `
+      <h4>${period.label}</h4>
+      <div style="font-size:12px;color:var(--ink-soft)">
+        Ninguna combinación supera la configuración actual (baseline: ${fmt$(baselineScore)}).
+        <br>El modelo actual ya es óptimo para esta ventana, o necesitas tunear pesos antes.
+      </div>`;
+    container.appendChild(card);
+    return;
+  }
+
+  const cfg = result.bestConfig;
+  const delta = result.bestScore - baselineScore;
+  const activeVars = COMPRESSION_VARS
+    .map((v, i) => (cfg.mask & (1 << i)) ? v.label : null)
+    .filter(Boolean);
+
+  _compressorCache.set(period.key, cfg);
+
+  card.innerHTML = `
+    <h4>${period.label}</h4>
+    <div class="iter-info">
+      <span>Baseline → Mejor</span>
+      <span>${fmt$(baselineScore)} → <b style="color:var(--good)">${fmt$(result.bestScore)}</b> (${fmt$(delta)})</span>
+    </div>
+    <div class="threshold-block">
+      <div class="th-label">Parámetros del modelo</div>
+      <div class="th-vals">
+        λ = <b>${cfg.lambda}</b> · C<sub>min</sub> = <b>${cfg.cmin}</b> · C<sub>max</sub> = <b>${cfg.cmax}</b> · V<sub>ref</sub> = <b>${cfg.vref}</b>
+      </div>
+    </div>
+    <div class="threshold-block">
+      <div class="th-label">Variables activas (${activeVars.length}/6)</div>
+      <div class="th-vals">
+        ${activeVars.length === 0
+          ? '<i style="color:var(--ink-soft)">Ninguna — sólo aplica el clamp [Cmin, Cmax]</i>'
+          : activeVars.map(v => `<span class="changed">${v}</span>`).join(' · ')}
+      </div>
+    </div>
+    <button class="apply-btn" data-compressor-period="${period.key}">Aplicar esta configuración</button>
+  `;
+  container.appendChild(card);
+}
+
+function applyCompressorProposal(periodKey) {
+  const cfg = _compressorCache.get(periodKey);
+  if (!cfg) return;
+  // Update DOM inputs
+  document.getElementById('cParamLambda').value = cfg.lambda;
+  document.getElementById('cParamCmin').value   = cfg.cmin;
+  document.getElementById('cParamCmax').value   = cfg.cmax;
+  document.getElementById('cParamVref').value   = cfg.vref;
+  // Update internal state
+  compressionParams.lambda = cfg.lambda;
+  compressionParams.Cmin   = cfg.cmin;
+  compressionParams.Cmax   = cfg.cmax;
+  compressionParams.Vref   = cfg.vref;
+  // Update active flags per mask
+  for (let i = 0; i < 6; i++) {
+    compressionVars[i].active = (cfg.mask & (1 << i)) !== 0;
+  }
+  renderCompressionPanel();
+  closeCompressorModal();
+  recalc();
+}
+
+function openCompressorModal()  { document.getElementById('compressorModal').style.display = 'flex'; }
+function closeCompressorModal() { document.getElementById('compressorModal').style.display = 'none'; }
+
+// Safe wrapper around Plotly — never crashes the rest of the pipeline
+// if Plotly failed to load from CDN.
+function safePlotly(elementId, traces, layout, config) {
+  if (typeof Plotly === 'undefined') {
+    const el = document.getElementById(elementId);
+    if (el && !el.dataset.plotlyWarned) {
+      el.dataset.plotlyWarned = '1';
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:#b73232;background:#fee;border:1px solid #b73232;border-radius:5px;font-size:13px"><b>⚠ Plotly no disponible</b><br>Refresca la página cuando vuelvas a tener internet.</div>';
+    }
+    return;
+  }
+  try {
+    Plotly.newPlot(elementId, traces, layout, config);
+  } catch (e) {
+    console.error('[Plotly]', elementId, 'render error:', e);
+  }
+}
+
+// ---- Theme toggle (light/dark) ------------------------------------------
+const THEME_KEY = 'spx-vix-theme-v1';
+function applyTheme(theme) {
+  const t = (theme === 'dark') ? 'dark' : 'light';
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll('.theme-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.theme === t);
+  });
+  try { localStorage.setItem(THEME_KEY, t); } catch (_) {}
+}
+applyTheme(localStorage.getItem(THEME_KEY) || 'light');
+document.querySelectorAll('.theme-btn').forEach(b => {
+  b.addEventListener('click', () => applyTheme(b.dataset.theme));
+});
+
+// Auto-load priority: cached CSV → fetch (http only) → manual entries only
+const AUTO_LOAD_NAMES = ['SPX-VIX.fin.csv', 'data.csv'];
+(async () => {
+  // 1. Cached CSV — works regardless of file:// vs http
+  const cache = loadCSVCache();
+  if (cache && cache.text) {
+    try {
+      currentRows = applyEntries(parseCSV(cache.text), loadEntries());
+      console.log(`[CSV cache] Cargadas ${currentRows.length} filas de "${cache.filename}" (${((Date.now() - cache.savedAt)/86400000).toFixed(1)} días en caché)`);
+      recalc();
+      updateCacheStatus();
+      return;
+    } catch (e) {
+      console.warn('[CSV cache] Cache corrupto, ignorando:', e);
+      clearCSVCache();
+    }
+  }
+
+  // 2. Auto-fetch (only works via http(s))
+  for (const name of AUTO_LOAD_NAMES) {
+    try {
+      const r = await fetch(name);
+      if (r.ok) {
+        const text = await r.text();
+        saveCSVCache(text, name);
+        currentRows = applyEntries(parseCSV(text), loadEntries());
+        recalc();
+        updateCacheStatus();
+        return;
+      }
+    } catch (_) { /* file:// or missing */ }
+  }
+
+  // 3. Manual entries only (no CSV available)
+  const stored = loadEntries();
+  if (Object.keys(stored).length) {
+    currentRows = applyEntries([], stored);
+  }
+  recalc();
+  updateCacheStatus();
+})();
