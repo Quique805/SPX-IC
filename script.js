@@ -4618,3 +4618,57 @@ const AUTO_LOAD_NAMES = ['SPX-VIX.fin.csv', 'data.csv'];
   recalc();
   updateCacheStatus();
 })();
+
+// ---- Auto-load OHLC fetched by GitHub Action --------------------------
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/Quique805/SPX-IC/main';
+
+async function loadAutoFetchedOHLC() {
+  if (!currentRows) {
+    console.log('[Auto OHLC] currentRows no disponible aún, reintentando en 2s');
+    setTimeout(loadAutoFetchedOHLC, 2000);
+    return;
+  }
+  try {
+    const url = `${GITHUB_RAW_BASE}/data/daily-ohlc.json?t=${Date.now()}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.log('[Auto OHLC] No disponible aún (status ' + r.status + '). Esperando primer run del Action.');
+      return;
+    }
+    const data = await r.json();
+    if (!data.byDate) return;
+    let added = 0, filled = 0;
+    const byDate = new Map(currentRows.map(row => [row.date, row]));
+    for (const [d, info] of Object.entries(data.byDate)) {
+      if (byDate.has(d)) {
+        const row = byDate.get(d);
+        if (!isFinite(row.open)  && isFinite(info.spx_open))  { row.open  = info.spx_open;  filled++; }
+        if (!isFinite(row.high)  && isFinite(info.spx_high))  { row.high  = info.spx_high;  filled++; }
+        if (!isFinite(row.low)   && isFinite(info.spx_low))   { row.low   = info.spx_low;   filled++; }
+        if (!isFinite(row.close) && isFinite(info.spx_close)) { row.close = info.spx_close; filled++; }
+        if (!isFinite(row.vix)   && isFinite(info.vix_close)) { row.vix   = info.vix_close; filled++; }
+      } else if (isFinite(info.spx_close)) {
+        currentRows.push({
+          date: d,
+          open: info.spx_open, high: info.spx_high, low: info.spx_low,
+          close: info.spx_close, vix: info.vix_close,
+          iv: NaN, hv: NaN, ivRank: NaN, ivPctl: NaN, ivChg: NaN, pcv: NaN,
+        });
+        added++;
+      }
+    }
+    if (added > 0 || filled > 0) {
+      currentRows.sort((a, b) => new Date(a.date) - new Date(b.date));
+      enrichRows(currentRows);
+      console.log(`[Auto OHLC] ${added} días nuevos, ${filled} campos rellenados desde GitHub`);
+      recalc();
+    } else {
+      console.log('[Auto OHLC] Sin cambios respecto a datos existentes');
+    }
+  } catch (e) {
+    console.warn('[Auto OHLC] Error:', e.message);
+  }
+}
+
+// Disparar el auto-load tras 3 segundos (da tiempo al CSV/cache a cargarse primero)
+setTimeout(loadAutoFetchedOHLC, 3000);
