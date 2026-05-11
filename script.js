@@ -3955,9 +3955,9 @@ function _renderDataViewInner(content, countEl) {
       const hasMissing = !isFinite(num(r.iv)) || !isFinite(num(r.hv)) || !isFinite(num(r.ivPctl)) || !isFinite(num(r.ivChg)) || !isFinite(num(r.pcv));
       const rowBg = isManual ? '#fff7df' : (hasMissing ? '#fdf3ec' : '#fff');
       const dateColor = isManual ? '#8a6d10' : '#0c1f33';
-      const editBtn = isManual
-        ? ` <button class="edit-entry-btn" data-date="${r.date}" style="margin-left:6px;background:#c9a227;color:#0a0a0a;border:none;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;font-weight:600">✏️ Editar</button>`
-        : '';
+      // Botón editar SIEMPRE disponible (filas CSV o manuales).
+      // Al editar una fila de CSV, se crea un override en localStorage.
+      const editBtn = ` <button class="edit-entry-btn" data-date="${r.date}" style="margin-left:6px;background:${isManual ? '#c9a227' : '#cfe1f2'};color:${isManual ? '#0a0a0a' : '#0c1f33'};border:none;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;font-weight:600" title="${isManual ? 'Editar entrada manual' : 'Crear override de fila CSV'}">✏️ Editar</button>`;
       bodyParts.push(`<tr style="background:${rowBg}">
         <td style="background:${rowBg};color:${dateColor};padding:3px 8px;border-bottom:1px solid #ddd;font-weight:500">${r.date || '(sin fecha)'}${isManual ? ' ✎' : ''}${editBtn}</td>
         ${cell(r.close)}${cell(r.high)}${cell(r.low)}${cell(r.vix)}
@@ -3998,34 +3998,44 @@ function _renderDataViewInner(content, countEl) {
     </table>
   `;
 }
-// Pre-fill the entry form with an existing manual entry, ready for edit.
+// Pre-fill the entry form with an existing row (manual override OR CSV-only).
+// Manual overrides take priority; otherwise falls back to the row in currentRows.
 function populateFormFromEntry(date) {
   const entries = loadEntries();
   const entry = entries[date];
-  if (!entry) {
-    console.warn('[Edit] No entry found for', date);
-    return;
+  let source = 'manual';
+  let data = entry;
+  if (!data) {
+    // Try to find the row in currentRows (CSV-only row)
+    const csvRow = currentRows && currentRows.find(r => r.date === date);
+    if (!csvRow) {
+      console.warn('[Edit] No data found for', date);
+      return;
+    }
+    data = csvRow;
+    source = 'csv';
   }
   const setVal = (id, v) => {
     document.getElementById(id).value = isFinite(v) ? v : '';
   };
   document.getElementById('entryDate').value = date;
-  setVal('entryOpen',   entry.open);
-  setVal('entryClose',  entry.close);
-  setVal('entryHigh',   entry.high);
-  setVal('entryLow',    entry.low);
-  setVal('entryVix',    entry.vix);
-  setVal('entryIv',     entry.iv);
-  setVal('entryHv',     entry.hv);
-  setVal('entryIvr',    entry.ivRank);
-  setVal('entryIvp',    entry.ivPctl);
-  setVal('entryIvchg',  entry.ivChg);
-  setVal('entryPcv',    entry.pcv);
+  setVal('entryOpen',   data.open);
+  setVal('entryClose',  data.close);
+  setVal('entryHigh',   data.high);
+  setVal('entryLow',    data.low);
+  setVal('entryVix',    data.vix);
+  setVal('entryIv',     data.iv);
+  setVal('entryHv',     data.hv);
+  setVal('entryIvr',    data.ivRank);
+  setVal('entryIvp',    data.ivPctl);
+  setVal('entryIvchg',  data.ivChg);
+  setVal('entryPcv',    data.pcv);
   // Visual feedback
   const fb = document.getElementById('entryFeedback');
   fb.className = 'feedback';
-  fb.textContent = `✏️ Editando ${date}. Modifica y pulsa Add para guardar (sobrescribe).`;
-  // Scroll header into view in case the user is far down
+  fb.textContent = source === 'manual'
+    ? `✏️ Editando entrada manual ${date}. Modifica y pulsa Add para sobrescribir.`
+    : `✏️ Editando fila CSV ${date}. Al pulsar Add, se creará un override en localStorage que prevalecerá sobre el CSV.`;
   document.querySelector('header').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 

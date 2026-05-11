@@ -13,6 +13,22 @@ OHLC_FILE = os.path.join(DATA_DIR, "daily-ohlc.json")
 CHAINS_INDEX = os.path.join(DATA_DIR, "chains-index.json")
 UA = "Mozilla/5.0 (compatible; SPX-IC-bot/1.0)"
 
+# NYSE full-close holidays. Update yearly.
+NYSE_HOLIDAYS = {
+    # 2026
+    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25",
+    "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+    # 2027
+    "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31",
+    "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24",
+}
+
+def is_trading_day(d):
+    """True if d (datetime.date) is a NYSE trading day (Mon-Fri, not a holiday)."""
+    if d.weekday() >= 5: return False  # 5=Sat, 6=Sun
+    if d.isoformat() in NYSE_HOLIDAYS: return False
+    return True
+
 def http_get_json(url, timeout=30):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -66,9 +82,16 @@ def save_json(path, data):
     with open(path, "w") as f: json.dump(data, f, indent=2, default=str)
 
 def main():
-    today = date.today().isoformat()
+    today_d = date.today()
+    today = today_d.isoformat()
     now_iso = datetime.now(timezone.utc).isoformat()
-    print(f"[{now_iso}] SPX-IC daily fetch starting...")
+    print(f"[{now_iso}] SPX-IC daily fetch starting (today={today}, weekday={today_d.strftime('%A')})...")
+
+    if not is_trading_day(today_d):
+        reason = "fin de semana" if today_d.weekday() >= 5 else "festivo NYSE"
+        print(f"  ⏭  Saltando: hoy es {reason}. No se descarga nada.")
+        return
+
     os.makedirs(CHAINS_DIR, exist_ok=True)
 
     # Yahoo OHLC
@@ -99,6 +122,14 @@ def main():
         save_json(OHLC_FILE, {"lastUpdated": now_iso, "byDate": by_date})
         print(f"  ✓ OHLC: {len(by_date)} fechas guardadas")
 
+    # Cross-check: si la última vela de Yahoo no es de hoy, NYSE no operó hoy
+    # (festivo no listado, fallo de feed, etc.) → no escribir cadena con fecha falsa.
+    latest_spx = spx_rows[-1]["date"] if spx_rows else None
+    if latest_spx and latest_spx != today:
+        print(f"  ⏭  Última vela SPX es {latest_spx}, no {today}. NYSE parece cerrado → omito cadena.")
+        print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
+        return
+
     # CBOE chain
     try:
         raw = http_get_json("https://cdn.cboe.com/api/global/delayed_quotes/options/_SPX.json")
@@ -108,7 +139,6 @@ def main():
         options = [o for o in options if o is not None]
         print(f"  ✓ CBOE: spot={spot}, {len(options)} opciones")
 
-        today_d = date.today()
         relevant = []
         for e in sorted(set(o["expiration"] for o in options)):
             ed = datetime.strptime(e, "%Y-%m-%d").date()
