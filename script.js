@@ -4791,12 +4791,17 @@ function updateScheduleBar() {
   const dstEl = document.getElementById('chainsCurrentDST');
   if (dstEl) dstEl.textContent = dstLabel;
 
-  const cronUTC = 15;
+  // Cron hardcoded en el YAML — actualízalo aquí también si cambias el YAML
+  // Verano (CEST):  cron 0 14 * * 1-5  →  cronUTC = 14
+  // Invierno (CET): cron 0 15 * * 1-5  →  cronUTC = 15
+  const cronUTC = dst === 'CEST' ? 14 : 15;
   const madridHour = dst === 'CEST' ? cronUTC + 2 : cronUTC + 1;
-  const nyHour    = dst === 'CEST' ? cronUTC - 4 : cronUTC - 5;
+  const nyHour     = dst === 'CEST' ? cronUTC - 4 : cronUTC - 5;
+  const minutesAfterOpen = (nyHour - 9) * 60 - 30; // NY abre 9:30
+  const delayedDataMin = minutesAfterOpen - 15;     // CBOE delay 15min
   const nextEl = document.getElementById('chainsNextRun');
   if (nextEl) {
-    nextEl.innerHTML = `${madridHour}:00 Madrid (= ${nyHour}:00 NY, ${dst === 'CEST' ? '+90 min' : '+30 min'} tras apertura)`;
+    nextEl.innerHTML = `<b>${String(madridHour).padStart(2,'0')}:00 Madrid</b> (= ${String(nyHour).padStart(2,'0')}:00 NY, datos efectivos +${delayedDataMin} min tras apertura)`;
   }
 }
 
@@ -4804,7 +4809,7 @@ const editBtn = document.getElementById('editScheduleBtn');
 if (editBtn) {
   editBtn.addEventListener('click', () => {
     window.open('https://github.com/Quique805/SPX-IC/edit/main/.github/workflows/daily-fetch.yml', '_blank');
-    alert('Abriendo el YAML en GitHub.\n\nPara cambiar el horario, edita la línea:\n  - cron: \'0 15 * * 1-5\'\n\nValores típicos:\n  • Verano (CEST): 0 14 * * 1-5  → captura ~30 min tras apertura NY\n  • Invierno (CET): 0 15 * * 1-5  → captura ~30 min tras apertura NY\n\nDespués pulsa "Commit changes" abajo.');
+    alert('Abriendo el YAML en GitHub.\n\nObjetivo: que la captura siempre sea a las 16:00 Madrid (= 10:00 NY = 30 min tras apertura).\n\n• VERANO (CEST):  - cron: \'0 14 * * 1-5\'  ← actualmente activo\n• INVIERNO (CET): - cron: \'0 15 * * 1-5\'\n\nCuando España cambie de hora (último domingo de marzo y de octubre), comenta una línea y descomenta la otra. Después actualiza también la línea cronUTC en script.js (función updateScheduleBar) para que coincida.\n\nDespués pulsa "Commit changes" abajo.');
   });
 }
 
