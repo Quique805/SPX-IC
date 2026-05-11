@@ -2,9 +2,12 @@ name: Daily SPX Data Fetch
 
 on:
   schedule:
-    # 15:00 UTC = 11:00 ET en verano (EDT) / 10:00 ET en invierno (EST)
-    # Captura ~30-90 min tras apertura de NY (margen para DST)
-    - cron: '0 15 * * 1-5'
+    # === HORARIO DE VERANO (CEST, UTC+2) — actualmente activo ===
+    # 14:00 UTC = 16:00 Madrid (CEST) = 10:00 NY (EDT) = +30 min tras apertura
+    - cron: '0 14 * * 1-5'
+    # === HORARIO DE INVIERNO (CET, UTC+1) ===
+    # En invierno, comentar la línea de arriba y descomentar esta:
+    # - cron: '0 15 * * 1-5'  # 15:00 UTC = 16:00 Madrid (CET) = 10:00 NY (EST)
   workflow_dispatch:  # Permite disparar manualmente desde la pestaña Actions
 
 permissions:
