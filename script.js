@@ -2623,7 +2623,6 @@ function renderStats(stats, regimes) {
   const o = stats.overall;
   const winRateClose  = o.total ? (o.wins / o.total * 100) : 0;
   const winRateStrict = o.total ? (o.cleanWins / o.total * 100) : 0;
-  const lossRate = o.total ? ((o.lossUp + o.lossDn) / o.total * 100) : 0;
   const period = (o.firstDate && o.lastDate) ? `${o.firstDate} → ${o.lastDate}` : '—';
 
   const rowsHtml = regimes.map((reg, i) => {
@@ -4670,5 +4669,146 @@ async function loadAutoFetchedOHLC() {
   }
 }
 
-// Disparar el auto-load tras 3 segundos (da tiempo al CSV/cache a cargarse primero)
 setTimeout(loadAutoFetchedOHLC, 3000);
+
+// ---- Auto-loaded chains from GitHub Action ------------------------------
+async function loadAutoFetchedChains() {
+  const listEl = document.getElementById('autoChainsList');
+  const lastEl = document.getElementById('chainsLastUpdate');
+  if (!listEl) return;
+  try {
+    const indexUrl = `${GITHUB_RAW_BASE}/data/chains-index.json?t=${Date.now()}`;
+    const r = await fetch(indexUrl);
+    if (!r.ok) {
+      listEl.innerHTML = '<div style="font-size:12px;color:var(--ink-soft);text-align:center;padding:14px">Aún no hay cadenas auto-descargadas. Esperando primer run del Action.</div>';
+      if (lastEl) lastEl.textContent = 'aún no disponible';
+      return;
+    }
+    const idx = await r.json();
+    if (lastEl) lastEl.textContent = idx.lastUpdated ? formatMadridTime(idx.lastUpdated) : '—';
+    const dates = (idx.dates || []).slice().reverse();
+    if (dates.length === 0) {
+      listEl.innerHTML = '<div style="font-size:12px;color:var(--ink-soft);text-align:center;padding:14px">Sin cadenas todavía.</div>';
+      return;
+    }
+    listEl.innerHTML = `
+      <div style="font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">
+        Cadenas auto-descargadas de CBOE (${dates.length})
+      </div>
+      ${dates.map(d => `
+        <div class="auto-chain-item">
+          <div>
+            <span class="ac-date">${d}</span>
+            <span class="ac-meta"> · CBOE delayed</span>
+          </div>
+          <button class="auto-chain-view" data-date="${d}">👁 Ver</button>
+        </div>`).join('')}`;
+    listEl.querySelectorAll('.auto-chain-view').forEach(btn => {
+      btn.addEventListener('click', () => viewAutoChain(btn.dataset.date));
+    });
+  } catch (e) {
+    console.warn('[Auto chains] Error:', e.message);
+    listEl.innerHTML = `<div style="color:var(--bad);font-size:12px">Error: ${e.message}</div>`;
+  }
+}
+
+async function viewAutoChain(date) {
+  const preview = document.getElementById('chainPreview');
+  if (!preview) return;
+  preview.style.display = '';
+  preview.innerHTML = '<div style="padding:14px;text-align:center">Cargando cadena…</div>';
+  try {
+    const url = `${GITHUB_RAW_BASE}/data/chains/${date}.json?t=${Date.now()}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const c = await r.json();
+    const expirations = Object.entries(c.expirations || {});
+    const fmt = v => isFinite(v) && v !== null ? Number(v).toFixed(2) : '—';
+    const fmtIV = v => isFinite(v) && v !== null ? (Number(v) * 100).toFixed(1) + '%' : '—';
+    let html = `<div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+      <b>Cadena ${c.date}</b> · Spot: <b>${fmt(c.spot)}</b> · Capturada: <b>${formatMadridTime(c.capturedAt)} (Madrid)</b>
+    </div>`;
+    for (const [exp, data] of expirations) {
+      const rows = data.strikes.map(s => `<tr>
+        <td>${s.strike}</td>
+        <td class="call-cell">${fmt(s.call_bid)}</td>
+        <td class="call-cell">${fmt(s.call_ask)}</td>
+        <td class="call-cell">${fmtIV(s.call_iv)}</td>
+        <td class="put-cell">${fmt(s.put_bid)}</td>
+        <td class="put-cell">${fmt(s.put_ask)}</td>
+        <td class="put-cell">${fmtIV(s.put_iv)}</td>
+      </tr>`).join('');
+      html += `
+        <details ${data.dte === 0 ? 'open' : ''} style="margin-bottom:8px">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--navy-700);padding:6px 0">
+            Vencimiento ${exp} (${data.dte} DTE) · ${data.strikes.length} strikes
+          </summary>
+          <table class="chain-table" style="margin-top:6px">
+            <thead><tr>
+              <th>Strike</th>
+              <th>Call Bid</th><th>Call Ask</th><th>Call IV</th>
+              <th>Put Bid</th><th>Put Ask</th><th>Put IV</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </details>`;
+    }
+    html += `<div class="chain-preview-actions"><button class="chain-cancel-btn" id="chainCancelBtn">Cerrar vista</button></div>`;
+    preview.innerHTML = html;
+    document.getElementById('chainCancelBtn').addEventListener('click', () => {
+      preview.style.display = 'none';
+    });
+  } catch (e) {
+    preview.innerHTML = `<div style="color:var(--bad);padding:14px">Error cargando cadena: ${e.message}</div>`;
+  }
+}
+
+// ---- Madrid timezone helpers --------------------------------------------
+function formatMadridTime(isoUtc) {
+  if (!isoUtc) return '—';
+  try {
+    const d = new Date(isoUtc);
+    return d.toLocaleString('es-ES', {
+      timeZone: 'Europe/Madrid',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }) + ' h';
+  } catch (_) { return isoUtc; }
+}
+
+function getMadridDST() {
+  const parts = new Intl.DateTimeFormat('es-ES', {
+    timeZone: 'Europe/Madrid', timeZoneName: 'short'
+  }).formatToParts(new Date());
+  const tz = parts.find(p => p.type === 'timeZoneName');
+  return tz ? tz.value : '—';
+}
+
+function updateScheduleBar() {
+  const dst = getMadridDST();
+  const dstLabel = dst === 'CEST' ? '☀ Verano (CEST, UTC+2)' :
+                   dst === 'CET'  ? '❄ Invierno (CET, UTC+1)' : dst;
+  const dstEl = document.getElementById('chainsCurrentDST');
+  if (dstEl) dstEl.textContent = dstLabel;
+
+  const cronUTC = 15;
+  const madridHour = dst === 'CEST' ? cronUTC + 2 : cronUTC + 1;
+  const nyHour    = dst === 'CEST' ? cronUTC - 4 : cronUTC - 5;
+  const nextEl = document.getElementById('chainsNextRun');
+  if (nextEl) {
+    nextEl.innerHTML = `${madridHour}:00 Madrid (= ${nyHour}:00 NY, ${dst === 'CEST' ? '+90 min' : '+30 min'} tras apertura)`;
+  }
+}
+
+const editBtn = document.getElementById('editScheduleBtn');
+if (editBtn) {
+  editBtn.addEventListener('click', () => {
+    window.open('https://github.com/Quique805/SPX-IC/edit/main/.github/workflows/daily-fetch.yml', '_blank');
+    alert('Abriendo el YAML en GitHub.\n\nPara cambiar el horario, edita la línea:\n  - cron: \'0 15 * * 1-5\'\n\nValores típicos:\n  • Verano (CEST): 0 14 * * 1-5  → captura ~30 min tras apertura NY\n  • Invierno (CET): 0 15 * * 1-5  → captura ~30 min tras apertura NY\n\nDespués pulsa "Commit changes" abajo.');
+  });
+}
+
+setTimeout(() => {
+  loadAutoFetchedChains();
+  updateScheduleBar();
+}, 1500);

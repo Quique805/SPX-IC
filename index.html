@@ -1699,6 +1699,55 @@
     [data-theme="dark"] .equity-header label { color: var(--ink-soft); }
     [data-theme="dark"] .iter-info,
     [data-theme="dark"] .period-info { color: var(--ink-soft); }
+
+    /* ---- Chains panel: status bar + schedule -------------------------- */
+    .chains-status {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 16px; flex-wrap: wrap;
+      padding: 10px 14px;
+      background: linear-gradient(180deg, var(--blue-50) 0%, #fff 100%);
+      border: 1px solid var(--blue-200);
+      border-left: 3px solid var(--gold-500);
+      border-radius: 6px;
+      margin-bottom: 14px;
+      font-size: 12px;
+    }
+    .chains-status-info { display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; }
+    .chains-status-info b { color: var(--navy-700); }
+    .chains-schedule-toggle {
+      display: flex; flex-direction: column; gap: 6px;
+      align-items: flex-end;
+      flex: 0 0 auto;
+    }
+    .edit-schedule-btn {
+      background: var(--navy-700); color: #fff;
+      border: 1px solid var(--gold-500);
+      border-radius: 5px;
+      padding: 5px 12px; font-size: 11px; font-weight: 600;
+      cursor: pointer;
+    }
+    .edit-schedule-btn:hover { background: var(--navy-600); }
+    .auto-chain-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px;
+      background: #fff; border: 1px solid var(--blue-200);
+      border-radius: 5px; margin-bottom: 6px;
+      font-size: 12px;
+    }
+    .auto-chain-item .ac-date { font-weight: 700; color: var(--navy-700); }
+    .auto-chain-item .ac-meta { color: var(--ink-soft); font-size: 11px; }
+    .auto-chain-item button {
+      background: transparent; color: var(--navy-700);
+      border: 1px solid var(--navy-700); border-radius: 4px;
+      padding: 3px 10px; font-size: 11px; cursor: pointer;
+    }
+    .auto-chain-item button:hover { background: var(--navy-700); color: #fff; }
+    [data-theme="dark"] .chains-status {
+      background: linear-gradient(180deg, #131613 0%, #1a1d1a 100%);
+    }
+    [data-theme="dark"] .auto-chain-item {
+      background: #1a1d1a;
+    }
   </style>
 </head>
 <body>
@@ -1765,19 +1814,41 @@
   <main>
     <div id="eventBanner" style="display:none"></div>
 
-    <div class="card">
-      <h2>Cadenas de opciones (Barchart CSV)</h2>
-      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
-        Sube cada día el CSV exportado de la option chain de Barchart Premier (botón "Download" en la página de cadena).
-        El sistema lo interpreta, lo guarda y lo asocia a una fecha. Cuando tengas suficientes cadenas, podremos calcular P&L real por día en lugar del modelo simplificado.
+    <div class="card" id="chainsCard">
+      <h2>Cadenas de opciones SPX</h2>
+
+      <div class="chains-status">
+        <div class="chains-status-info">
+          <div>📥 <b>Última cadena auto-descargada:</b> <span id="chainsLastUpdate">cargando…</span></div>
+          <div>⏰ <b>Próxima ejecución programada:</b> <span id="chainsNextRun">—</span></div>
+        </div>
+        <div class="chains-schedule-toggle">
+          <div>Horario Madrid actual: <b id="chainsCurrentDST">—</b></div>
+          <button id="editScheduleBtn" type="button" class="edit-schedule-btn" title="Abre el archivo YAML en GitHub para editar el cron del Action">
+            📝 Editar horario en GitHub
+          </button>
+        </div>
       </div>
-      <div class="upload-zone">
-        <label for="chainCSV">📂 Subir CSV de cadena</label>
-        <input type="file" id="chainCSV" accept=".csv" style="display:none">
-        <div class="help">Formato Barchart estándar: detecta automáticamente Strike, Call Bid/Ask/IV, Put Bid/Ask/IV, Volume, OI.</div>
-      </div>
-      <div id="chainPreview" style="display:none;margin-top:14px"></div>
-      <div id="chainSavedList" style="margin-top:14px"></div>
+
+      <div id="autoChainsList" style="margin-bottom:14px"></div>
+
+      <details style="margin-top:14px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--ink-soft);padding:6px 0;font-weight:600">
+          📂 Subir CSV de Barchart manualmente (avanzado)
+        </summary>
+        <div style="margin-top:10px">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
+            Subir manualmente un CSV de Barchart Premier (datos tiempo real) anula la cadena auto-descargada de CBOE para esa fecha.
+          </div>
+          <div class="upload-zone">
+            <label for="chainCSV">📂 Subir CSV de cadena</label>
+            <input type="file" id="chainCSV" accept=".csv" style="display:none">
+            <div class="help">Formato Barchart estándar.</div>
+          </div>
+          <div id="chainPreview" style="display:none;margin-top:14px"></div>
+          <div id="chainSavedList" style="margin-top:14px"></div>
+        </div>
+      </details>
     </div>
 
     <div class="card">
