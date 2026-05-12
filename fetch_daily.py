@@ -107,18 +107,21 @@ def main():
     except Exception as e:
         print(f"  ✗ Yahoo VIX: {e}", file=sys.stderr)
 
+    def r_int(v): return round(v) if v is not None else None  # SPX → entero
+    def r_vix(v): return round(v, 1) if v is not None else None  # VIX → 1 decimal
+
     if spx_rows or vix_rows:
         existing = load_json_safe(OHLC_FILE) or {"byDate": {}}
         by_date = existing.get("byDate", {})
         for row in spx_rows:
             d = row["date"]
             if d not in by_date: by_date[d] = {}
-            by_date[d].update({"spx_open": row["open"], "spx_high": row["high"],
-                               "spx_low": row["low"], "spx_close": row["close"]})
+            by_date[d].update({"spx_open": r_int(row["open"]), "spx_high": r_int(row["high"]),
+                               "spx_low": r_int(row["low"]), "spx_close": r_int(row["close"])})
         for row in vix_rows:
             d = row["date"]
             if d not in by_date: by_date[d] = {}
-            by_date[d].update({"vix_open": row["open"], "vix_close": row["close"]})
+            by_date[d].update({"vix_open": r_vix(row["open"]), "vix_close": r_vix(row["close"])})
         save_json(OHLC_FILE, {"lastUpdated": now_iso, "byDate": by_date})
         print(f"  ✓ OHLC: {len(by_date)} fechas guardadas")
 
