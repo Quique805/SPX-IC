@@ -2,12 +2,15 @@ name: Daily SPX Data Fetch
 
 on:
   schedule:
+    # IMPORTANTE: evitar minuto :00 (filo de hora). GitHub Actions tiene picos de
+    # carga en el filo y puede retrasar o saltarse el cron entero. :07 reduce ese
+    # riesgo significativamente sin alterar la ventana de captura.
     # === HORARIO DE VERANO (CEST, UTC+2) — actualmente activo ===
-    # 14:00 UTC = 16:00 Madrid (CEST) = 10:00 NY (EDT) = +30 min tras apertura
-    - cron: '0 14 * * 1-5'
+    # 14:07 UTC = 16:07 Madrid (CEST) = 10:07 NY (EDT) = ~37 min tras apertura
+    - cron: '7 14 * * 1-5'
     # === HORARIO DE INVIERNO (CET, UTC+1) ===
     # En invierno, comentar la línea de arriba y descomentar esta:
-    # - cron: '0 15 * * 1-5'  # 15:00 UTC = 16:00 Madrid (CET) = 10:00 NY (EST)
+    # - cron: '7 15 * * 1-5'  # 15:07 UTC = 16:07 Madrid (CET) = 10:07 NY (EST)
   workflow_dispatch:  # Permite disparar manualmente desde la pestaña Actions
 
 permissions:
@@ -33,4 +36,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
-          git diff --staged --quiet || (git commit -m "Auto fetch $(date -u +%Y-%m-%d_%H%M)" && git push)
+          if git diff --staged --quiet; then
+            echo "No data changes to commit."
+            exit 0
+          fi
+          git commit -m "Auto fetch $(date -u +%Y-%m-%d_%H%M)"
+          # Reintenta hasta 3 veces si remoto cambia mientras pusheamos (race condition)
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            echo "Push attempt $i failed, retrying..."
+            sleep 5
+          done
+          echo "All push attempts failed."
+          exit 1
