@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-11T20:23:56.827874+00:00",
+  "lastUpdated": "2026-05-13T20:26:15.055549+00:00",
   "byDate": {
     "2026-04-27": {
       "spx_open": 7153,
@@ -88,6 +88,22 @@
       "spx_close": 7413,
       "vix_open": 18.2,
       "vix_close": 18.4
+    },
+    "2026-05-12": {
+      "spx_open": 7391,
+      "spx_high": 7410,
+      "spx_low": 7339,
+      "spx_close": 7401,
+      "vix_open": 18.8,
+      "vix_close": 18.0
+    },
+    "2026-05-13": {
+      "spx_open": 7409,
+      "spx_high": 7460,
+      "spx_low": 7375,
+      "spx_close": 7444,
+      "vix_open": 18.0,
+      "vix_close": 17.9
     }
   }
 }
