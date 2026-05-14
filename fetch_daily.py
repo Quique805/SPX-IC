@@ -151,11 +151,12 @@ def main():
         options = [o for o in options if o is not None]
         print(f"  ✓ CBOE: spot={spot}, {len(options)} opciones")
 
+        # Solo capturamos el vencimiento del propio día (0DTE).
         relevant = []
         for e in sorted(set(o["expiration"] for o in options)):
             ed = datetime.strptime(e, "%Y-%m-%d").date()
             dte = (ed - today_d).days
-            if 0 <= dte <= 7: relevant.append((e, dte))
+            if dte == 0: relevant.append((e, dte))
 
         chain_out = {"date": today, "capturedAt": now_iso, "spot": spot, "expirations": {}}
         for e, dte in relevant:
