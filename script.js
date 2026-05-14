@@ -4725,7 +4725,11 @@ async function loadAutoFetchedChains() {
 async function viewAutoChain(date) {
   const preview = document.getElementById('chainPreview');
   if (!preview) return;
+  // Si el preview vive dentro de un <details> colapsado, abrirlo para que sea visible.
+  const parentDetails = preview.closest('details');
+  if (parentDetails) parentDetails.open = true;
   preview.style.display = '';
+  preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   preview.innerHTML = '<div style="padding:14px;text-align:center">Cargando cadena…</div>';
   try {
     const url = `${GITHUB_RAW_BASE}/data/chains/${date}.json?t=${Date.now()}`;
