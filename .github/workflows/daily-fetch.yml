@@ -2,15 +2,20 @@ name: Daily SPX Data Fetch
 
 on:
   schedule:
-    # IMPORTANTE: evitar minuto :00 (filo de hora). GitHub Actions tiene picos de
-    # carga en el filo y puede retrasar o saltarse el cron entero. :07 reduce ese
-    # riesgo significativamente sin alterar la ventana de captura.
+    # GitHub Actions cron es best-effort: puede retrasarse horas o saltarse durante
+    # picos de carga. Solución: múltiples disparos en la ventana objetivo.
+    # El script tiene dedup → solo el PRIMERO en correr captura la cadena;
+    # los siguientes hacen no-op si el JSON de hoy ya existe.
     # === HORARIO DE VERANO (CEST, UTC+2) — actualmente activo ===
-    # 14:07 UTC = 16:07 Madrid (CEST) = 10:07 NY (EDT) = ~37 min tras apertura
-    - cron: '7 14 * * 1-5'
+    # Ventana buena: 10:00-10:30 NY = 16:00-16:30 Madrid = 14:00-14:30 UTC
+    - cron: '7 14 * * 1-5'   # 16:07 Madrid (1er intento)
+    - cron: '17 14 * * 1-5'  # 16:17 Madrid (2º intento si falla el 1º)
+    - cron: '27 14 * * 1-5'  # 16:27 Madrid (3er intento si fallan los 2 anteriores)
     # === HORARIO DE INVIERNO (CET, UTC+1) ===
-    # En invierno, comentar la línea de arriba y descomentar esta:
-    # - cron: '7 15 * * 1-5'  # 15:07 UTC = 16:07 Madrid (CET) = 10:07 NY (EST)
+    # En invierno, comentar las 3 líneas de arriba y descomentar estas 3:
+    # - cron: '7 15 * * 1-5'   # 16:07 Madrid (1er intento)
+    # - cron: '17 15 * * 1-5'  # 16:17 Madrid (2º intento)
+    # - cron: '27 15 * * 1-5'  # 16:27 Madrid (3er intento)
   workflow_dispatch:  # Permite disparar manualmente desde la pestaña Actions
 
 permissions:

@@ -133,6 +133,15 @@ def main():
         print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
         return
 
+    # Dedup: si la cadena de hoy ya está capturada (otro cron disparó antes), no la
+    # sobrescribimos. Queremos preservar el primer snapshot — el más cercano a +30
+    # min de apertura, antes de que cambien las primas.
+    chain_file = os.path.join(CHAINS_DIR, f"{today}.json")
+    if os.path.exists(chain_file):
+        print(f"  ⏭  Cadena de hoy ya existe ({chain_file}). Omito CBOE para preservar snapshot original.")
+        print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
+        return
+
     # CBOE chain
     try:
         raw = http_get_json("https://cdn.cboe.com/api/global/delayed_quotes/options/_SPX.json")
@@ -152,7 +161,6 @@ def main():
         for e, dte in relevant:
             chain_out["expirations"][e] = {"dte": dte,
                 "strikes": merge_strikes(options, e, spot, max_pct=5.0)}
-        chain_file = os.path.join(CHAINS_DIR, f"{today}.json")
         save_json(chain_file, chain_out)
         print(f"  ✓ Chain: {chain_file} ({len(relevant)} expiraciones)")
 
