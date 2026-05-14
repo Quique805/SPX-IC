@@ -116,12 +116,23 @@ def main():
         for row in spx_rows:
             d = row["date"]
             if d not in by_date: by_date[d] = {}
-            by_date[d].update({"spx_open": r_int(row["open"]), "spx_high": r_int(row["high"]),
-                               "spx_low": r_int(row["low"]), "spx_close": r_int(row["close"])})
+            # Open: solo se fija la primera vez (preserva el valor capturado al
+            # abrir mercado; runs posteriores no lo tocan aunque Yahoo glitchee).
+            new_open = r_int(row["open"])
+            if by_date[d].get("spx_open") is None and new_open is not None:
+                by_date[d]["spx_open"] = new_open
+            # High/Low/Close: siempre se actualizan (evolucionan durante la sesión,
+            # solo son definitivos tras 22:00 Madrid).
+            if row["high"] is not None: by_date[d]["spx_high"] = r_int(row["high"])
+            if row["low"] is not None: by_date[d]["spx_low"] = r_int(row["low"])
+            if row["close"] is not None: by_date[d]["spx_close"] = r_int(row["close"])
         for row in vix_rows:
             d = row["date"]
             if d not in by_date: by_date[d] = {}
-            by_date[d].update({"vix_open": r_vix(row["open"]), "vix_close": r_vix(row["close"])})
+            new_vix_open = r_vix(row["open"])
+            if by_date[d].get("vix_open") is None and new_vix_open is not None:
+                by_date[d]["vix_open"] = new_vix_open
+            if row["close"] is not None: by_date[d]["vix_close"] = r_vix(row["close"])
         save_json(OHLC_FILE, {"lastUpdated": now_iso, "byDate": by_date})
         print(f"  ✓ OHLC: {len(by_date)} fechas guardadas")
 
