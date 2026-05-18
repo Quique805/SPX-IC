@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-15T23:41:41.860987+00:00",
+  "lastUpdated": "2026-05-18T19:16:20.800835+00:00",
   "byDate": {
     "2026-04-27": {
       "spx_open": 7153,
@@ -120,6 +120,14 @@
       "spx_close": 7408,
       "vix_open": 18.1,
       "vix_close": 18.4
+    },
+    "2026-05-18": {
+      "spx_open": 7415,
+      "spx_high": 7434,
+      "spx_low": 7353,
+      "spx_close": 7381,
+      "vix_open": 19.2,
+      "vix_close": 18.6
     }
   }
 }
