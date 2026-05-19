@@ -1,40 +1,14 @@
 name: Daily SPX Data Fetch
 
 on:
-  schedule:
-    # GitHub Actions cron es best-effort: puede retrasarse horas o saltarse durante
-    # picos de carga. Solución: 3 disparos espaciados por fase + dedup en el script.
-    # El script siempre actualiza OHLC (idempotente). El Open queda fijo una vez
-    # capturado por primera vez; High/Low/Close se actualizan en cada corrida.
-    # La cadena se captura solo una vez gracias al dedup por fichero.
-    #
-    # === HORARIO DE VERANO (CEST, UTC+2) — actualmente activo ===
-    # Fase 1 — OPEN del mercado (15:30 Madrid = 9:30 NY):
-    - cron: '32 13 * * 1-5'  # 15:32 Madrid (Open, intento 1)
-    - cron: '42 13 * * 1-5'  # 15:42 Madrid (Open, intento 2)
-    - cron: '52 13 * * 1-5'  # 15:52 Madrid (Open, intento 3)
-    # Fase 2 — CADENA de opciones (~30 min tras apertura):
-    - cron: '7 14 * * 1-5'   # 16:07 Madrid (Chain, intento 1)
-    - cron: '17 14 * * 1-5'  # 16:17 Madrid (Chain, intento 2)
-    - cron: '27 14 * * 1-5'  # 16:27 Madrid (Chain, intento 3)
-    # Fase 3 — CIERRE definitivo (post 22:00 Madrid = 16:00 NY):
-    - cron: '32 20 * * 1-5'  # 22:32 Madrid (Close, intento 1)
-    - cron: '42 20 * * 1-5'  # 22:42 Madrid (Close, intento 2)
-    - cron: '52 20 * * 1-5'  # 22:52 Madrid (Close, intento 3)
-    #
-    # === HORARIO DE INVIERNO (CET, UTC+1) ===
-    # En invierno, sumar +1 hora a TODAS las líneas UTC de arriba (cambiar 13→14,
-    # 14→15, 20→21). Es decir: comentar el bloque de verano y descomentar este:
-    # - cron: '32 14 * * 1-5'  # 15:32 Madrid (Open, intento 1)
-    # - cron: '42 14 * * 1-5'  # 15:42 Madrid (Open, intento 2)
-    # - cron: '52 14 * * 1-5'  # 15:52 Madrid (Open, intento 3)
-    # - cron: '7 15 * * 1-5'   # 16:07 Madrid (Chain, intento 1)
-    # - cron: '17 15 * * 1-5'  # 16:17 Madrid (Chain, intento 2)
-    # - cron: '27 15 * * 1-5'  # 16:27 Madrid (Chain, intento 3)
-    # - cron: '32 21 * * 1-5'  # 22:32 Madrid (Close, intento 1)
-    # - cron: '42 21 * * 1-5'  # 22:42 Madrid (Close, intento 2)
-    # - cron: '52 21 * * 1-5'  # 22:52 Madrid (Close, intento 3)
-  workflow_dispatch:  # Permite disparar manualmente desde la pestaña Actions
+  # Trigger principal: evento repository_dispatch desde cron-job.org (servicio externo).
+  # Se dispara vía HTTP POST a la API de GitHub. Latencia típica: 5-30 segundos.
+  # NO usamos `schedule` aquí porque GitHub Actions cron tiene 5-6h de cola en
+  # picos de carga (13-14 UTC = apertura US), inaceptable para nuestro caso.
+  repository_dispatch:
+    types: [fetch_data]
+  # Permite disparar manualmente desde la pestaña Actions (botón Run workflow):
+  workflow_dispatch:
 
 permissions:
   contents: write
