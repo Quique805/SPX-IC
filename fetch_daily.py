@@ -6,6 +6,7 @@ Writes to data/daily-ohlc.json (accumulating) and data/chains/YYYY-MM-DD.json (o
 """
 import json, os, re, sys, urllib.request
 from datetime import datetime, date, timezone
+from zoneinfo import ZoneInfo  # Python 3.9+, viene con stdlib
 
 DATA_DIR = "data"
 CHAINS_DIR = os.path.join(DATA_DIR, "chains")
@@ -141,6 +142,17 @@ def main():
     latest_spx = spx_rows[-1]["date"] if spx_rows else None
     if latest_spx and latest_spx != today:
         print(f"  ⏭  Última vela SPX es {latest_spx}, no {today}. NYSE parece cerrado → omito cadena.")
+        print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
+        return
+
+    # Guardia horaria: la fase Open (15:32 Madrid) NO debe capturar cadena, porque
+    # CBOE tiene ~15 min de delay público → a las 15:32 Madrid devuelve datos de
+    # 15:17 Madrid, que es PRE-mercado (NYSE abre 15:30). Solo capturamos a partir
+    # de 16:00 Madrid (con la fase Chain a 16:07, CBOE entrega datos de +22min de
+    # apertura, ya estables). zoneinfo gestiona DST automáticamente.
+    now_madrid = datetime.now(ZoneInfo("Europe/Madrid"))
+    if now_madrid.hour < 16:
+        print(f"  ⏭  Hora Madrid {now_madrid:%H:%M} < 16:00. Salto cadena (fase pre-Chain, datos CBOE serían pre-mercado).")
         print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
         return
 
