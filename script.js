@@ -4832,6 +4832,224 @@ if (editBtn) {
   });
 }
 
+// ---- Gamma levels from close chains --------------------------------------
+const GAMMA_LEVEL_DATES = ['2026-05-11', '2026-05-13', '2026-05-14', '2026-05-15', '2026-05-18'];
+const GAMMA_RISK_FREE_RATE = 0.045;
+const GAMMA_CONTRACT_MULT = 100;
+const GAMMA_MIN_T = 1 / 252;
+
+function normalPdf(x) {
+  return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+}
+
+function bsGamma(spot, strike, sigma, yearsToExpiry, rate = GAMMA_RISK_FREE_RATE) {
+  const S = Number(spot);
+  const K = Number(strike);
+  const rawSigma = Number(sigma);
+  const T = Math.max(Number(yearsToExpiry) || 0, GAMMA_MIN_T);
+  if (!(S > 0) || !(K > 0)) return 0;
+  const vol = Math.min(Math.max(rawSigma > 0 ? rawSigma : 0.18, 0.03), 5);
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(S / K) + (rate + 0.5 * vol * vol) * T) / (vol * sqrtT);
+  return normalPdf(d1) / (S * vol * sqrtT);
+}
+
+function gammaExposure(spot, strike, sigma, yearsToExpiry, openInterest, sideSign) {
+  const oi = Number(openInterest) || 0;
+  if (oi <= 0) return 0;
+  const gamma = bsGamma(spot, strike, sigma, yearsToExpiry);
+  return sideSign * gamma * oi * GAMMA_CONTRACT_MULT * spot * spot * 0.01;
+}
+
+function getBestExpiration(chain) {
+  const expirations = Object.entries(chain.expirations || {});
+  if (!expirations.length) return null;
+  return expirations
+    .map(([date, data]) => ({ date, data, dte: Number(data && data.dte) || 0 }))
+    .sort((a, b) => Math.abs(a.dte) - Math.abs(b.dte))[0];
+}
+
+function computeGammaLevels(chain) {
+  const spot = Number(chain && chain.spot);
+  const exp = getBestExpiration(chain);
+  if (!(spot > 0) || !exp || !Array.isArray(exp.data.strikes)) return null;
+  const yearsToExpiry = Math.max((Number(exp.data.dte) || 0) / 252, GAMMA_MIN_T);
+  const strikes = exp.data.strikes
+    .map(s => ({
+      strike: Number(s.strike),
+      callIv: Number(s.call_iv) || Number(s.put_iv) || 0.18,
+      putIv: Number(s.put_iv) || Number(s.call_iv) || 0.18,
+      callOi: Number(s.call_oi) || 0,
+      putOi: Number(s.put_oi) || 0,
+      callVolume: Number(s.call_volume) || 0,
+      putVolume: Number(s.put_volume) || 0
+    }))
+    .filter(s => s.strike > 0)
+    .sort((a, b) => a.strike - b.strike);
+  if (!strikes.length) return null;
+
+  const rows = strikes.map(s => {
+    const callGex = gammaExposure(spot, s.strike, s.callIv, yearsToExpiry, s.callOi, 1);
+    const putGex = gammaExposure(spot, s.strike, s.putIv, yearsToExpiry, s.putOi, -1);
+    return {
+      ...s,
+      callGex,
+      putGex,
+      netGex: callGex + putGex,
+      absTotalGex: Math.abs(callGex) + Math.abs(putGex)
+    };
+  });
+
+  const callWall = rows.reduce((best, r) => !best || r.callGex > best.callGex ? r : best, null);
+  const putWall = rows.reduce((best, r) => !best || Math.abs(r.putGex) > Math.abs(best.putGex) ? r : best, null);
+  const netAtSpot = rows.reduce((sum, r) => sum + r.netGex, 0);
+
+  const spotGrid = strikes
+    .filter(s => Math.abs(s.strike / spot - 1) <= 0.08)
+    .map(s => s.strike);
+  const triggerGrid = spotGrid.map(testSpot => {
+    const net = strikes.reduce((sum, s) => {
+      const c = gammaExposure(testSpot, s.strike, s.callIv, yearsToExpiry, s.callOi, 1);
+      const p = gammaExposure(testSpot, s.strike, s.putIv, yearsToExpiry, s.putOi, -1);
+      return sum + c + p;
+    }, 0);
+    return { spot: testSpot, net };
+  });
+  let volTrigger = null;
+  for (let i = 1; i < triggerGrid.length; i++) {
+    const prev = triggerGrid[i - 1];
+    const cur = triggerGrid[i];
+    if ((prev.net <= 0 && cur.net >= 0) || (prev.net >= 0 && cur.net <= 0)) {
+      const denom = Math.abs(prev.net) + Math.abs(cur.net);
+      const w = denom > 0 ? Math.abs(prev.net) / denom : 0.5;
+      volTrigger = prev.spot + (cur.spot - prev.spot) * w;
+      break;
+    }
+  }
+  if (volTrigger === null && triggerGrid.length) {
+    volTrigger = triggerGrid.reduce((best, r) => !best || Math.abs(r.net) < Math.abs(best.net) ? r : best, null).spot;
+  }
+
+  return {
+    date: chain.date,
+    capturedAt: chain.capturedAt,
+    spot,
+    expiration: exp.date,
+    dte: exp.data.dte,
+    effectiveDte: Math.max(Number(exp.data.dte) || 0, 1),
+    callWall,
+    putWall,
+    volTrigger,
+    netAtSpot,
+    topRows: rows
+      .slice()
+      .sort((a, b) => b.absTotalGex - a.absTotalGex)
+      .slice(0, 8)
+  };
+}
+
+async function fetchGammaChain(date) {
+  const sources = [
+    { folder: 'chains-close', label: 'cierre' },
+    { folder: 'chains', label: 'histórico cierre/entrada' }
+  ];
+  let lastErr = null;
+  for (const src of sources) {
+    try {
+      const url = `${GITHUB_RAW_BASE}/data/${src.folder}/${date}.json?t=${Date.now()}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const chain = await r.json();
+      chain._sourceLabel = src.label;
+      return chain;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('cadena no encontrada');
+}
+
+function fmtGammaNum(v, digits = 0) {
+  return Number.isFinite(Number(v)) ? Number(v).toLocaleString('es-ES', { maximumFractionDigits: digits }) : '—';
+}
+
+function renderGammaCard(levels) {
+  const cw = levels.callWall;
+  const pw = levels.putWall;
+  const vt = levels.volTrigger;
+  const tone = levels.netAtSpot >= 0 ? 'var(--good)' : 'var(--bad)';
+  const topRows = levels.topRows.map(r => `<tr>
+    <td>${fmtGammaNum(r.strike, 0)}</td>
+    <td class="call-cell">${fmtGammaNum(r.callOi, 0)}</td>
+    <td class="call-cell">${fmtGammaNum(r.callGex, 0)}</td>
+    <td class="put-cell">${fmtGammaNum(r.putOi, 0)}</td>
+    <td class="put-cell">${fmtGammaNum(r.putGex, 0)}</td>
+    <td>${fmtGammaNum(r.netGex, 0)}</td>
+  </tr>`).join('');
+  return `
+    <details class="auto-chain-item" open style="display:block;padding:0;margin-bottom:12px">
+      <summary style="cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-700)">
+        ${levels.date} · Spot ${fmtGammaNum(levels.spot, 2)} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
+      </summary>
+      <div style="padding:0 12px 12px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:10px">
+          <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Call Wall</div>
+            <b>${fmtGammaNum(cw && cw.strike, 0)}</b>
+          </div>
+          <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Put Wall</div>
+            <b>${fmtGammaNum(pw && pw.strike, 0)}</b>
+          </div>
+          <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Vol Trigger</div>
+            <b>${fmtGammaNum(vt, 0)}</b>
+          </div>
+          <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Net GEX spot</div>
+            <b style="color:${tone}">${fmtGammaNum(levels.netAtSpot, 0)}</b>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px">
+          Vencimiento usado: ${levels.expiration} · DTE original: ${levels.dte} · T efectivo: ${levels.effectiveDte} sesión · Captura: ${formatMadridTime(levels.capturedAt)}
+        </div>
+        <table class="chain-table">
+          <thead><tr>
+            <th>Strike</th><th>Call OI</th><th>Call GEX</th><th>Put OI</th><th>Put GEX</th><th>Net GEX</th>
+          </tr></thead>
+          <tbody>${topRows}</tbody>
+        </table>
+      </div>
+    </details>`;
+}
+
+async function renderGammaLevelsPanel() {
+  const panel = document.getElementById('gammaLevelsPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div style="padding:14px;text-align:center">Calculando niveles gamma…</div>';
+  const results = [];
+  for (const date of GAMMA_LEVEL_DATES) {
+    try {
+      const chain = await fetchGammaChain(date);
+      const levels = computeGammaLevels(chain);
+      if (!levels) throw new Error('estructura insuficiente');
+      results.push({ ok: true, date, levels });
+    } catch (e) {
+      results.push({ ok: false, date, error: e.message });
+    }
+  }
+  const cards = results.map(r => r.ok
+    ? renderGammaCard(r.levels)
+    : `<div class="auto-chain-item" style="color:var(--bad)">No se pudo calcular ${r.date}: ${r.error}</div>`
+  ).join('');
+  panel.innerHTML = `
+    <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+      <b>Niveles Gamma estimados</b> · Black-Scholes con IV por strike, Open Interest y T mínimo de 1 sesión para cadenas 0DTE.
+      El Vol Trigger es una aproximación por cambio de signo del Net GEX estimado.
+    </div>
+    ${cards}`;
+}
+
 function initChainTabs() {
   document.querySelectorAll('.chain-auto-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4839,10 +5057,16 @@ function initChainTabs() {
       document.querySelectorAll('.chain-auto-tab').forEach(b => b.classList.toggle('active', b === btn));
       const entry = document.getElementById('autoChainsList');
       const close = document.getElementById('autoCloseChainsList');
+      const gamma = document.getElementById('gammaLevelsPanel');
       if (entry) entry.style.display = tab === 'entry' ? '' : 'none';
       if (close) close.style.display = tab === 'close' ? '' : 'none';
+      if (gamma) gamma.style.display = tab === 'gamma' ? '' : 'none';
       const preview = document.getElementById('chainPreview');
       if (preview) preview.style.display = 'none';
+      if (tab === 'gamma' && gamma && !gamma.dataset.loaded) {
+        gamma.dataset.loaded = '1';
+        renderGammaLevelsPanel();
+      }
     });
   });
 }
