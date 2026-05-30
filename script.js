@@ -1,7 +1,7 @@
-// ---- Regime config (edit defaults here, or tweak in the on-page table) ----
+﻿// ---- Regime config (edit defaults here, or tweak in the on-page table) ----
 // Each row: VIX <= maxVix selects this regime.
 // upperMult / lowerMult / k determine band width.
-// trade=false → the day is graphed but marked as "no-trade" (Iron Condor not opened).
+// trade=false â†’ the day is graphed but marked as "no-trade" (Iron Condor not opened).
 const DEFAULT_REGIMES = [
   { maxVix: 16.0, upperMult: 1.4, lowerMult: 0.9, k: 1.2, trade: true  },
   { maxVix: 19.5, upperMult: 1.2, lowerMult: 0.9, k: 0.9, trade: true  },
@@ -10,7 +10,7 @@ const DEFAULT_REGIMES = [
   { maxVix: 999,  upperMult: 1.2, lowerMult: 1.2, k: 1.3, trade: false }, // VIX > 24
 ];
 
-// Minimum sample size required inside the lookback window before we trust σ.
+// Minimum sample size required inside the lookback window before we trust Ïƒ.
 const MIN_SAMPLES = 20;
 
 // Trend window & threshold (mean of last N closes vs previous N).
@@ -19,34 +19,34 @@ const TREND_THRESHOLD = 0.5; // %
 
 // ---- Dynamic compression factor C_t (variable selection model) ----------
 // Each variable has a standardized form (centered ~0, scale ~1) and a weight.
-// Z = sum(weight × standardized_value) over ACTIVE variables only.
-// C_t = sigmoid(λ × Z), clamped to [Cmin, Cmax].
-// Bands_t = Close_prev × (1 ± C_t × k_regime × mult × σ)
+// Z = sum(weight Ã— standardized_value) over ACTIVE variables only.
+// C_t = sigmoid(Î» Ã— Z), clamped to [Cmin, Cmax].
+// Bands_t = Close_prev Ã— (1 Â± C_t Ã— k_regime Ã— mult Ã— Ïƒ)
 //
 // Sign convention: a positive standardized value pushes toward LESS compression
 // (wider bands). A user can flip this by entering a negative weight.
 const COMPRESSION_VARS = [
   { id: 'iv_hv',   label: 'IV/HV',         group: 'A', defaultWeight: 1.0, defaultActive: true,
-    desc: 'log(IV/HV) — positivo cuando IV > HV (mercado descuenta más vol)' },
+    desc: 'log(IV/HV) â€” positivo cuando IV > HV (mercado descuenta mÃ¡s vol)' },
   { id: 'iv_rank', label: 'IV Rank',       group: 'B', defaultWeight: 0.5, defaultActive: false,
-    desc: '(IVR-50)/50 — positivo cuando IV está sobre la media del histórico' },
+    desc: '(IVR-50)/50 â€” positivo cuando IV estÃ¡ sobre la media del histÃ³rico' },
   { id: 'iv_pctl', label: 'IV Percentile', group: 'B', defaultWeight: 0.5, defaultActive: false,
-    desc: '(IVP-50)/50 — positivo cuando IV está sobre la mediana histórica' },
+    desc: '(IVP-50)/50 â€” positivo cuando IV estÃ¡ sobre la mediana histÃ³rica' },
   { id: 'vix',     label: 'VIX',           group: 'B', defaultWeight: 0.7, defaultActive: true,
-    desc: '(Vref-VIX)/Vref — positivo cuando VIX < Vref' },
+    desc: '(Vref-VIX)/Vref â€” positivo cuando VIX < Vref' },
   { id: 'iv_chg',  label: 'IV Change',     group: 'C', defaultWeight: 0.3, defaultActive: false,
-    desc: '(IV-IV_prev)/IV_prev — positivo cuando IV está subiendo' },
+    desc: '(IV-IV_prev)/IV_prev â€” positivo cuando IV estÃ¡ subiendo' },
   { id: 'pcv',     label: 'P/C Volume',    group: 'D', defaultWeight: 0.4, defaultActive: false,
-    desc: 'log(PCV) — positivo cuando puts dominan (sentimiento miedoso)' },
+    desc: 'log(PCV) â€” positivo cuando puts dominan (sentimiento miedoso)' },
 ];
 const COMPRESSION_GROUP_LABEL = {
   A: 'Mispricing',
-  B: 'Nivel/régimen vol (REDUNDANTES — elige idealmente uno)',
+  B: 'Nivel/rÃ©gimen vol (REDUNDANTES â€” elige idealmente uno)',
   C: 'Momentum vol',
   D: 'Sentimiento',
 };
 
-// Mutable runtime state — initialized from defaults, edited via UI.
+// Mutable runtime state â€” initialized from defaults, edited via UI.
 const compressionVars = COMPRESSION_VARS.map(v => ({
   ...v, active: v.defaultActive, weight: v.defaultWeight,
 }));
@@ -77,7 +77,7 @@ function standardizeVar(varId, prevRow, params) {
 
 // Returns { Ccall, Cput, base, trend } so the caller can apply asymmetric
 // strikes per side. Cbase is the value of C_t straight from the sigmoid;
-// Ccall and Cput are after the trend shift Δ = shiftFactor × (Cmax − Cmin).
+// Ccall and Cput are after the trend shift Î” = shiftFactor Ã— (Cmax âˆ’ Cmin).
 function compressionFactor(prevRow) {
   if (!prevRow) return { Ccall: 1.0, Cput: 1.0, base: 1.0, trend: null };
   let Z = 0;
@@ -148,7 +148,7 @@ function parseCSV(text) {
 
   const headers = rawLines[0].split(delim).map(h => h.trim());
 
-  // Header aliases — map common variants to internal IDs
+  // Header aliases â€” map common variants to internal IDs
   const findHeader = (...aliases) => {
     for (const a of aliases) {
       const i = headers.findIndex(h => h.toLowerCase().replace(/[\s\/\-]/g, '') === a.toLowerCase().replace(/[\s\/\-]/g, ''));
@@ -160,8 +160,8 @@ function parseCSV(text) {
     Date:  findHeader('Date', 'Fecha'),
     Close: findHeader('Close', 'Cierre'),
     Open:  findHeader('Open', 'Apertura', 'Op'),
-    High:  findHeader('High', 'Maximo', 'Máximo'),
-    Low:   findHeader('Low', 'Minimo', 'Mínimo'),
+    High:  findHeader('High', 'Maximo', 'MÃ¡ximo'),
+    Low:   findHeader('Low', 'Minimo', 'MÃ­nimo'),
     VIX:   findHeader('VIX'),
     IV:    findHeader('IV', 'Implied Volatility'),
     HV:    findHeader('HV', 'Historical Volatility'),
@@ -173,8 +173,8 @@ function parseCSV(text) {
 
   const missing = ['Date','Close','High','Low','VIX'].filter(h => idx[h] < 0);
   if (missing.length) {
-    console.error('CSV: faltan columnas obligatorias:', missing, '· headers detectados:', headers);
-    alert('CSV inválido: faltan columnas obligatorias ' + missing.join(', ') +
+    console.error('CSV: faltan columnas obligatorias:', missing, 'Â· headers detectados:', headers);
+    alert('CSV invÃ¡lido: faltan columnas obligatorias ' + missing.join(', ') +
           '\n\nDelimitador detectado: "' + (delim === '\t' ? 'TAB' : delim) + '"' +
           '\nHeaders detectados: ' + headers.join(' | '));
     return [];
@@ -199,7 +199,7 @@ function parseCSV(text) {
     if (s === undefined || s === null) return NaN;
     s = String(s).trim().replace(/[%\s]/g, '');
     if (s === '') return NaN;
-    // If has both comma and dot, assume comma is thousands → strip commas
+    // If has both comma and dot, assume comma is thousands â†’ strip commas
     if (s.includes(',') && s.includes('.')) s = s.replace(/,/g, '');
     // If only commas (no dots), treat comma as decimal separator
     else if (s.includes(',') && !s.includes('.')) s = s.replace(/,/g, '.');
@@ -247,7 +247,7 @@ function enrichRows(rows, ivWindow = 252, hvWindow = 30) {
     const row = rows[i];
 
     // Auto-compute HV from realized log-returns of close prices when missing.
-    // Standard formula: stdev(log returns) × √252 × 100, annualized %.
+    // Standard formula: stdev(log returns) Ã— âˆš252 Ã— 100, annualized %.
     if (!isFinite(row.hv) && isFinite(row.close)) {
       const returns = [];
       const start = Math.max(1, i - hvWindow + 1);
@@ -299,13 +299,13 @@ function enrichRows(rows, ivWindow = 252, hvWindow = 30) {
       }
     }
 
-    // Compute opening gap vs previous close: (Open[t] − Close[t-1]) / Close[t-1] × 100
+    // Compute opening gap vs previous close: (Open[t] âˆ’ Close[t-1]) / Close[t-1] Ã— 100
     row.gap = NaN;
     if (i > 0 && isFinite(row.open) && isFinite(rows[i - 1].close) && rows[i - 1].close > 0) {
       row.gap = (row.open - rows[i - 1].close) / rows[i - 1].close * 100;
     }
 
-    // Pre-compute trend AT this row (uses only data ≤ i, no look-ahead).
+    // Pre-compute trend AT this row (uses only data â‰¤ i, no look-ahead).
     row.trend = null;
     if (i >= TREND_WINDOW * 2 - 1) {
       let rsum = 0, rn = 0, psum = 0, pn = 0;
@@ -329,7 +329,7 @@ function enrichRows(rows, ivWindow = 252, hvWindow = 30) {
 }
 
 // ---- Regime lookup --------------------------------------------------------
-// Plain for loop — much faster than for-of in hot paths (called millions of
+// Plain for loop â€” much faster than for-of in hot paths (called millions of
 // times during optimization).
 function regimeFor(vix, regimes) {
   const n = regimes.length;
@@ -340,11 +340,11 @@ function regimeFor(vix, regimes) {
 }
 
 // ---- Band math ------------------------------------------------------------
-// σ from a rolling window of intraday range moves vs previous close:
-//   σ_high = std(High / Close_prev − 1)
-//   σ_low  = std(1 − Low  / Close_prev)
+// Ïƒ from a rolling window of intraday range moves vs previous close:
+//   Ïƒ_high = std(High / Close_prev âˆ’ 1)
+//   Ïƒ_low  = std(1 âˆ’ Low  / Close_prev)
 // Bands for day t use Close[t-1] as base and the regime picked by VIX[t-1].
-// Sample standard deviation (Bessel-corrected, ddof=1) — matches pandas/numpy default.
+// Sample standard deviation (Bessel-corrected, ddof=1) â€” matches pandas/numpy default.
 function std(arr) {
   const n = arr.length;
   if (n < 2) return 0;
@@ -439,7 +439,7 @@ function computeStats(rows, bands) {
 }
 
 // ---- P&L engine (modelo conservador +150 / -600) -------------------------
-// Modelo simplificado: cada día ganador suma WIN_PNL, cada día perdedor resta LOSS_PNL.
+// Modelo simplificado: cada dÃ­a ganador suma WIN_PNL, cada dÃ­a perdedor resta LOSS_PNL.
 // No-trade days: P&L = 0. Break-even win rate: 80%.
 const WIN_PNL  = 150;
 const LOSS_PNL = -600;
@@ -555,30 +555,30 @@ function drawEquityChart(pnl) {
 }
 
 function renderEquityStats(s, pnl) {
-  const fmt   = v => (v >= 0 ? '+' : '−') + '$' + Math.abs(v).toFixed(2);
-  const fmtPc = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%';
+  const fmt   = v => (v >= 0 ? '+' : 'âˆ’') + '$' + Math.abs(v).toFixed(2);
+  const fmtPc = v => (v >= 0 ? '+' : 'âˆ’') + Math.abs(v).toFixed(2) + '%';
   const goodBad = v => v >= 0 ? 'good' : 'bad';
-  const bestStr  = s.best  ? `${fmt(s.best.pnl)} (${s.best.date})`   : '—';
-  const worstStr = s.worst ? `${fmt(s.worst.pnl)} (${s.worst.date})` : '—';
+  const bestStr  = s.best  ? `${fmt(s.best.pnl)} (${s.best.date})`   : 'â€”';
+  const worstStr = s.worst ? `${fmt(s.worst.pnl)} (${s.worst.date})` : 'â€”';
 
   document.getElementById('equityStats').innerHTML = `
     <div class="stats-card">
       <h3>P&amp;L total</h3>
       <div class="big ${goodBad(s.totalPnL)}">${fmt(s.totalPnL)}</div>
       <div style="font-size:11px;color:#888;margin-top:4px">
-        Equity ${pnl.initialCapital} → <b>${pnl.finalEquity.toFixed(2)}</b> (${fmtPc(s.returnPct)})
+        Equity ${pnl.initialCapital} â†’ <b>${pnl.finalEquity.toFixed(2)}</b> (${fmtPc(s.returnPct)})
       </div>
     </div>
     <div class="stats-card" style="min-width:240px">
-      <h3>Métricas económicas</h3>
-      <div class="row"><span>Días operados</span><span><b>${s.tradedDays}</b></span></div>
-      <div class="row"><span>Expectancia / día</span><span class="${goodBad(s.expectancy)}"><b>${fmt(s.expectancy)}</b></span></div>
-      <div class="row"><span>Profit factor</span><span><b>${isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : '∞'}</b></span></div>
-      <div class="row"><span>Max drawdown</span><span class="bad"><b>−${s.maxDD.toFixed(2)}%</b></span></div>
+      <h3>MÃ©tricas econÃ³micas</h3>
+      <div class="row"><span>DÃ­as operados</span><span><b>${s.tradedDays}</b></span></div>
+      <div class="row"><span>Expectancia / dÃ­a</span><span class="${goodBad(s.expectancy)}"><b>${fmt(s.expectancy)}</b></span></div>
+      <div class="row"><span>Profit factor</span><span><b>${isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : 'âˆž'}</b></span></div>
+      <div class="row"><span>Max drawdown</span><span class="bad"><b>âˆ’${s.maxDD.toFixed(2)}%</b></span></div>
       <div class="row" style="border-top:1px solid #eee;margin-top:4px;padding-top:4px">
-        <span style="color:#080">Mejor día</span><span style="color:#080">${bestStr}</span>
+        <span style="color:#080">Mejor dÃ­a</span><span style="color:#080">${bestStr}</span>
       </div>
-      <div class="row"><span class="loss-up">Peor día</span><span class="loss-up">${worstStr}</span></div>
+      <div class="row"><span class="loss-up">Peor dÃ­a</span><span class="loss-up">${worstStr}</span></div>
     </div>
   `;
 }
@@ -586,18 +586,18 @@ function renderEquityStats(s, pnl) {
 // ---- Trade log table -----------------------------------------------------
 function renderTradesTable(pnl) {
   const status2label = {
-    'win':      '<span style="color:#1e7a4d">✓ Win</span>',
-    'loss-up':  '<span class="loss-up">✗ Call hit</span>',
-    'loss-dn':  '<span class="loss-dn">✗ Put hit</span>',
-    'no-trade': '<span style="color:#9b8a4b">— No-trade</span>',
+    'win':      '<span style="color:#1e7a4d">âœ“ Win</span>',
+    'loss-up':  '<span class="loss-up">âœ— Call hit</span>',
+    'loss-dn':  '<span class="loss-dn">âœ— Put hit</span>',
+    'no-trade': '<span style="color:#9b8a4b">â€” No-trade</span>',
   };
   const fmt$ = v => '$' + v.toFixed(2);
   const rows = pnl.trades.map(t => `
     <tr class="${t.status}">
       <td>${t.date}</td>
       <td>${t.prevClose.toFixed(2)}</td>
-      <td>${t.lower.toFixed(2)} – ${t.upper.toFixed(2)}</td>
-      <td>${t.distDn !== null ? '−'+t.distDn.toFixed(2)+'%' : '—'} / ${t.distUp !== null ? '+'+t.distUp.toFixed(2)+'%' : '—'}</td>
+      <td>${t.lower.toFixed(2)} â€“ ${t.upper.toFixed(2)}</td>
+      <td>${t.distDn !== null ? 'âˆ’'+t.distDn.toFixed(2)+'%' : 'â€”'} / ${t.distUp !== null ? '+'+t.distUp.toFixed(2)+'%' : 'â€”'}</td>
       <td>${t.close.toFixed(2)}</td>
       <td>${status2label[t.status]}</td>
       <td class="pnl-${t.pnl >= 0 ? 'pos' : 'neg'}"><b>${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(0)}</b></td>
@@ -607,7 +607,7 @@ function renderTradesTable(pnl) {
 
   document.getElementById('tradesTable').innerHTML = `
     <thead><tr>
-      <th>Date</th><th>Prev close</th><th>Bands (low–up)</th><th>Dist (put / call)</th>
+      <th>Date</th><th>Prev close</th><th>Bands (lowâ€“up)</th><th>Dist (put / call)</th>
       <th>Close</th><th>Outcome</th><th>P&amp;L</th><th>Equity</th>
     </tr></thead>
     <tbody>${rows}</tbody>
@@ -617,7 +617,7 @@ function renderTradesTable(pnl) {
 // ---- Quant Agent: optimizer ---------------------------------------------
 // Per-regime grid search. Each regime is independent because a given day
 // belongs to exactly one regime, so its params don't affect other regimes.
-// Score = expectancy (= +150 per win, −600 per loss) over the training window.
+// Score = expectancy (= +150 per win, âˆ’600 per loss) over the training window.
 const OPT_RANGE = { min: 0.5, max: 2.0, step: 0.1 };
 
 // Pre-computed grid array (way faster than re-iterating a generator each pass).
@@ -635,7 +635,7 @@ function* gridValues({ min, max, step }) {
   for (let v = min; v <= max + 1e-9; v += step) yield Math.round(v * 100) / 100;
 }
 
-// Indexed access — no iterator object per call.
+// Indexed access â€” no iterator object per call.
 // Applies asymmetric Ccall/Cput compression factors per side.
 function scoreParams(days, upperMult, lowerMult, k) {
   let score = 0;
@@ -728,7 +728,7 @@ function rebandWithNewRegimes(rows, baseBands, baseRegimes, newRegimes) {
 }
 
 // ---- Quant Agent: proposal rendering ------------------------------------
-const _proposalCache = new Map(); // periodKey → newRegimes (for Apply button)
+const _proposalCache = new Map(); // periodKey â†’ newRegimes (for Apply button)
 
 function inSampleStats(pnl, fromDate) {
   const traded = pnl.trades.filter(t => t.date >= fromDate && t.status !== 'no-trade');
@@ -754,74 +754,74 @@ function renderProposal(containerId, periodKey, periodLabel, baseRegimes, optRes
   const fullOpt  = fullStats(optPnL);
 
   const showWarn = optResult.totalSample < 30;
-  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const fmt$ = v => (v >= 0 ? '+$' : 'âˆ’$') + Math.abs(v).toFixed(0);
   const arrow = (a, b, betterIsHigher = true) => {
     const diff = b - a;
     if (Math.abs(diff) < 1e-6) return '<span class="arrow-eq">=</span>';
     const isUp = diff > 0;
     const isGood = (isUp && betterIsHigher) || (!isUp && !betterIsHigher);
-    return `<span class="arrow-${isUp ? 'up' : 'down'}-${isGood ? 'good' : 'bad'}">${isUp ? '▲' : '▼'}</span>`;
+    return `<span class="arrow-${isUp ? 'up' : 'down'}-${isGood ? 'good' : 'bad'}">${isUp ? 'â–²' : 'â–¼'}</span>`;
   };
 
   const paramRows = baseRegimes.map((r, i) => {
     if (!r.trade) {
-      return `<tr class="notrade"><td>${regimeLabel(baseRegimes, i)}</td><td colspan="3" style="font-style:italic">no-trade · sin optimizar</td></tr>`;
+      return `<tr class="notrade"><td>${regimeLabel(baseRegimes, i)}</td><td colspan="3" style="font-style:italic">no-trade Â· sin optimizar</td></tr>`;
     }
     const n = optResult.newRegimes[i];
     const sampleStat = optResult.perRegimeStats[i] || { sample: 0 };
     const sampleHint = sampleStat.sample === 0
-      ? '<div class="sample-warn">0 días en ventana</div>'
-      : `<div class="sample-hint">${sampleStat.sample} días</div>`;
+      ? '<div class="sample-warn">0 dÃ­as en ventana</div>'
+      : `<div class="sample-hint">${sampleStat.sample} dÃ­as</div>`;
     return `<tr>
       <td>${regimeLabel(baseRegimes, i)}${sampleHint}</td>
-      <td>${r.k.toFixed(2)} → <b>${n.k.toFixed(2)}</b> ${arrow(r.k, n.k, false)}</td>
-      <td>${r.upperMult.toFixed(2)} → <b>${n.upperMult.toFixed(2)}</b> ${arrow(r.upperMult, n.upperMult, false)}</td>
-      <td>${r.lowerMult.toFixed(2)} → <b>${n.lowerMult.toFixed(2)}</b> ${arrow(r.lowerMult, n.lowerMult, false)}</td>
+      <td>${r.k.toFixed(2)} â†’ <b>${n.k.toFixed(2)}</b> ${arrow(r.k, n.k, false)}</td>
+      <td>${r.upperMult.toFixed(2)} â†’ <b>${n.upperMult.toFixed(2)}</b> ${arrow(r.upperMult, n.upperMult, false)}</td>
+      <td>${r.lowerMult.toFixed(2)} â†’ <b>${n.lowerMult.toFixed(2)}</b> ${arrow(r.lowerMult, n.lowerMult, false)}</td>
     </tr>`;
   }).join('');
 
   const html = `
     <h3>${periodLabel}</h3>
     <div class="period-info">
-      <span><b>Training:</b> ${optResult.trainingStartDate} → ${optResult.trainingEndDate}</span>
+      <span><b>Training:</b> ${optResult.trainingStartDate} â†’ ${optResult.trainingEndDate}</span>
       <span><b>${optResult.totalSample}</b> trades en ventana</span>
     </div>
-    ${showWarn ? `<div class="warn-box">⚠ Muestra pequeña (${optResult.totalSample} trades) — alto riesgo de sobreajuste.</div>` : ''}
+    ${showWarn ? `<div class="warn-box">âš  Muestra pequeÃ±a (${optResult.totalSample} trades) â€” alto riesgo de sobreajuste.</div>` : ''}
     <div class="metrics-grid">
       <div class="metric-card">
         <div class="metric-label">Win rate (in-sample)</div>
         <div class="metric-value">
-          ${inBase.winRate.toFixed(1)}% → <b class="${inOpt.winRate >= inBase.winRate ? 'd-good' : 'd-bad'}">${inOpt.winRate.toFixed(1)}%</b>
+          ${inBase.winRate.toFixed(1)}% â†’ <b class="${inOpt.winRate >= inBase.winRate ? 'd-good' : 'd-bad'}">${inOpt.winRate.toFixed(1)}%</b>
         </div>
       </div>
       <div class="metric-card">
         <div class="metric-label">P&amp;L (in-sample)</div>
         <div class="metric-value">
-          ${fmt$(inBase.pnl)} → <b class="${inOpt.pnl >= inBase.pnl ? 'd-good' : 'd-bad'}">${fmt$(inOpt.pnl)}</b>
+          ${fmt$(inBase.pnl)} â†’ <b class="${inOpt.pnl >= inBase.pnl ? 'd-good' : 'd-bad'}">${fmt$(inOpt.pnl)}</b>
         </div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Equity final (full history)</div>
         <div class="metric-value">
-          $${basePnL.finalEquity.toFixed(0)} → <b class="${optPnL.finalEquity >= basePnL.finalEquity ? 'd-good' : 'd-bad'}">$${optPnL.finalEquity.toFixed(0)}</b>
+          $${basePnL.finalEquity.toFixed(0)} â†’ <b class="${optPnL.finalEquity >= basePnL.finalEquity ? 'd-good' : 'd-bad'}">$${optPnL.finalEquity.toFixed(0)}</b>
         </div>
       </div>
       <div class="metric-card">
         <div class="metric-label">Win rate (full history)</div>
         <div class="metric-value">
-          ${fullBase.winRate.toFixed(1)}% → <b class="${fullOpt.winRate >= fullBase.winRate ? 'd-good' : 'd-bad'}">${fullOpt.winRate.toFixed(1)}%</b>
+          ${fullBase.winRate.toFixed(1)}% â†’ <b class="${fullOpt.winRate >= fullBase.winRate ? 'd-good' : 'd-bad'}">${fullOpt.winRate.toFixed(1)}%</b>
         </div>
       </div>
     </div>
     <div class="params-block">
-      <div class="block-label">Parámetros propuestos por régimen</div>
+      <div class="block-label">ParÃ¡metros propuestos por rÃ©gimen</div>
       <table class="agent-params">
-        <thead><tr><th>Régimen</th><th>k</th><th>Upper mult</th><th>Lower mult</th></tr></thead>
+        <thead><tr><th>RÃ©gimen</th><th>k</th><th>Upper mult</th><th>Lower mult</th></tr></thead>
         <tbody>${paramRows}</tbody>
       </table>
     </div>
     <div class="equity-cmp" id="equity-cmp-${periodKey}"></div>
-    <button class="apply-btn" data-period="${periodKey}">Aplicar esta optimización</button>
+    <button class="apply-btn" data-period="${periodKey}">Aplicar esta optimizaciÃ³n</button>
   `;
 
   document.getElementById(containerId).innerHTML = html;
@@ -871,9 +871,9 @@ function drawAgentEquity(elementId, basePnL, optPnL, trainStart) {
 
 // Trading-day window estimation (rough): 21 / 63 / 126 trading days
 const AGENT_PERIODS = [
-  { key: '1m', label: 'Mejora 1 — Último mes',     days:  21 },
-  { key: '3m', label: 'Mejora 2 — Últimos 3 meses', days:  63 },
-  { key: '6m', label: 'Mejora 3 — Últimos 6 meses', days: 126 },
+  { key: '1m', label: 'Mejora 1 â€” Ãšltimo mes',     days:  21 },
+  { key: '3m', label: 'Mejora 2 â€” Ãšltimos 3 meses', days:  63 },
+  { key: '6m', label: 'Mejora 3 â€” Ãšltimos 6 meses', days: 126 },
 ];
 
 function runAgent() {
@@ -911,7 +911,7 @@ function renderAgentLegend(rows, baseRegimes, basePnL, proposals) {
   const best = ranked[0];
   const noneBeatBase = ranked.every(r => r.deltaVsBase <= 0);
 
-  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const fmt$ = v => (v >= 0 ? '+$' : 'âˆ’$') + Math.abs(v).toFixed(0);
 
   // Direction agreement check: count how many proposals push each parameter same direction
   // (useful for the 1m-wins case to decide if it's robust or noise)
@@ -930,70 +930,70 @@ function renderAgentLegend(rows, baseRegimes, basePnL, proposals) {
 
   let recommendation = '';
   if (noneBeatBase) {
-    recommendation = `<p>Ninguna de las tres propuestas mejora la equity histórica del modelo base.
-      <span class="pill">Mantener parámetros actuales</span>.
-      Esto puede indicar que tu config ya está bien calibrada, o que las tres ventanas
-      reflejan regímenes de mercado distintos y el agente no encuentra una mejora robusta común.</p>`;
+    recommendation = `<p>Ninguna de las tres propuestas mejora la equity histÃ³rica del modelo base.
+      <span class="pill">Mantener parÃ¡metros actuales</span>.
+      Esto puede indicar que tu config ya estÃ¡ bien calibrada, o que las tres ventanas
+      reflejan regÃ­menes de mercado distintos y el agente no encuentra una mejora robusta comÃºn.</p>`;
   } else if (best.key === '6m') {
-    recommendation = `<p>La propuesta de <b>6 meses</b> es la que más equity acumula en el histórico completo
-      (<b>${fmt$(best.deltaVsBase)}</b> vs base) y se basa en la muestra más amplia
-      (${best.optResult.totalSample} trades). Es la opción <b>más robusta estadísticamente</b>.
+    recommendation = `<p>La propuesta de <b>6 meses</b> es la que mÃ¡s equity acumula en el histÃ³rico completo
+      (<b>${fmt$(best.deltaVsBase)}</b> vs base) y se basa en la muestra mÃ¡s amplia
+      (${best.optResult.totalSample} trades). Es la opciÃ³n <b>mÃ¡s robusta estadÃ­sticamente</b>.
       <span class="pill gold">Aplicar Mejora 3 (6m)</span></p>`;
   } else if (best.key === '3m') {
     const sixM = ranked.find(p => p.key === '6m');
-    recommendation = `<p>La propuesta de <b>3 meses</b> rinde mejor en histórico completo
+    recommendation = `<p>La propuesta de <b>3 meses</b> rinde mejor en histÃ³rico completo
       (<b>${fmt$(best.deltaVsBase)}</b> vs base) que la de 6 meses
       (${fmt$(sixM.deltaVsBase)}). Sugiere que el mercado <b>reciente</b> tiene un perfil distinto
-      al del semestre. <span class="pill gold">Aplicar Mejora 2 (3m)</span> y vigilar las próximas semanas.</p>`;
+      al del semestre. <span class="pill gold">Aplicar Mejora 2 (3m)</span> y vigilar las prÃ³ximas semanas.</p>`;
   } else {
     // 1m wins
     const agreementHigh = agreementHint >= 0.6;
-    recommendation = `<p>La propuesta de <b>1 mes</b> es la más rentable
-      (<b>${fmt$(best.deltaVsBase)}</b> vs base), pero está entrenada con sólo
-      ${best.optResult.totalSample} trades — <b>alto riesgo de sobreajuste</b>.</p>
+    recommendation = `<p>La propuesta de <b>1 mes</b> es la mÃ¡s rentable
+      (<b>${fmt$(best.deltaVsBase)}</b> vs base), pero estÃ¡ entrenada con sÃ³lo
+      ${best.optResult.totalSample} trades â€” <b>alto riesgo de sobreajuste</b>.</p>
       ${agreementHigh
-        ? `<p>Las tres propuestas coinciden bastante en la dirección de los cambios
-            (~${(agreementHint*100).toFixed(0)}% de los parámetros mueven en el mismo sentido),
-            así que el patrón parece real. <span class="pill gold">Puedes aplicar Mejora 1</span>,
+        ? `<p>Las tres propuestas coinciden bastante en la direcciÃ³n de los cambios
+            (~${(agreementHint*100).toFixed(0)}% de los parÃ¡metros mueven en el mismo sentido),
+            asÃ­ que el patrÃ³n parece real. <span class="pill gold">Puedes aplicar Mejora 1</span>,
             pero monitoriza de cerca.</p>`
-        : `<p>Las propuestas discrepan bastante entre sí — sólo el ${(agreementHint*100).toFixed(0)}%
-            de los parámetros mueve en la misma dirección. El "ganador" es probablemente ruido del mes.
+        : `<p>Las propuestas discrepan bastante entre sÃ­ â€” sÃ³lo el ${(agreementHint*100).toFixed(0)}%
+            de los parÃ¡metros mueve en la misma direcciÃ³n. El "ganador" es probablemente ruido del mes.
             <span class="pill">Recomiendo aplicar Mejora 2 o 3 en su lugar</span>.</p>`}`;
   }
 
   const regimeNote = currentRegime.trade
-    ? `<p>El cierre más reciente es <b>VIX ${lastRow.vix.toFixed(2)}</b>, dentro del régimen
-       <b>${currentRegimeLbl}</b>. La próxima sesión se opera con los parámetros de ese régimen
-       — fíjate especialmente en cómo lo modifica cada propuesta.</p>`
-    : `<p>El cierre más reciente es <b>VIX ${lastRow.vix.toFixed(2)}</b>, en una zona
-       <b>${currentRegimeLbl} (no-trade)</b>. La próxima sesión no se opera, así que
-       cualquier ajuste sólo afectará cuando el VIX vuelva a una zona operable.</p>`;
+    ? `<p>El cierre mÃ¡s reciente es <b>VIX ${lastRow.vix.toFixed(2)}</b>, dentro del rÃ©gimen
+       <b>${currentRegimeLbl}</b>. La prÃ³xima sesiÃ³n se opera con los parÃ¡metros de ese rÃ©gimen
+       â€” fÃ­jate especialmente en cÃ³mo lo modifica cada propuesta.</p>`
+    : `<p>El cierre mÃ¡s reciente es <b>VIX ${lastRow.vix.toFixed(2)}</b>, en una zona
+       <b>${currentRegimeLbl} (no-trade)</b>. La prÃ³xima sesiÃ³n no se opera, asÃ­ que
+       cualquier ajuste sÃ³lo afectarÃ¡ cuando el VIX vuelva a una zona operable.</p>`;
 
   document.getElementById('agentLegend').innerHTML = `
-    <h3>Cómo leer este panel</h3>
+    <h3>CÃ³mo leer este panel</h3>
 
     <div class="legend-section">
-      <div class="legend-title"><span class="badge">①</span>Trading window y franja dorada</div>
-      <p>Cada propuesta entrena los parámetros sobre una <b>ventana del histórico</b>:
-        <b>Mejora 1</b> usa los últimos 21 días de trading,
-        <b>Mejora 2</b> los últimos 63, y <b>Mejora 3</b> los últimos 126.</p>
-      <p>Esa ventana es la <b>franja dorada</b> que ves en el gráfico de equity. Dentro de la franja,
-        el agente <i>vio</i> los datos al optimizar — por eso la línea dorada (propuesta) suele
-        superar siempre a la navy (base) ahí.</p>
-      <p><b>Lo que importa de verdad es lo que pasa fuera de la franja</b>: ahí la línea dorada
-        está corriendo sobre datos que el agente nunca vio (validación <i>out-of-sample</i>).
-        Si la línea dorada sigue por encima de la navy fuera de la franja, la mejora es robusta.
-        Si se desploma, era curva-fitting del período.</p>
+      <div class="legend-title"><span class="badge">â‘ </span>Trading window y franja dorada</div>
+      <p>Cada propuesta entrena los parÃ¡metros sobre una <b>ventana del histÃ³rico</b>:
+        <b>Mejora 1</b> usa los Ãºltimos 21 dÃ­as de trading,
+        <b>Mejora 2</b> los Ãºltimos 63, y <b>Mejora 3</b> los Ãºltimos 126.</p>
+      <p>Esa ventana es la <b>franja dorada</b> que ves en el grÃ¡fico de equity. Dentro de la franja,
+        el agente <i>vio</i> los datos al optimizar â€” por eso la lÃ­nea dorada (propuesta) suele
+        superar siempre a la navy (base) ahÃ­.</p>
+      <p><b>Lo que importa de verdad es lo que pasa fuera de la franja</b>: ahÃ­ la lÃ­nea dorada
+        estÃ¡ corriendo sobre datos que el agente nunca vio (validaciÃ³n <i>out-of-sample</i>).
+        Si la lÃ­nea dorada sigue por encima de la navy fuera de la franja, la mejora es robusta.
+        Si se desploma, era curva-fitting del perÃ­odo.</p>
     </div>
 
     <div class="legend-section">
-      <div class="legend-title"><span class="badge">②</span>Modelo de optimización</div>
-      <p>Búsqueda exhaustiva por régimen (<b>grid search</b>) sobre k, upper mult y lower mult.
-        Maximiza expectancia con el modelo simplificado <b>+$150</b> por win / <b>−$600</b> por loss.</p>
+      <div class="legend-title"><span class="badge">â‘¡</span>Modelo de optimizaciÃ³n</div>
+      <p>BÃºsqueda exhaustiva por rÃ©gimen (<b>grid search</b>) sobre k, upper mult y lower mult.
+        Maximiza expectancia con el modelo simplificado <b>+$150</b> por win / <b>âˆ’$600</b> por loss.</p>
     </div>
 
     <div class="legend-section">
-      <div class="legend-title"><span class="badge">③</span>Recomendación del agente</div>
+      <div class="legend-title"><span class="badge">â‘¢</span>RecomendaciÃ³n del agente</div>
       ${recommendation}
       ${regimeNote}
     </div>
@@ -1020,13 +1020,13 @@ function openAgentModal()  { document.getElementById('agentModal').style.display
 function closeAgentModal() { document.getElementById('agentModal').style.display = 'none'; }
 
 // ==========================================================================
-// JEFE DE MESA — random-search optimizer constrained on avg strike distance
+// JEFE DE MESA â€” random-search optimizer constrained on avg strike distance
 // ==========================================================================
 // Generates random configurations, filters to those whose average strike
 // distance over the last 3 months matches the user's target (within tolerance),
 // then ranks the survivors by strict win rate.
 const JEFE_WINDOW_DAYS = 63; // ~3 months
-const _jefeCache = new Map(); // rank → config (for Apply button)
+const _jefeCache = new Map(); // rank â†’ config (for Apply button)
 
 function rand(a, b) { return a + Math.random() * (b - a); }
 function randStep(a, b, step) {
@@ -1080,7 +1080,7 @@ function scoreJefeConfig(rows, baseBands, config) {
     const reg = regimeFor(prev.vix, config.regimes);
     if (!isDayAccepted(r, reg)) continue;
 
-    // Z = Σ wᵢ × sᵢ
+    // Z = Î£ wáµ¢ Ã— sáµ¢
     let Z = 0;
     for (let j = 0; j < config.compressionVars.length; j++) {
       const v = config.compressionVars[j];
@@ -1142,7 +1142,7 @@ async function runJefeDeMesa() {
   const samples    = Math.max(1000, parseInt(document.getElementById('jefeSamples').value, 10) || 10000);
 
   if (!isFinite(targetCall) || !isFinite(targetPut) || !isFinite(tolerance)) {
-    alert('Revisa los valores numéricos del formulario.');
+    alert('Revisa los valores numÃ©ricos del formulario.');
     return;
   }
 
@@ -1189,7 +1189,7 @@ async function runJefeDeMesa() {
       }
       if (i % 500 === 0) {
         fill.style.width = (i / samples * 100).toFixed(1) + '%';
-        status.textContent = `Probando ${i.toLocaleString()}/${samples.toLocaleString()} · ${matches.length} matches…`;
+        status.textContent = `Probando ${i.toLocaleString()}/${samples.toLocaleString()} Â· ${matches.length} matchesâ€¦`;
         await new Promise(r => setTimeout(r, 0));
       }
     }
@@ -1198,9 +1198,9 @@ async function runJefeDeMesa() {
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
 
     if (matches.length === 0) {
-      // No exact match — show diagnostic + near-best
+      // No exact match â€” show diagnostic + near-best
       status.style.color = '#b06000';
-      status.textContent = `⚠ Ningún match exacto en ${elapsed}s. Mostrando la mejor aproximación.`;
+      status.textContent = `âš  NingÃºn match exacto en ${elapsed}s. Mostrando la mejor aproximaciÃ³n.`;
 
       _jefeCache.clear();
       _jefeCache.set(0, bestNear.config);
@@ -1210,24 +1210,24 @@ async function runJefeDeMesa() {
 
       resultsEl.innerHTML = `
         <div style="grid-column:1/-1;background:#fff7df;border:1px solid var(--gold-500);border-left:4px solid var(--gold-500);border-radius:8px;padding:14px;margin-bottom:12px">
-          <h4 style="margin:0 0 8px;color:#6b5b2e">📊 Diagnóstico de la búsqueda</h4>
+          <h4 style="margin:0 0 8px;color:#6b5b2e">ðŸ“Š DiagnÃ³stico de la bÃºsqueda</h4>
           <div style="font-size:12px;line-height:1.7;color:#5a4a18">
-            <b>Targets pedidos</b>: call <b>+${targetCallAbs.toFixed(2)}%</b> · put <b>−${targetPutAbs.toFixed(2)}%</b> · tolerancia <b>±${tolerance.toFixed(2)}%</b><br>
-            <b>Rango factible probado</b>: call <b>+${minCall.toFixed(2)}% a +${maxCall.toFixed(2)}%</b> · put <b>−${minPut.toFixed(2)}% a −${maxPut.toFixed(2)}%</b><br>
+            <b>Targets pedidos</b>: call <b>+${targetCallAbs.toFixed(2)}%</b> Â· put <b>âˆ’${targetPutAbs.toFixed(2)}%</b> Â· tolerancia <b>Â±${tolerance.toFixed(2)}%</b><br>
+            <b>Rango factible probado</b>: call <b>+${minCall.toFixed(2)}% a +${maxCall.toFixed(2)}%</b> Â· put <b>âˆ’${minPut.toFixed(2)}% a âˆ’${maxPut.toFixed(2)}%</b><br>
             ${(targetCallAbs < minCall || targetCallAbs > maxCall)
-              ? `<span style="color:#b73232">⚠ Tu target call está FUERA del rango factible</span><br>` : ''}
+              ? `<span style="color:#b73232">âš  Tu target call estÃ¡ FUERA del rango factible</span><br>` : ''}
             ${(targetPutAbs < minPut || targetPutAbs > maxPut)
-              ? `<span style="color:#b73232">⚠ Tu target put está FUERA del rango factible</span><br>` : ''}
-            <b>Mejor aproximación</b>: avg call <b>+${bestNear.stats.avgDistCall.toFixed(3)}%</b>
+              ? `<span style="color:#b73232">âš  Tu target put estÃ¡ FUERA del rango factible</span><br>` : ''}
+            <b>Mejor aproximaciÃ³n</b>: avg call <b>+${bestNear.stats.avgDistCall.toFixed(3)}%</b>
             (${callDelta >= 0 ? '+' : ''}${callDelta.toFixed(3)} del target),
-            avg put <b>−${bestNear.stats.avgDistPut.toFixed(3)}%</b>
+            avg put <b>âˆ’${bestNear.stats.avgDistPut.toFixed(3)}%</b>
             (${putDelta >= 0 ? '+' : ''}${putDelta.toFixed(3)} del target)
           </div>
           <div style="margin-top:10px;font-size:11px;color:#6b5b2e">
             <b>Sugerencias</b>:
             ${(targetCallAbs < minCall || targetCallAbs > maxCall || targetPutAbs < minPut || targetPutAbs > maxPut)
               ? `prueba targets dentro del rango factible (ej. <b>${((minCall + maxCall)/2).toFixed(2)}%</b> / <b>${((minPut + maxPut)/2).toFixed(2)}%</b>)`
-              : `aumenta tolerancia a <b>±${Math.max(0.15, bestNearScore.toFixed(2))}%</b> o sube las muestras a 25.000-50.000`}
+              : `aumenta tolerancia a <b>Â±${Math.max(0.15, bestNearScore.toFixed(2))}%</b> o sube las muestras a 25.000-50.000`}
           </div>
         </div>
         ${renderJefeResult(bestNear, 0)}
@@ -1243,13 +1243,13 @@ async function runJefeDeMesa() {
     _jefeCache.clear();
     top.forEach((m, i) => _jefeCache.set(i, m.config));
 
-    status.textContent = `✓ Completado en ${elapsed}s · ${matches.length} configs cumplen el target · top 5 ordenadas por win rate estricto`;
+    status.textContent = `âœ“ Completado en ${elapsed}s Â· ${matches.length} configs cumplen el target Â· top 5 ordenadas por win rate estricto`;
     resultsEl.innerHTML = top.map((m, i) => renderJefeResult(m, i)).join('');
     setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 1500);
   } catch (err) {
     console.error('Jefe de mesa error:', err);
     status.style.color = '#b73232';
-    status.textContent = `✗ Error: ${err.message || err}`;
+    status.textContent = `âœ— Error: ${err.message || err}`;
   } finally {
     btn.disabled = false;
   }
@@ -1260,11 +1260,11 @@ function renderJefeResult(m, rank) {
   const cp = m.config.compressionParams;
   const activeVars = m.config.compressionVars.filter(v => v.active);
   const isBest = rank === 0;
-  const fmtPct = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(3) + '%';
+  const fmtPct = v => (v >= 0 ? '+' : 'âˆ’') + Math.abs(v).toFixed(3) + '%';
 
   return `
     <div class="jefe-result-card ${isBest ? 'best' : ''}">
-      <div class="jefe-rank">${isBest ? '🏆 #1 — MEJOR' : `#${rank + 1}`}</div>
+      <div class="jefe-rank">${isBest ? 'ðŸ† #1 â€” MEJOR' : `#${rank + 1}`}</div>
       <div class="jefe-metrics">
         <div class="jefe-metric-card">
           <div class="jefe-metric-lbl">Win rate (estricto)</div>
@@ -1285,38 +1285,38 @@ function renderJefeResult(m, rank) {
         <div class="jefe-metric-card">
           <div class="jefe-metric-lbl">Limpios / Tocados / Loss</div>
           <div class="jefe-metric-val" style="font-size:12px">
-            <span style="color:var(--good)">${s.cleanWins}</span> ·
-            <span style="color:#b06000">${s.touched}</span> ·
+            <span style="color:var(--good)">${s.cleanWins}</span> Â·
+            <span style="color:#b06000">${s.touched}</span> Â·
             <span style="color:var(--bad)">${s.losses}</span>
           </div>
         </div>
         <div class="jefe-metric-card">
-          <div class="jefe-metric-lbl">Días en muestra</div>
+          <div class="jefe-metric-lbl">DÃ­as en muestra</div>
           <div class="jefe-metric-val">${s.sampleCount}</div>
         </div>
       </div>
       <div class="threshold-block" style="margin-bottom:8px">
-        <div class="th-label">Compresión</div>
+        <div class="th-label">CompresiÃ³n</div>
         <div class="th-vals">
-          λ=${cp.lambda} · C<sub>min</sub>=${cp.Cmin} · C<sub>max</sub>=${cp.Cmax} · V<sub>ref</sub>=${cp.Vref} · Δ=${cp.shiftFactor}
+          Î»=${cp.lambda} Â· C<sub>min</sub>=${cp.Cmin} Â· C<sub>max</sub>=${cp.Cmax} Â· V<sub>ref</sub>=${cp.Vref} Â· Î”=${cp.shiftFactor}
         </div>
       </div>
       <div class="threshold-block" style="margin-bottom:8px">
         <div class="th-label">Variables (${activeVars.length}/6)</div>
         <div class="th-vals" style="font-size:11px">
           ${activeVars.length === 0 ? '<i>ninguna</i>' :
-            activeVars.map(v => `<b>${v.id}</b>=${v.weight}`).join(' · ')}
+            activeVars.map(v => `<b>${v.id}</b>=${v.weight}`).join(' Â· ')}
         </div>
       </div>
       <div class="threshold-block" style="margin-bottom:8px">
-        <div class="th-label">Regímenes operables (k / up / lo)</div>
+        <div class="th-label">RegÃ­menes operables (k / up / lo)</div>
         <table class="fav-regime-table" style="font-size:10px">
           ${m.config.regimes.filter(r => r.trade).map(r =>
-            `<tr><td>VIX≤${r.maxVix}</td><td>${r.k.toFixed(1)}</td><td>${r.upperMult.toFixed(1)}</td><td>${r.lowerMult.toFixed(1)}</td></tr>`
+            `<tr><td>VIXâ‰¤${r.maxVix}</td><td>${r.k.toFixed(1)}</td><td>${r.upperMult.toFixed(1)}</td><td>${r.lowerMult.toFixed(1)}</td></tr>`
           ).join('')}
         </table>
       </div>
-      <button class="apply-btn" data-jefe-rank="${rank}">✓ Aplicar esta configuración</button>
+      <button class="apply-btn" data-jefe-rank="${rank}">âœ“ Aplicar esta configuraciÃ³n</button>
     </div>`;
 }
 
@@ -1357,7 +1357,7 @@ function openJefeModal()  { document.getElementById('jefeModal').style.display =
 function closeJefeModal() { document.getElementById('jefeModal').style.display = 'none'; }
 
 // ==========================================================================
-// OPTION CHAINS — parse Barchart CSV, persist, and view stored chains
+// OPTION CHAINS â€” parse Barchart CSV, persist, and view stored chains
 // ==========================================================================
 const CHAINS_KEY = 'spx-vix-chains-v1';
 
@@ -1367,12 +1367,12 @@ function loadChains() {
 }
 function saveChains(chains) { localStorage.setItem(CHAINS_KEY, JSON.stringify(chains)); }
 
-// Flexible CSV parser — autodetects delimiter, headers, and column aliases.
+// Flexible CSV parser â€” autodetects delimiter, headers, and column aliases.
 // Works with Barchart's wide format (Strike + Call cols + Put cols).
 function parseChainCSV(text) {
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-  if (lines.length < 2) throw new Error('CSV vacío o sin filas de datos.');
+  if (lines.length < 2) throw new Error('CSV vacÃ­o o sin filas de datos.');
 
   // Detect delimiter
   const delims = [',', ';', '\t'];
@@ -1423,7 +1423,7 @@ function parseChainCSV(text) {
   };
 
   if (idx.strike < 0) {
-    throw new Error(`No se encontró la columna "Strike". Headers: ${headers.join(' | ')}`);
+    throw new Error(`No se encontrÃ³ la columna "Strike". Headers: ${headers.join(' | ')}`);
   }
 
   const cleanNum = (s) => {
@@ -1453,7 +1453,7 @@ function parseChainCSV(text) {
       putOI:   get(cells, idx.putOI),    putDelta: get(cells, idx.putDelta),
     });
   }
-  if (strikes.length === 0) throw new Error('No se encontraron filas válidas con strike numérico.');
+  if (strikes.length === 0) throw new Error('No se encontraron filas vÃ¡lidas con strike numÃ©rico.');
   strikes.sort((a, b) => a.strike - b.strike);
 
   // Detected columns (for showing the user what we found)
@@ -1503,7 +1503,7 @@ function renderChainPreview(parsed, filename) {
   }
   if (!detectedDate) detectedDate = new Date().toISOString().slice(0, 10);
 
-  // Try to detect spot — use median strike as a rough fallback
+  // Try to detect spot â€” use median strike as a rough fallback
   const middleIdx = Math.floor(parsed.strikes.length / 2);
   const detectedSpot = parsed.strikes[middleIdx]?.strike || '';
 
@@ -1516,16 +1516,16 @@ function renderChainPreview(parsed, filename) {
   const sampleRows = sample.map(s => `
     <tr>
       <td>${s.strike}</td>
-      <td class="call-cell">${isFinite(s.callBid) ? s.callBid.toFixed(2) : '—'}</td>
-      <td class="call-cell">${isFinite(s.callAsk) ? s.callAsk.toFixed(2) : '—'}</td>
-      <td class="put-cell">${isFinite(s.putBid) ? s.putBid.toFixed(2) : '—'}</td>
-      <td class="put-cell">${isFinite(s.putAsk) ? s.putAsk.toFixed(2) : '—'}</td>
+      <td class="call-cell">${isFinite(s.callBid) ? s.callBid.toFixed(2) : 'â€”'}</td>
+      <td class="call-cell">${isFinite(s.callAsk) ? s.callAsk.toFixed(2) : 'â€”'}</td>
+      <td class="put-cell">${isFinite(s.putBid) ? s.putBid.toFixed(2) : 'â€”'}</td>
+      <td class="put-cell">${isFinite(s.putAsk) ? s.putAsk.toFixed(2) : 'â€”'}</td>
     </tr>`).join('');
 
   preview.innerHTML = `
     <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px">
       <div style="font-weight:600;margin-bottom:6px;color:var(--navy-700)">
-        ✓ ${parsed.strikes.length} strikes detectados
+        âœ“ ${parsed.strikes.length} strikes detectados
       </div>
       <div style="font-size:11px">${fieldList}</div>
     </div>
@@ -1538,8 +1538,8 @@ function renderChainPreview(parsed, filename) {
       <div>
         <label>DTE</label>
         <select id="chainPreviewDTE">
-          <option value="0DTE">0DTE (mismo día)</option>
-          <option value="1DTE">1DTE (siguiente sesión)</option>
+          <option value="0DTE">0DTE (mismo dÃ­a)</option>
+          <option value="1DTE">1DTE (siguiente sesiÃ³n)</option>
           <option value="2DTE">2DTE</option>
           <option value="weekly">Weekly</option>
           <option value="monthly">Monthly</option>
@@ -1552,7 +1552,7 @@ function renderChainPreview(parsed, filename) {
     </div>
 
     <details style="margin-bottom:10px">
-      <summary style="cursor:pointer;font-size:12px;color:var(--ink-soft)">Ver muestra (primeros y últimos 5 strikes)</summary>
+      <summary style="cursor:pointer;font-size:12px;color:var(--ink-soft)">Ver muestra (primeros y Ãºltimos 5 strikes)</summary>
       <table class="chain-table" style="margin-top:8px">
         <thead><tr>
           <th>Strike</th>
@@ -1564,7 +1564,7 @@ function renderChainPreview(parsed, filename) {
     </details>
 
     <div class="chain-preview-actions">
-      <button class="chain-save-btn"  id="chainSaveBtn">💾 Guardar cadena</button>
+      <button class="chain-save-btn"  id="chainSaveBtn">ðŸ’¾ Guardar cadena</button>
       <button class="chain-cancel-btn" id="chainCancelBtn">Cancelar</button>
     </div>
   `;
@@ -1585,7 +1585,7 @@ function confirmSaveChain() {
   if (!date) { alert('Falta la fecha.'); return; }
 
   const chains = loadChains();
-  if (chains[date] && !confirm(`Ya existe una cadena guardada para ${date}. ¿Sobrescribir?`)) return;
+  if (chains[date] && !confirm(`Ya existe una cadena guardada para ${date}. Â¿Sobrescribir?`)) return;
 
   chains[date] = {
     date, dte, spot: isFinite(spot) ? spot : null,
@@ -1605,19 +1605,19 @@ function renderChainsList() {
   const dates = Object.keys(chains).sort().reverse();
   const container = document.getElementById('chainSavedList');
   if (dates.length === 0) {
-    container.innerHTML = `<div style="font-size:12px;color:var(--ink-soft);font-style:italic">No hay cadenas guardadas todavía.</div>`;
+    container.innerHTML = `<div style="font-size:12px;color:var(--ink-soft);font-style:italic">No hay cadenas guardadas todavÃ­a.</div>`;
     return;
   }
   const rows = dates.map(d => {
     const c = chains[d];
     return `<tr>
       <td><b>${d}</b></td>
-      <td>${c.dte || '—'}</td>
-      <td>${c.spot ? c.spot.toFixed(2) : '—'}</td>
+      <td>${c.dte || 'â€”'}</td>
+      <td>${c.spot ? c.spot.toFixed(2) : 'â€”'}</td>
       <td>${c.strikes.length}</td>
       <td>
-        <button class="view-btn" data-chain-date="${d}">👁 Ver</button>
-        <button class="del-btn" data-chain-date="${d}">🗑</button>
+        <button class="view-btn" data-chain-date="${d}">ðŸ‘ Ver</button>
+        <button class="del-btn" data-chain-date="${d}">ðŸ—‘</button>
       </td>
     </tr>`;
   }).join('');
@@ -1642,8 +1642,8 @@ function viewChain(date) {
   const spot = c.spot;
   const rows = c.strikes.map(s => {
     const isATM = spot && Math.abs(s.strike - spot) < 5;
-    const fmt = v => isFinite(v) ? v.toFixed(2) : '—';
-    const fmtIV = v => isFinite(v) ? (v * 100 < 100 ? (v * 100).toFixed(1) + '%' : v.toFixed(1) + '%') : '—';
+    const fmt = v => isFinite(v) ? v.toFixed(2) : 'â€”';
+    const fmtIV = v => isFinite(v) ? (v * 100 < 100 ? (v * 100).toFixed(1) + '%' : v.toFixed(1) + '%') : 'â€”';
     return `<tr class="${isATM ? 'atm' : ''}">
       <td>${s.strike}</td>
       <td class="call-cell">${fmt(s.callBid)}</td>
@@ -1656,7 +1656,7 @@ function viewChain(date) {
   }).join('');
   preview.innerHTML = `
     <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px">
-      <b>Cadena ${c.date}</b> · DTE: ${c.dte || '—'} · Spot: ${c.spot ? c.spot.toFixed(2) : '—'} · ${c.strikes.length} strikes
+      <b>Cadena ${c.date}</b> Â· DTE: ${c.dte || 'â€”'} Â· Spot: ${c.spot ? c.spot.toFixed(2) : 'â€”'} Â· ${c.strikes.length} strikes
     </div>
     <table class="chain-table">
       <thead><tr>
@@ -1675,7 +1675,7 @@ function viewChain(date) {
 }
 
 function deleteChain(date) {
-  if (!confirm(`¿Eliminar la cadena del ${date}?`)) return;
+  if (!confirm(`Â¿Eliminar la cadena del ${date}?`)) return;
   const chains = loadChains();
   delete chains[date];
   saveChains(chains);
@@ -1683,7 +1683,7 @@ function deleteChain(date) {
 }
 
 // ==========================================================================
-// FAVORITES — save/load/apply full configurations with summary stats
+// FAVORITES â€” save/load/apply full configurations with summary stats
 // ==========================================================================
 const FAVORITES_KEY = 'spx-vix-favorites-v1';
 
@@ -1745,7 +1745,7 @@ function computeFavoriteStats(rows, bands) {
 
 function saveCurrentAsFavorite(name) {
   if (!currentRows) {
-    alert('No hay datos cargados — carga el CSV primero.');
+    alert('No hay datos cargados â€” carga el CSV primero.');
     return;
   }
   const lookback = parseInt(document.getElementById('lookback').value, 10);
@@ -1769,7 +1769,7 @@ function saveCurrentAsFavorite(name) {
 }
 
 function deleteFavorite(id) {
-  if (!confirm('¿Eliminar esta configuración guardada?')) return;
+  if (!confirm('Â¿Eliminar esta configuraciÃ³n guardada?')) return;
   saveFavorites(loadFavorites().filter(f => f.id !== id));
   renderFavoritesList();
   updateFavoritesCardCount();
@@ -1805,7 +1805,7 @@ function applyFavorite(id) {
     }
   });
 
-  // Regime parameters → re-render the table with saved values, then write to DOM inputs
+  // Regime parameters â†’ re-render the table with saved values, then write to DOM inputs
   c.regimes.forEach((reg, i) => {
     const set = (f, val) => {
       const inp = document.querySelector(`#regimeTable input[data-i="${i}"][data-f="${f}"]`);
@@ -1836,9 +1836,9 @@ function renderFavoritesList() {
   if (favs.length === 0) {
     container.innerHTML = `
       <div style="text-align:center;padding:40px;color:var(--ink-soft)">
-        <div style="font-size:36px">⭐</div>
-        <div style="margin-top:8px;font-size:14px">Aún no has guardado ninguna configuración.</div>
-        <div style="font-size:11px;margin-top:6px">Usa el formulario de arriba para guardar la configuración actual.</div>
+        <div style="font-size:36px">â­</div>
+        <div style="margin-top:8px;font-size:14px">AÃºn no has guardado ninguna configuraciÃ³n.</div>
+        <div style="font-size:11px;margin-top:6px">Usa el formulario de arriba para guardar la configuraciÃ³n actual.</div>
       </div>`;
     return;
   }
@@ -1846,17 +1846,17 @@ function renderFavoritesList() {
 }
 
 function renderFavoriteCard(fav) {
-  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const fmt$ = v => (v >= 0 ? '+$' : 'âˆ’$') + Math.abs(v).toFixed(0);
   const wrColor = fav.stats.winRate >= 80 ? 'var(--good)' : 'var(--bad)';
   const pnlColor = fav.stats.totalPnL >= 0 ? 'var(--good)' : 'var(--bad)';
   return `
     <div class="favorite-card" data-id="${fav.id}">
       <div class="fav-header">
-        <span class="fav-star">⭐</span>
+        <span class="fav-star">â­</span>
         <input type="text" class="fav-name" value="${fav.name.replace(/"/g, '&quot;')}" data-id="${fav.id}">
         <span class="fav-date">${fav.date}</span>
-        <button class="fav-apply"  data-id="${fav.id}">✓ Aplicar</button>
-        <button class="fav-delete" data-id="${fav.id}">🗑</button>
+        <button class="fav-apply"  data-id="${fav.id}">âœ“ Aplicar</button>
+        <button class="fav-delete" data-id="${fav.id}">ðŸ—‘</button>
       </div>
       <div class="fav-stats">
         <div class="fav-stat">
@@ -1866,8 +1866,8 @@ function renderFavoriteCard(fav) {
         <div class="fav-stat">
           <div class="fav-stat-lbl">Operaciones</div>
           <div class="fav-stat-val" style="font-size:12px">
-            <span style="color:var(--good)">${fav.stats.wins} W</span> ·
-            <span style="color:var(--bad)">${fav.stats.losses} L</span> ·
+            <span style="color:var(--good)">${fav.stats.wins} W</span> Â·
+            <span style="color:var(--bad)">${fav.stats.losses} L</span> Â·
             <span style="color:var(--ink-soft)">${fav.stats.noTrade} NT</span>
           </div>
         </div>
@@ -1875,7 +1875,7 @@ function renderFavoriteCard(fav) {
           <div class="fav-stat-lbl">Dist media (3m)</div>
           <div class="fav-stat-val" style="font-size:12px">
             <span style="color:var(--good)">+${fav.stats.avgDistCallPct.toFixed(2)}%</span> /
-            <span style="color:var(--bad)">−${fav.stats.avgDistPutPct.toFixed(2)}%</span>
+            <span style="color:var(--bad)">âˆ’${fav.stats.avgDistPutPct.toFixed(2)}%</span>
           </div>
         </div>
         <div class="fav-stat">
@@ -1883,7 +1883,7 @@ function renderFavoriteCard(fav) {
           <div class="fav-stat-val" style="color:${pnlColor}">${fmt$(fav.stats.totalPnL)}</div>
         </div>
       </div>
-      <button class="fav-expand" data-id="${fav.id}">▼ Ver todas las variables</button>
+      <button class="fav-expand" data-id="${fav.id}">â–¼ Ver todas las variables</button>
       <div class="fav-details" id="fav-details-${fav.id}" style="display:none">${renderFavoriteDetails(fav)}</div>
     </div>`;
 }
@@ -1896,27 +1896,27 @@ function renderFavoriteDetails(fav) {
   return `
     <div class="fav-detail-block">
       <div class="fav-detail-title">Compression params</div>
-      λ = ${cp.lambda} · C<sub>min</sub> = ${cp.Cmin} · C<sub>max</sub> = ${cp.Cmax} · V<sub>ref</sub> = ${cp.Vref} · Δ<sub>trend</sub> = ${cp.shiftFactor || 0.25}
+      Î» = ${cp.lambda} Â· C<sub>min</sub> = ${cp.Cmin} Â· C<sub>max</sub> = ${cp.Cmax} Â· V<sub>ref</sub> = ${cp.Vref} Â· Î”<sub>trend</sub> = ${cp.shiftFactor || 0.25}
     </div>
     <div class="fav-detail-block">
       <div class="fav-detail-title">Variables activas (${activeVars.length}/${vars.length})</div>
       ${activeVars.length === 0
         ? '<i style="color:var(--ink-soft)">Ninguna</i>'
-        : activeVars.map(v => `<b>${v.id}</b>=${v.weight}`).join(' · ')}
+        : activeVars.map(v => `<b>${v.id}</b>=${v.weight}`).join(' Â· ')}
       ${vars.filter(v => !v.active).length > 0
         ? `<div style="margin-top:3px;font-size:10px;color:var(--ink-soft)">Inactivas: ${vars.filter(v => !v.active).map(v => v.id).join(', ')}</div>`
         : ''}
     </div>
     <div class="fav-detail-block">
-      <div class="fav-detail-title">Regímenes</div>
+      <div class="fav-detail-title">RegÃ­menes</div>
       <table class="fav-regime-table">
-        <thead><tr><th>VIX≤</th><th>k</th><th>Up</th><th>Low</th><th>Trade</th></tr></thead>
-        <tbody>${regs.map(r => `<tr><td>${r.maxVix}</td><td>${r.k}</td><td>${r.upperMult}</td><td>${r.lowerMult}</td><td>${r.trade ? '✓' : '✗'}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>VIXâ‰¤</th><th>k</th><th>Up</th><th>Low</th><th>Trade</th></tr></thead>
+        <tbody>${regs.map(r => `<tr><td>${r.maxVix}</td><td>${r.k}</td><td>${r.upperMult}</td><td>${r.lowerMult}</td><td>${r.trade ? 'âœ“' : 'âœ—'}</td></tr>`).join('')}</tbody>
       </table>
     </div>
     <div class="fav-detail-block">
       <div class="fav-detail-title">Otros</div>
-      Capital inicial = $${fav.config.initialCapital} · Lookback σ = ${fav.config.lookback}d · Display window = ${fav.config.displayWindow}d
+      Capital inicial = $${fav.config.initialCapital} Â· Lookback Ïƒ = ${fav.config.lookback}d Â· Display window = ${fav.config.displayWindow}d
     </div>`;
 }
 
@@ -2017,7 +2017,7 @@ function drawVixAnalystChart() {
   const annotations = regimes.filter(r => r.maxVix < 998).map(reg => ({
     xref: 'paper', yref: 'y', x: 1, y: reg.maxVix,
     xanchor: 'right', yanchor: 'bottom',
-    text: ` ≤ ${reg.maxVix} `,
+    text: ` â‰¤ ${reg.maxVix} `,
     font: { size: 10, color: '#8a6d10' },
     bgcolor: 'rgba(255,255,255,0.7)', showarrow: false,
   }));
@@ -2025,7 +2025,7 @@ function drawVixAnalystChart() {
   const traces = [
     { x: dates, y: vix, mode: 'lines', name: 'VIX',
       line: { color: '#143a64', width: 1.8 } },
-    { x: lossX, y: lossY, mode: 'markers', name: 'Pérdidas',
+    { x: lossX, y: lossY, mode: 'markers', name: 'PÃ©rdidas',
       marker: { color: '#b73232', size: 10, symbol: 'x', line: { width: 1, color: '#fff' } } },
   ];
   safePlotly('vixAnalystChart', traces, {
@@ -2055,7 +2055,7 @@ function renderUpcomingEvents() {
   };
 
   const rowsHtml = future.length === 0
-    ? '<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:20px">No hay eventos próximos cargados.</td></tr>'
+    ? '<tr><td colspan="4" style="text-align:center;color:var(--ink-soft);padding:20px">No hay eventos prÃ³ximos cargados.</td></tr>'
     : future.slice(0, 50).map(e => `
         <tr class="${isImminent(e.date) ? 'imminent' : ''}">
           <td><b>${e.date}</b></td>
@@ -2071,7 +2071,7 @@ function renderUpcomingEvents() {
       <tbody>${rowsHtml}</tbody>
     </table>
     <div style="font-size:11px;color:var(--ink-soft);margin-top:8px">
-      ${future.length} eventos cargados. Las filas resaltadas son hoy o mañana.
+      ${future.length} eventos cargados. Las filas resaltadas son hoy o maÃ±ana.
     </div>
   `;
 
@@ -2105,14 +2105,14 @@ function checkEventBanner() {
   const banner = document.getElementById('eventBanner');
   if (imminent.length === 0) { banner.style.display = 'none'; return; }
 
-  const list = imminent.map(e => `<b>${e.date === todayISO ? 'HOY' : 'MAÑANA'}</b>: ${e.event} (${e.category})`).join(' &nbsp;·&nbsp; ');
+  const list = imminent.map(e => `<b>${e.date === todayISO ? 'HOY' : 'MAÃ‘ANA'}</b>: ${e.event} (${e.category})`).join(' &nbsp;Â·&nbsp; ');
   banner.style.display = 'flex';
   banner.className = 'event-banner';
   banner.innerHTML = `
-    <div class="icon">⚠</div>
+    <div class="icon">âš </div>
     <div class="body">
       <div class="title">Evento macro de alta importancia</div>
-      <div class="desc">${list} — Esperar volatilidad superior a la media.</div>
+      <div class="desc">${list} â€” Esperar volatilidad superior a la media.</div>
     </div>
     <button class="dismiss" type="button">Descartar</button>
   `;
@@ -2130,7 +2130,7 @@ function renderHistoricalCorrelation() {
 
   if (!events.length) {
     container.innerHTML = `<div style="color:var(--ink-soft);text-align:center;padding:20px">
-      Carga el CSV histórico de eventos macro para analizar la correlación con tus días de pérdida.</div>`;
+      Carga el CSV histÃ³rico de eventos macro para analizar la correlaciÃ³n con tus dÃ­as de pÃ©rdida.</div>`;
     return;
   }
   if (!currentRows) return;
@@ -2147,7 +2147,7 @@ function renderHistoricalCorrelation() {
 
   const shiftDays = (iso, n) => { const d = new Date(iso); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 
-  // For each loss, look ±1 day
+  // For each loss, look Â±1 day
   let withEvent = 0;
   const eventCounter = new Map();
   losses.forEach(loss => {
@@ -2163,27 +2163,27 @@ function renderHistoricalCorrelation() {
     }
   });
 
-  const pct = losses.length ? (withEvent / losses.length * 100).toFixed(1) : '—';
+  const pct = losses.length ? (withEvent / losses.length * 100).toFixed(1) : 'â€”';
   const topEvents = [...eventCounter.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
 
   const eventsRows = topEvents.length === 0
-    ? '<tr><td colspan="2" style="color:var(--ink-soft);text-align:center">Ningún evento del histórico coincide con días de pérdida.</td></tr>'
+    ? '<tr><td colspan="2" style="color:var(--ink-soft);text-align:center">NingÃºn evento del histÃ³rico coincide con dÃ­as de pÃ©rdida.</td></tr>'
     : topEvents.map(([name, n]) => `<tr><td>${name}</td><td><b>${n}</b></td></tr>`).join('');
 
   container.innerHTML = `
     <div class="corr-summary">
       <div class="corr-card">
-        <div class="lbl">Pérdidas totales</div>
+        <div class="lbl">PÃ©rdidas totales</div>
         <div class="val bad">${losses.length}</div>
       </div>
       <div class="corr-card">
-        <div class="lbl">Coincidieron con evento (±1 día)</div>
+        <div class="lbl">Coincidieron con evento (Â±1 dÃ­a)</div>
         <div class="val">${withEvent}</div>
       </div>
       <div class="corr-card">
-        <div class="lbl">% pérdidas con evento</div>
+        <div class="lbl">% pÃ©rdidas con evento</div>
         <div class="val">${pct}%</div>
       </div>
       <div class="corr-card">
@@ -2193,20 +2193,20 @@ function renderHistoricalCorrelation() {
     </div>
     <div style="margin-top:14px">
       <div style="font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">
-        Eventos que más coinciden con pérdidas
+        Eventos que mÃ¡s coinciden con pÃ©rdidas
       </div>
       <table class="events-table">
-        <thead><tr><th>Evento</th><th>Veces que coincidió</th></tr></thead>
+        <thead><tr><th>Evento</th><th>Veces que coincidiÃ³</th></tr></thead>
         <tbody>${eventsRows}</tbody>
       </table>
     </div>
     <div style="font-size:11px;color:var(--ink-soft);margin-top:8px">
-      Ventana de correlación: el día del evento o ±1 día respecto al día de la pérdida.
+      Ventana de correlaciÃ³n: el dÃ­a del evento o Â±1 dÃ­a respecto al dÃ­a de la pÃ©rdida.
     </div>
   `;
 }
 
-// ---- Tab 4: MIX iterative optimizer (Quant ↔ Vol Analyst) -------------
+// ---- Tab 4: MIX iterative optimizer (Quant â†” Vol Analyst) -------------
 function rebandWithNewThresholds(rows, baseBands, regimes) {
   return baseBands.map((b, i) => {
     if (!b) return null;
@@ -2235,7 +2235,7 @@ function scorePnLOnWindow(rows, bands, windowDays) {
   return score;
 }
 
-// Inline scorer — computes upper/lower on the fly with no allocations,
+// Inline scorer â€” computes upper/lower on the fly with no allocations,
 // and inlines regimeFor (called millions of times during threshold search).
 function scoreRegimesOnWindow(rows, baseBands, regimes, windowDays) {
   const start = Math.max(1, rows.length - windowDays);
@@ -2313,7 +2313,7 @@ function optimizeMultsForMix(rows, baseBands, regimes, windowDays) {
 // Optimize VIX thresholds via COORDINATE DESCENT:
 //   For each threshold (T1,T2,T3,T4) in turn, find the best value while
 //   holding the others fixed. Repeat until a full pass produces no change.
-// ~150 evaluations vs ~3000 for full grid — converges in milliseconds.
+// ~150 evaluations vs ~3000 for full grid â€” converges in milliseconds.
 function optimizeThresholds(rows, baseBands, regimes, windowDays) {
   const innerRegimes = regimes.filter(r => r.maxVix < 998);
   const N = innerRegimes.length;
@@ -2356,8 +2356,8 @@ function optimizeThresholds(rows, baseBands, regimes, windowDays) {
   return { newRegimes, score: bestScore };
 }
 
-// Iterative: alternate Quant (mults+k) ↔ VolAnalyst (thresholds) until no improvement.
-// Uses inline scoring throughout — no allocations during the search.
+// Iterative: alternate Quant (mults+k) â†” VolAnalyst (thresholds) until no improvement.
+// Uses inline scoring throughout â€” no allocations during the search.
 async function runMixIteration(rows, baseRegimes, windowDays, maxIters, onProgress) {
   const lookback = parseInt(document.getElementById('lookback').value, 10);
   const baseBands = computeBands(rows, baseRegimes, lookback).bands;
@@ -2406,9 +2406,9 @@ async function runMix() {
     const basePnL = computePnL(currentRows, baseBands, initialCapital);
 
     const periods = [
-      { key: '1m', label: 'Mejora 1 — 1 mes',   days: 21  },
-      { key: '3m', label: 'Mejora 2 — 3 meses', days: 63  },
-      { key: '6m', label: 'Mejora 3 — 6 meses', days: 126 },
+      { key: '1m', label: 'Mejora 1 â€” 1 mes',   days: 21  },
+      { key: '3m', label: 'Mejora 2 â€” 3 meses', days: 63  },
+      { key: '6m', label: 'Mejora 3 â€” 6 meses', days: 126 },
     ];
 
     document.getElementById('mixResults').innerHTML = '';
@@ -2430,7 +2430,7 @@ async function runMix() {
       const onProgress = ({ stage, iter }) => {
         consumedSlots = baseSlot + (iter - 1) * 2 + (stage === 'vol' ? 1 : 0) + 1;
         const pct = consumedSlots / totalSlots * 100;
-        setProgress(pct, `[${pIdx + 1}/3 · ${p.label}] iter ${iter} · ${stage === 'quant' ? 'Quant (mults+k)' : 'Vol (umbrales)'}`);
+        setProgress(pct, `[${pIdx + 1}/3 Â· ${p.label}] iter ${iter} Â· ${stage === 'quant' ? 'Quant (mults+k)' : 'Vol (umbrales)'}`);
       };
       const mix = await runMixIteration(currentRows, baseRegimes, p.days, MAX_ITERS, onProgress);
       const finalPnL = computePnL(currentRows, mix.finalBands, initialCapital);
@@ -2448,12 +2448,12 @@ async function runMix() {
     fill.style.width = '100%';
 
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-    status.textContent = `✓ Completado en ${elapsed}s · iteraciones (1m/3m/6m): ${results.map(r => r.mix.iters).join(' / ')}`;
+    status.textContent = `âœ“ Completado en ${elapsed}s Â· iteraciones (1m/3m/6m): ${results.map(r => r.mix.iters).join(' / ')}`;
     setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 1800);
   } catch (err) {
     console.error('runMix error:', err);
     status.style.color = '#b73232';
-    status.textContent = `✗ Error: ${err.message || err}`;
+    status.textContent = `âœ— Error: ${err.message || err}`;
     fill.style.background = '#b73232';
   } finally {
     btn.disabled = false;
@@ -2468,14 +2468,14 @@ function renderMixCard(period, baseRegimes, mix, basePnL, finalPnL) {
   const trainStart = currentRows[Math.max(1, currentRows.length - period.days)].date;
   const inBase = inSampleStats(basePnL, trainStart);
   const inOpt  = inSampleStats(finalPnL, trainStart);
-  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const fmt$ = v => (v >= 0 ? '+$' : 'âˆ’$') + Math.abs(v).toFixed(0);
 
   // Threshold changes
   const baseTh = baseRegimes.filter(r => r.maxVix < 998).map(r => r.maxVix);
   const optTh  = mix.finalRegimes.filter(r => r.maxVix < 998).map(r => r.maxVix);
   const thHtml = baseTh.map((t, i) => {
     const changed = Math.abs(t - optTh[i]) > 1e-6;
-    return `<span class="${changed ? 'changed' : ''}">${t} → ${optTh[i]}</span>`;
+    return `<span class="${changed ? 'changed' : ''}">${t} â†’ ${optTh[i]}</span>`;
   }).join(' &nbsp;|&nbsp; ');
 
   // Param changes per regime
@@ -2483,12 +2483,12 @@ function renderMixCard(period, baseRegimes, mix, basePnL, finalPnL) {
     if (!r.trade) return `<tr class="notrade"><td>${regimeLabel(baseRegimes, i)}</td><td colspan="3" style="font-style:italic">no-trade</td></tr>`;
     const n = mix.finalRegimes[i];
     const arrow = (a, b) => Math.abs(a - b) < 1e-6 ? '<span class="arrow-eq">=</span>' :
-      b > a ? '<span class="arrow-up-bad">▲</span>' : '<span class="arrow-down-good">▼</span>';
+      b > a ? '<span class="arrow-up-bad">â–²</span>' : '<span class="arrow-down-good">â–¼</span>';
     return `<tr>
       <td>${regimeLabel(baseRegimes, i)}</td>
-      <td>${r.k.toFixed(2)} → <b>${n.k.toFixed(2)}</b> ${arrow(r.k, n.k)}</td>
-      <td>${r.upperMult.toFixed(2)} → <b>${n.upperMult.toFixed(2)}</b> ${arrow(r.upperMult, n.upperMult)}</td>
-      <td>${r.lowerMult.toFixed(2)} → <b>${n.lowerMult.toFixed(2)}</b> ${arrow(r.lowerMult, n.lowerMult)}</td>
+      <td>${r.k.toFixed(2)} â†’ <b>${n.k.toFixed(2)}</b> ${arrow(r.k, n.k)}</td>
+      <td>${r.upperMult.toFixed(2)} â†’ <b>${n.upperMult.toFixed(2)}</b> ${arrow(r.upperMult, n.upperMult)}</td>
+      <td>${r.lowerMult.toFixed(2)} â†’ <b>${n.lowerMult.toFixed(2)}</b> ${arrow(r.lowerMult, n.lowerMult)}</td>
     </tr>`;
   }).join('');
 
@@ -2497,19 +2497,19 @@ function renderMixCard(period, baseRegimes, mix, basePnL, finalPnL) {
   card.innerHTML = `
     <h4>${period.label}</h4>
     <div class="iter-info">
-      <span>Convergió en <b>${iters} iteración${iters === 1 ? '' : 'es'}</b></span>
-      <span>P&L in-sample: ${fmt$(inBase.pnl)} → <b>${fmt$(inOpt.pnl)}</b></span>
+      <span>ConvergiÃ³ en <b>${iters} iteraciÃ³n${iters === 1 ? '' : 'es'}</b></span>
+      <span>P&L in-sample: ${fmt$(inBase.pnl)} â†’ <b>${fmt$(inOpt.pnl)}</b></span>
     </div>
     <div class="threshold-block">
-      <div class="th-label">Umbrales VIX (base → optimizado)</div>
+      <div class="th-label">Umbrales VIX (base â†’ optimizado)</div>
       <div class="th-vals">${thHtml}</div>
     </div>
     <table class="agent-params">
-      <thead><tr><th>Régimen</th><th>k</th><th>Upper</th><th>Lower</th></tr></thead>
+      <thead><tr><th>RÃ©gimen</th><th>k</th><th>Upper</th><th>Lower</th></tr></thead>
       <tbody>${paramRows}</tbody>
     </table>
     <div class="equity-cmp" id="${chartId}"></div>
-    <button class="apply-btn" data-mix-period="${period.key}">Aplicar esta optimización</button>
+    <button class="apply-btn" data-mix-period="${period.key}">Aplicar esta optimizaciÃ³n</button>
   `;
   container.appendChild(card);
 
@@ -2543,7 +2543,7 @@ function renderMixSummary(basePnL, results) {
   const card = document.createElement('div');
   card.className = 'mix-card summary';
 
-  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const fmt$ = v => (v >= 0 ? '+$' : 'âˆ’$') + Math.abs(v).toFixed(0);
   const ranked = results.map(r => ({
     key: r.period.key, label: r.period.label,
     finalEquity: r.finalPnL.finalEquity,
@@ -2555,29 +2555,29 @@ function renderMixSummary(basePnL, results) {
 
   let recommendation;
   if (noneBeats) {
-    recommendation = `<p>Ninguna optimización iterativa supera la base en equity histórica completa.
-      <span class="pill">Mantener parámetros actuales</span>.</p>`;
+    recommendation = `<p>Ninguna optimizaciÃ³n iterativa supera la base en equity histÃ³rica completa.
+      <span class="pill">Mantener parÃ¡metros actuales</span>.</p>`;
   } else if (best.key === '6m') {
-    recommendation = `<p>La iteración a <b>6 meses</b> es la que más equity histórica acumula
-      (${fmt$(best.delta)} vs base) y la más robusta.
+    recommendation = `<p>La iteraciÃ³n a <b>6 meses</b> es la que mÃ¡s equity histÃ³rica acumula
+      (${fmt$(best.delta)} vs base) y la mÃ¡s robusta.
       <span class="pill gold">Aplicar Mejora 3 (MIX 6m)</span></p>`;
   } else if (best.key === '3m') {
-    recommendation = `<p>La iteración a <b>3 meses</b> rinde mejor que la de 6 meses (${fmt$(best.delta)} vs base).
+    recommendation = `<p>La iteraciÃ³n a <b>3 meses</b> rinde mejor que la de 6 meses (${fmt$(best.delta)} vs base).
       Sugiere que el mercado reciente tiene un perfil distinto.
       <span class="pill gold">Aplicar Mejora 2 (MIX 3m)</span></p>`;
   } else {
-    recommendation = `<p>La iteración a <b>1 mes</b> es la mejor en cifras pero usa muestra muy pequeña
-      → riesgo alto de sobreajuste. <span class="pill">Recomendado: contrastar con MIX 3m antes de aplicar</span></p>`;
+    recommendation = `<p>La iteraciÃ³n a <b>1 mes</b> es la mejor en cifras pero usa muestra muy pequeÃ±a
+      â†’ riesgo alto de sobreajuste. <span class="pill">Recomendado: contrastar con MIX 3m antes de aplicar</span></p>`;
   }
 
   card.innerHTML = `
-    <h4>📌 Recomendación del análisis combinado</h4>
+    <h4>ðŸ“Œ RecomendaciÃ³n del anÃ¡lisis combinado</h4>
     <div style="font-size:12px;line-height:1.5">
       ${recommendation}
       <p style="font-size:11px;color:var(--ink-soft);margin-top:8px">
         El MIX optimiza <b>al mismo tiempo</b> los multiplicadores y los umbrales del VIX,
-        alternando Quant ↔ Analista hasta convergencia. Comparado con el Quant solo,
-        suele encontrar una mejora extra ajustando dónde caen las fronteras de régimen.
+        alternando Quant â†” Analista hasta convergencia. Comparado con el Quant solo,
+        suele encontrar una mejora extra ajustando dÃ³nde caen las fronteras de rÃ©gimen.
       </p>
     </div>
   `;
@@ -2615,19 +2615,19 @@ function regimeLabel(regimes, idx) {
   const cur = regimes[idx];
   const prev = idx > 0 ? regimes[idx - 1].maxVix : null;
   if (cur.maxVix >= 998) return `VIX > ${prev}`;
-  if (prev === null)     return `VIX ≤ ${cur.maxVix}`;
-  return `VIX ${prev}–${cur.maxVix}`;
+  if (prev === null)     return `VIX â‰¤ ${cur.maxVix}`;
+  return `VIX ${prev}â€“${cur.maxVix}`;
 }
 
 function renderStats(stats, regimes) {
   const o = stats.overall;
   const winRateClose  = o.total ? (o.wins / o.total * 100) : 0;
   const winRateStrict = o.total ? (o.cleanWins / o.total * 100) : 0;
-  const period = (o.firstDate && o.lastDate) ? `${o.firstDate} → ${o.lastDate}` : '—';
+  const period = (o.firstDate && o.lastDate) ? `${o.firstDate} â†’ ${o.lastDate}` : 'â€”';
 
   const rowsHtml = regimes.map((reg, i) => {
     const s = stats.byRegime.get(reg) || { total: 0, wins: 0, lossUp: 0, lossDn: 0, cleanWins: 0, touched: 0 };
-    const wrStrict = s.total ? (s.cleanWins / s.total * 100).toFixed(1) + '%' : '—';
+    const wrStrict = s.total ? (s.cleanWins / s.total * 100).toFixed(1) + '%' : 'â€”';
     const cls = reg.trade ? '' : ' class="notrade"';
     return `<tr${cls}>
       <td>${regimeLabel(regimes, i)}${reg.trade ? '' : ' (no-trade)'}</td>
@@ -2644,7 +2644,7 @@ function renderStats(stats, regimes) {
   let strikesHtml = `
     <div class="stats-card" id="strikesCard">
       <h3>Next-day strikes</h3>
-      <div style="font-size:12px;color:var(--ink-soft)">Esperando datos…</div>
+      <div style="font-size:12px;color:var(--ink-soft)">Esperando datosâ€¦</div>
     </div>`;
   if (window._lastNextBand && window._lastPrevRow) {
     const nb = window._lastNextBand;
@@ -2654,16 +2654,16 @@ function renderStats(stats, regimes) {
     const distCall = (sellCallStrike - prev.close) / prev.close * 100;
     const distPut  = (prev.close - sellPutStrike) / prev.close * 100;
     const tradeFlag = nb.trade
-      ? '<span style="color:var(--good)">✓ TRADE</span>'
-      : '<span class="loss-up">✗ NO-TRADE</span>';
+      ? '<span style="color:var(--good)">âœ“ TRADE</span>'
+      : '<span class="loss-up">âœ— NO-TRADE</span>';
     strikesHtml = `
       <div class="stats-card" id="strikesCard">
         <h3>Next-day strikes</h3>
         <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px">
-          Cierre previo: <b>${prev.close.toFixed(2)}</b> · ${tradeFlag}
+          Cierre previo: <b>${prev.close.toFixed(2)}</b> Â· ${tradeFlag}
         </div>
         <div class="row">
-          <span style="color:var(--good)"><b>↑ Vender CALL</b></span>
+          <span style="color:var(--good)"><b>â†‘ Vender CALL</b></span>
           <span><b>${sellCallStrike}</b> <small style="color:var(--ink-soft)">(banda ${nb.upper.toFixed(2)})</small></span>
         </div>
         <div class="row">
@@ -2671,15 +2671,15 @@ function renderStats(stats, regimes) {
           <span><b>+${distCall.toFixed(3)}%</b></span>
         </div>
         <div class="row" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px">
-          <span class="loss-dn"><b>↓ Vender PUT</b></span>
+          <span class="loss-dn"><b>â†“ Vender PUT</b></span>
           <span><b>${sellPutStrike}</b> <small style="color:var(--ink-soft)">(banda ${nb.lower.toFixed(2)})</small></span>
         </div>
         <div class="row">
           <span style="color:var(--ink-soft)">Distancia</span>
-          <span><b>−${distPut.toFixed(3)}%</b></span>
+          <span><b>âˆ’${distPut.toFixed(3)}%</b></span>
         </div>
         <div style="font-size:10px;color:var(--ink-soft);margin-top:6px;font-style:italic">
-          Strikes redondeados al múltiplo de $5 más cercano hacia OUTSIDE
+          Strikes redondeados al mÃºltiplo de $5 mÃ¡s cercano hacia OUTSIDE
         </div>
       </div>`;
   }
@@ -2689,7 +2689,7 @@ function renderStats(stats, regimes) {
     <div class="stats-card">
       <h3>Win rate (full history)</h3>
       <div class="big ${winRateStrict >= 80 ? '' : 'bad'}">${winRateStrict.toFixed(1)}%</div>
-      <div style="font-size:11px;color:var(--ink-soft);margin-top:2px"><b>estricto</b> (sin toques intradía)</div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-top:2px"><b>estricto</b> (sin toques intradÃ­a)</div>
       <div style="font-size:11px;color:var(--ink-soft);margin-top:6px">
         Close: <b>${winRateClose.toFixed(1)}%</b>
       </div>
@@ -2698,24 +2698,24 @@ function renderStats(stats, regimes) {
     <div class="stats-card" style="min-width:240px">
       <h3>Trade outcomes</h3>
       <div class="row"><span>Trading days</span><span><b>${o.total}</b></span></div>
-      <div class="row"><span style="color:var(--good)">✓ Limpios</span><span style="color:var(--good)"><b>${o.cleanWins}</b></span></div>
-      <div class="row"><span style="color:#b06000">⚠ Tocados (recuperaron)</span><span style="color:#b06000"><b>${o.touched}</b></span></div>
-      <div class="row"><span class="loss-up">✗ Loss — close &gt; upper</span><span class="loss-up"><b>${o.lossUp}</b></span></div>
-      <div class="row"><span class="loss-dn">✗ Loss — close &lt; lower</span><span class="loss-dn"><b>${o.lossDn}</b></span></div>
+      <div class="row"><span style="color:var(--good)">âœ“ Limpios</span><span style="color:var(--good)"><b>${o.cleanWins}</b></span></div>
+      <div class="row"><span style="color:#b06000">âš  Tocados (recuperaron)</span><span style="color:#b06000"><b>${o.touched}</b></span></div>
+      <div class="row"><span class="loss-up">âœ— Loss â€” close &gt; upper</span><span class="loss-up"><b>${o.lossUp}</b></span></div>
+      <div class="row"><span class="loss-dn">âœ— Loss â€” close &lt; lower</span><span class="loss-dn"><b>${o.lossDn}</b></span></div>
       <div class="row" style="border-top:1px solid #eee;margin-top:4px;padding-top:4px">
         <span>Fallos estrictos</span><span><b>${o.touched + o.lossUp + o.lossDn}</b> (${(100 - winRateStrict).toFixed(1)}%)</span>
       </div>
-      <div class="row"><span style="font-size:11px;color:var(--ink-soft)">Toques: ${o.callTouches} call · ${o.putTouches} put</span><span></span></div>
+      <div class="row"><span style="font-size:11px;color:var(--ink-soft)">Toques: ${o.callTouches} call Â· ${o.putTouches} put</span><span></span></div>
       <div class="row"><span>No-trade days</span><span>${o.noTrade}</span></div>
     </div>
     <div class="stats-card">
       <h3>Breakdown by regime</h3>
       <table class="regbreak">
         <thead><tr>
-          <th>Regime</th><th>Días</th>
-          <th style="color:#5dc080">✓</th>
-          <th style="color:#b06000">⚠</th>
-          <th class="loss-up">↑</th><th class="loss-dn">↓</th>
+          <th>Regime</th><th>DÃ­as</th>
+          <th style="color:#5dc080">âœ“</th>
+          <th style="color:#b06000">âš </th>
+          <th class="loss-up">â†‘</th><th class="loss-dn">â†“</th>
           <th>WR estricto</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
@@ -2734,7 +2734,7 @@ function drawChart(rows, bands, nextBand, windowDays) {
   const closes = slice.map(r => r.close);
   const upper  = sliceBands.map(b => b ? b.upper : null);
   const lower  = sliceBands.map(b => b ? b.lower : null);
-  // Palette — keep in sync with index.html :root vars
+  // Palette â€” keep in sync with index.html :root vars
   const NAVY = '#143a64', GOLD = '#c9a227', BLUE = '#2c6fa3',
         BAD = '#b73232',  BAD_SOFT = '#c46a35', MUTED = '#9aa9bb';
   const closeColors = sliceBands.map(b => b && !b.trade ? MUTED : NAVY);
@@ -2783,9 +2783,9 @@ function drawChart(rows, bands, nextBand, windowDays) {
     { x: dates, y: lower, mode: 'lines', name: 'Lower band',
       line: { color: BLUE, width: 1.8 },
       fill: 'tonexty', fillcolor: 'rgba(44, 111, 163, 0.07)' },
-    { x: lossUpX, y: lossUpY, mode: 'markers', name: 'Loss — close > upper',
+    { x: lossUpX, y: lossUpY, mode: 'markers', name: 'Loss â€” close > upper',
       marker: { color: BAD, size: 12, symbol: 'x', line: { width: 1, color: '#fff' } } },
-    { x: lossDnX, y: lossDnY, mode: 'markers', name: 'Loss — close < lower',
+    { x: lossDnX, y: lossDnY, mode: 'markers', name: 'Loss â€” close < lower',
       marker: { color: BAD_SOFT, size: 12, symbol: 'x', line: { width: 1, color: '#fff' } } },
   ];
 
@@ -2825,36 +2825,36 @@ function drawChart(rows, bands, nextBand, windowDays) {
   };
   safePlotly('chart', traces, layout, { responsive: true });
 
-  // Info panel — uses Number.isFinite (strict) to avoid null→0 coercion bugs
+  // Info panel â€” uses Number.isFinite (strict) to avoid nullâ†’0 coercion bugs
   const tradeLabel = nextBand && nextBand.trade ? 'TRADE' : 'NO-TRADE';
   const reg = nextBand ? nextBand.regime : null;
   const lastRow = rows[rows.length - 1];
-  const safe = (v, dec) => Number.isFinite(v) ? v.toFixed(dec) : '—';
-  const safePct = (v, dec) => Number.isFinite(v) ? (v * 100).toFixed(dec) + '%' : '—';
+  const safe = (v, dec) => Number.isFinite(v) ? v.toFixed(dec) : 'â€”';
+  const safePct = (v, dec) => Number.isFinite(v) ? (v * 100).toFixed(dec) + '%' : 'â€”';
   const ivHvNote = (Number.isFinite(lastRow.iv) && Number.isFinite(lastRow.hv))
-    ? `IV=${safe(lastRow.iv, 3)} · HV=${safe(lastRow.hv, 3)} · `
-    : `<span style="color:#ffb39b">IV/HV no introducidos</span> · `;
-  const trendArrow = { up: '↑', down: '↓', flat: '↔' };
+    ? `IV=${safe(lastRow.iv, 3)} Â· HV=${safe(lastRow.hv, 3)} Â· `
+    : `<span style="color:#ffb39b">IV/HV no introducidos</span> Â· `;
+  const trendArrow = { up: 'â†‘', down: 'â†“', flat: 'â†”' };
   const trendLabel = nextBand && nextBand.trend
     ? `${trendArrow[nextBand.trend]} ${nextBand.trend === 'up' ? 'Alcista' : nextBand.trend === 'down' ? 'Bajista' : 'Rango'}`
-    : '—';
+    : 'â€”';
   const ctNote = nextBand
     ? (nextBand.Ccall !== nextBand.Cput
-        ? `<b style="color:#e8cf78">C<sub>call</sub>=${(nextBand.Ccall*100).toFixed(1)}% · C<sub>put</sub>=${(nextBand.Cput*100).toFixed(1)}%</b>`
+        ? `<b style="color:#e8cf78">C<sub>call</sub>=${(nextBand.Ccall*100).toFixed(1)}% Â· C<sub>put</sub>=${(nextBand.Cput*100).toFixed(1)}%</b>`
         : `<b style="color:#e8cf78">C<sub>t</sub>=${(nextBand.Ccall*100).toFixed(1)}%</b>`)
     : '';
   document.getElementById('info').innerHTML = nextBand
     ? `Showing last ${slice.length} days. ` +
-      `Next-day (${nextStr}) — VIX<sub>prev</sub>=${safe(lastRow.vix, 2)} · ` +
+      `Next-day (${nextStr}) â€” VIX<sub>prev</sub>=${safe(lastRow.vix, 2)} Â· ` +
       ivHvNote +
-      `Tendencia: <b>${trendLabel}</b> · ` +
-      ctNote + ` · ` +
-      `σ<sub>high</sub>=${safePct(nextBand.sigUp, 2)} · ` +
-      `σ<sub>low</sub>=${safePct(nextBand.sigDn, 2)} · ` +
-      `k=${reg ? reg.k : '—'} · mults (${reg ? reg.upperMult : '—'}/${reg ? reg.lowerMult : '—'}) → ` +
-      `<b>Upper ${safe(nextBand.upper, 2)} · Lower ${safe(nextBand.lower, 2)}</b> · ` +
+      `Tendencia: <b>${trendLabel}</b> Â· ` +
+      ctNote + ` Â· ` +
+      `Ïƒ<sub>high</sub>=${safePct(nextBand.sigUp, 2)} Â· ` +
+      `Ïƒ<sub>low</sub>=${safePct(nextBand.sigDn, 2)} Â· ` +
+      `k=${reg ? reg.k : 'â€”'} Â· mults (${reg ? reg.upperMult : 'â€”'}/${reg ? reg.lowerMult : 'â€”'}) â†’ ` +
+      `<b>Upper ${safe(nextBand.upper, 2)} Â· Lower ${safe(nextBand.lower, 2)}</b> Â· ` +
       `<span style="color:${nextBand.trade ? '#7fdca8' : '#ffb39b'}"><b>${tradeLabel}</b></span>`
-    : 'No data — not enough history for the chosen lookback yet.';
+    : 'No data â€” not enough history for the chosen lookback yet.';
 }
 
 // ---- VIX context chart ----------------------------------------------------
@@ -2908,7 +2908,7 @@ function drawVixChart(rows, bands, regimes, windowDays) {
       xref: 'paper', yref: 'y',
       x: 1, y: reg.maxVix,
       xanchor: 'right', yanchor: 'bottom',
-      text: ` ≤ ${reg.maxVix} `,
+      text: ` â‰¤ ${reg.maxVix} `,
       font: { size: 10, color: '#8a6d10' },
       bgcolor: 'rgba(255,255,255,0.7)',
       showarrow: false,
@@ -3047,8 +3047,8 @@ function renderGapAnalysis() {
   if (totalDays === 0) {
     body.innerHTML = `
       <div style="padding:14px;background:#fff7df;border:1px solid var(--gold-500);border-left:4px solid var(--gold-500);border-radius:5px;font-size:12px;color:#5a4a18">
-        <b>⚠ No hay datos de gap calculables.</b><br>
-        Asegúrate de que el CSV tiene la columna <code>Open</code> con valores numéricos.
+        <b>âš  No hay datos de gap calculables.</b><br>
+        AsegÃºrate de que el CSV tiene la columna <code>Open</code> con valores numÃ©ricos.
         Filas sin Open: <b>${withoutGap}</b>
       </div>`;
     return;
@@ -3061,7 +3061,7 @@ function renderGapAnalysis() {
   const rejectedSet = getGapRejectedSet();
   const rowsHtml = buckets.map((bk, idx) => {
     const isRejected = rejectedSet.has(idx);
-    const checkbox = `<input type="checkbox" class="gap-accept-cb" data-bucket="${idx}" ${isRejected ? '' : 'checked'} title="Si está marcado, los días con gap en este rango se OPERAN. Desmárcalo para SALTARLOS." style="cursor:pointer">`;
+    const checkbox = `<input type="checkbox" class="gap-accept-cb" data-bucket="${idx}" ${isRejected ? '' : 'checked'} title="Si estÃ¡ marcado, los dÃ­as con gap en este rango se OPERAN. DesmÃ¡rcalo para SALTARLOS." style="cursor:pointer">`;
 
     if (bk.days === 0) {
       return `<tr style="opacity:0.5">
@@ -3074,8 +3074,8 @@ function renderGapAnalysis() {
     const wrColor = wr < overallWR - 10 ? 'var(--bad)' :
                     wr > overallWR + 5  ? 'var(--good)' : 'var(--ink)';
     const lowSample = bk.days < 5;
-    const flag = (wr < overallWR - 10 && bk.days >= 5) ? ' ⚠' :
-                 (lossRate > overallLoss + 10 && bk.days >= 5) ? ' ⚠' : '';
+    const flag = (wr < overallWR - 10 && bk.days >= 5) ? ' âš ' :
+                 (lossRate > overallLoss + 10 && bk.days >= 5) ? ' âš ' : '';
     const sampleNote = lowSample ? ` <span style="color:var(--bad-soft);font-size:10px">(pocos)</span>` : '';
     return `<tr class="${bk.isCenter ? 'center-row' : ''} ${isRejected ? 'rejected-row' : ''}">
       <td>${checkbox} <span style="color:${bk.color};font-weight:700">${bk.label}</span></td>
@@ -3093,9 +3093,9 @@ function renderGapAnalysis() {
     if (bk.days < 5) return;
     const wr = bk.wins / bk.days * 100;
     if (wr < overallWR - 10) {
-      findings.push(`<b style="color:${bk.color}">${bk.label}</b>: WR ${wr.toFixed(1)}% (vs ${overallWR.toFixed(1)}% global, ${(wr - overallWR).toFixed(1)}pp peor) — posible señal de día malo`);
+      findings.push(`<b style="color:${bk.color}">${bk.label}</b>: WR ${wr.toFixed(1)}% (vs ${overallWR.toFixed(1)}% global, ${(wr - overallWR).toFixed(1)}pp peor) â€” posible seÃ±al de dÃ­a malo`);
     } else if (wr > overallWR + 8) {
-      findings.push(`<b style="color:${bk.color}">${bk.label}</b>: WR ${wr.toFixed(1)}% (vs ${overallWR.toFixed(1)}% global, +${(wr - overallWR).toFixed(1)}pp mejor) — entorno favorable`);
+      findings.push(`<b style="color:${bk.color}">${bk.label}</b>: WR ${wr.toFixed(1)}% (vs ${overallWR.toFixed(1)}% global, +${(wr - overallWR).toFixed(1)}pp mejor) â€” entorno favorable`);
     }
   });
 
@@ -3106,18 +3106,18 @@ function renderGapAnalysis() {
 
   body.innerHTML = `
     <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
-      Distribución de outcomes según el gap entre el cierre previo y la apertura del día.
-      WR global: <b>${overallWR.toFixed(1)}%</b> sobre <b>${totalDays}</b> días con gap calculable.
-      ${withoutGap > 0 ? `<br><span style="color:var(--bad-soft);font-size:11px">⚠ ${withoutGap} días sin valor de Open en el CSV — quedan excluidos del análisis</span>` : ''}
-      ${rejectedCount > 0 ? `<br><span style="color:#6b5b2e;font-size:12px"><b>🚫 ${rejectedCount} bucket${rejectedCount === 1 ? '' : 's'} rechazado${rejectedCount === 1 ? '' : 's'}</b> · días filtrados: ${totalDays - acceptedDays} · WR del histórico SI sólo operas los buckets aceptados: <b style="color:var(--good)">${filteredWR.toFixed(1)}%</b></span>` : ''}
+      DistribuciÃ³n de outcomes segÃºn el gap entre el cierre previo y la apertura del dÃ­a.
+      WR global: <b>${overallWR.toFixed(1)}%</b> sobre <b>${totalDays}</b> dÃ­as con gap calculable.
+      ${withoutGap > 0 ? `<br><span style="color:var(--bad-soft);font-size:11px">âš  ${withoutGap} dÃ­as sin valor de Open en el CSV â€” quedan excluidos del anÃ¡lisis</span>` : ''}
+      ${rejectedCount > 0 ? `<br><span style="color:#6b5b2e;font-size:12px"><b>ðŸš« ${rejectedCount} bucket${rejectedCount === 1 ? '' : 's'} rechazado${rejectedCount === 1 ? '' : 's'}</b> Â· dÃ­as filtrados: ${totalDays - acceptedDays} Â· WR del histÃ³rico SI sÃ³lo operas los buckets aceptados: <b style="color:var(--good)">${filteredWR.toFixed(1)}%</b></span>` : ''}
     </div>
     <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;font-style:italic">
-      ✓ marcado = se opera ese día · ☐ desmarcado = se trata como NO-TRADE en todo el sistema
+      âœ“ marcado = se opera ese dÃ­a Â· â˜ desmarcado = se trata como NO-TRADE en todo el sistema
     </div>
     <table class="gap-analysis-table">
       <thead><tr>
-        <th>✓ / Gap apertura</th>
-        <th>Días</th>
+        <th>âœ“ / Gap apertura</th>
+        <th>DÃ­as</th>
         <th style="color:#a8d8a8">Wins</th>
         <th style="color:#e8cf78">Touched</th>
         <th style="color:#f5b8b8">Losses</th>
@@ -3127,10 +3127,10 @@ function renderGapAnalysis() {
     </table>
     ${findings.length > 0 ? `
       <div style="margin-top:12px;background:#fff7df;border-left:3px solid var(--gold-500);padding:10px 14px;border-radius:4px;font-size:12px;color:#5a4a18;line-height:1.6">
-        <b>🔍 Hallazgos:</b><br>${findings.join('<br>')}
+        <b>ðŸ” Hallazgos:</b><br>${findings.join('<br>')}
       </div>` : `
       <div style="margin-top:12px;font-size:11px;color:var(--ink-soft);font-style:italic">
-        No se detectan correlaciones fuertes entre gap y outcome (todos los buckets están dentro de ±10pp del WR global). Revisa de nuevo cuando acumules más datos.
+        No se detectan correlaciones fuertes entre gap y outcome (todos los buckets estÃ¡n dentro de Â±10pp del WR global). Revisa de nuevo cuando acumules mÃ¡s datos.
       </div>`}
   `;
 }
@@ -3140,7 +3140,7 @@ function setGapPanelCollapsed(collapsed) {
   const btn  = document.getElementById('gapPanelToggle');
   if (!body || !btn) return;
   body.style.display = collapsed ? 'none' : '';
-  btn.textContent    = collapsed ? '▲ Mostrar' : '▼ Minimizar';
+  btn.textContent    = collapsed ? 'â–² Mostrar' : 'â–¼ Minimizar';
   try { localStorage.setItem(GAP_PANEL_KEY, collapsed ? '1' : '0'); } catch (_) {}
 }
 function loadGapPanelState() {
@@ -3149,8 +3149,8 @@ function loadGapPanelState() {
 }
 
 // ---- Trend C/P indicator ------------------------------------------------
-// Compares mean(close last 20) vs mean(close last 20–40 ago).
-// > +0.5% → Alcista; < −0.5% → Bajista; en medio → Rango.
+// Compares mean(close last 20) vs mean(close last 20â€“40 ago).
+// > +0.5% â†’ Alcista; < âˆ’0.5% â†’ Bajista; en medio â†’ Rango.
 // (TREND_WINDOW and TREND_THRESHOLD declared near MIN_SAMPLES at top of file)
 
 function computeTrend(rows) {
@@ -3166,9 +3166,9 @@ function computeTrend(rows) {
   if (!isFinite(recentMean) || !isFinite(prevMean) || prevMean === 0) return null;
   const diffPct = (recentMean - prevMean) / prevMean * 100;
   let label, kind, arrow;
-  if (diffPct >  TREND_THRESHOLD) { label = 'Alcista'; kind = 'up';   arrow = '↑'; }
-  else if (diffPct < -TREND_THRESHOLD) { label = 'Bajista'; kind = 'down'; arrow = '↓'; }
-  else                                 { label = 'Rango';   kind = 'flat'; arrow = '↔'; }
+  if (diffPct >  TREND_THRESHOLD) { label = 'Alcista'; kind = 'up';   arrow = 'â†‘'; }
+  else if (diffPct < -TREND_THRESHOLD) { label = 'Bajista'; kind = 'down'; arrow = 'â†“'; }
+  else                                 { label = 'Rango';   kind = 'flat'; arrow = 'â†”'; }
   return { recentMean, prevMean, diffPct, label, kind, arrow,
            recentRange: [recent[0].date, recent[recent.length-1].date],
            prevRange:   [prev[0].date,   prev[prev.length-1].date] };
@@ -3177,7 +3177,7 @@ function computeTrend(rows) {
 function renderTrendCard() {
   const card = document.getElementById('trendCard');
   if (!card) return;
-  console.log('[Trend] renderTrendCard · currentRows:', currentRows ? currentRows.length : 'null');
+  console.log('[Trend] renderTrendCard Â· currentRows:', currentRows ? currentRows.length : 'null');
   try {
     if (!currentRows || currentRows.length === 0) {
       card.innerHTML = `
@@ -3192,7 +3192,7 @@ function renderTrendCard() {
       card.innerHTML = `
         <div class="trend-title">Tendencia C/P</div>
         <div style="font-size:11px;color:var(--ink-soft);text-align:center;margin-top:8px">
-          ${currentRows.length}/${TREND_WINDOW * 2} días<br>(insuficientes)
+          ${currentRows.length}/${TREND_WINDOW * 2} dÃ­as<br>(insuficientes)
         </div>`;
       window._lastTrend = null;
       return;
@@ -3202,7 +3202,7 @@ function renderTrendCard() {
     if (!t) {
       card.innerHTML = `<div class="trend-title">Tendencia C/P</div>
         <div style="font-size:11px;color:var(--bad);text-align:center;margin-top:8px">
-          Error en cálculo (cierres no numéricos)
+          Error en cÃ¡lculo (cierres no numÃ©ricos)
         </div>`;
       window._lastTrend = null;
       return;
@@ -3214,8 +3214,8 @@ function renderTrendCard() {
       <div class="trend-label ${t.kind}">${t.arrow} ${t.label}</div>
       <div class="trend-detail">${sign}${t.diffPct.toFixed(2)}% (20d)</div>
       <div class="trend-means">
-        μ<sub>20d</sub> = ${t.recentMean.toFixed(0)}<br>
-        μ<sub>20-40d</sub> = ${t.prevMean.toFixed(0)}
+        Î¼<sub>20d</sub> = ${t.recentMean.toFixed(0)}<br>
+        Î¼<sub>20-40d</sub> = ${t.prevMean.toFixed(0)}
       </div>`;
   } catch (err) {
     console.error('[Trend] renderTrendCard error:', err);
@@ -3246,7 +3246,7 @@ function renderCompressionPanel() {
   tbody.innerHTML = compressionVars.map((v, i) => {
     const std = lastPrev ? standardizeVar(v.id, lastPrev, compressionParams) : null;
     const stdStr = (std === null || !isFinite(std)) ? '<span style="color:#b73232">no data</span>' : std.toFixed(3);
-    const ws    = (std === null || !isFinite(std)) ? '—' : (v.weight * std).toFixed(3);
+    const ws    = (std === null || !isFinite(std)) ? 'â€”' : (v.weight * std).toFixed(3);
     const groupClass = `group-tag ${v.group}`;
     const groupTitle = COMPRESSION_GROUP_LABEL[v.group] || '';
     return `<tr title="${v.desc}">
@@ -3264,30 +3264,30 @@ function renderCompressionPanel() {
     const bd = compressionBreakdown(lastPrev);
     const pieces = bd.terms.map(t => {
       if (t.missing) return `<span class="breakdown-pill" style="color:#b73232">${t.label}: n/a</span>`;
-      const sign = t.weighted >= 0 ? '+' : '−';
+      const sign = t.weighted >= 0 ? '+' : 'âˆ’';
       return `<span class="breakdown-pill"><b>${t.label}</b>: ${sign}${Math.abs(t.weighted).toFixed(3)}</span>`;
     }).join(' ');
-    const trendLbl = bd.trend ? (bd.trend === 'up' ? '↑ Alcista' : bd.trend === 'down' ? '↓ Bajista' : '↔ Rango') : '—';
+    const trendLbl = bd.trend ? (bd.trend === 'up' ? 'â†‘ Alcista' : bd.trend === 'down' ? 'â†“ Bajista' : 'â†” Rango') : 'â€”';
     const trendColor = bd.trend === 'up' ? 'var(--good)' : bd.trend === 'down' ? 'var(--bad)' : 'var(--ink-soft)';
     const shiftNote = (bd.trend === 'up' || bd.trend === 'down')
-      ? `, desplazamiento Δ = ±${bd.delta.toFixed(3)}`
+      ? `, desplazamiento Î” = Â±${bd.delta.toFixed(3)}`
       : '';
     document.getElementById('cOptBreakdown').innerHTML = `
-      <b>Cierre más reciente (${lastPrev.date}):</b>
+      <b>Cierre mÃ¡s reciente (${lastPrev.date}):</b>
       ${pieces}<br>
-      Z = ${bd.Z.toFixed(3)} →
-      sigmoid(λ·Z) = ${bd.C_raw.toFixed(3)} →
+      Z = ${bd.Z.toFixed(3)} â†’
+      sigmoid(Î»Â·Z) = ${bd.C_raw.toFixed(3)} â†’
       C<sub>base</sub> = ${bd.base.toFixed(3)}
-      &nbsp;·&nbsp; Tendencia: <b style="color:${trendColor}">${trendLbl}</b>${shiftNote} →
-      <b style="color:var(--gold-500)">C<sub>call</sub> = ${bd.Ccall.toFixed(3)} · C<sub>put</sub> = ${bd.Cput.toFixed(3)}</b>
+      &nbsp;Â·&nbsp; Tendencia: <b style="color:${trendColor}">${trendLbl}</b>${shiftNote} â†’
+      <b style="color:var(--gold-500)">C<sub>call</sub> = ${bd.Ccall.toFixed(3)} Â· C<sub>put</sub> = ${bd.Cput.toFixed(3)}</b>
     `;
   } else {
     document.getElementById('cOptBreakdown').innerHTML = '';
   }
 }
 
-// "Run Optimization" — coordinate descent on weights of active variables.
-// Maximizes total P&L (= win_rate × WIN + loss_rate × LOSS over trading days).
+// "Run Optimization" â€” coordinate descent on weights of active variables.
+// Maximizes total P&L (= win_rate Ã— WIN + loss_rate Ã— LOSS over trading days).
 async function runCompressionOptimization() {
   if (!currentRows) return;
   const btn = document.getElementById('cRunOpt');
@@ -3301,7 +3301,7 @@ async function runCompressionOptimization() {
     const active = compressionVars.filter(v => v.active);
     if (active.length === 0) {
       status.style.color = '#b73232';
-      status.textContent = '✗ Activa al menos una variable.';
+      status.textContent = 'âœ— Activa al menos una variable.';
       btn.disabled = false; return;
     }
 
@@ -3331,20 +3331,20 @@ async function runCompressionOptimization() {
         }
         v.weight = bestW;
         if (Math.abs(bestW - orig) > 1e-6) changed = true;
-        status.textContent = `Optimizando ${v.label}…`;
+        status.textContent = `Optimizando ${v.label}â€¦`;
         await new Promise(r => setTimeout(r, 0));
       }
       if (!changed) break;
     }
 
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-    status.textContent = `✓ Completado en ${elapsed}s · score: $${bestScore.toFixed(0)}`;
+    status.textContent = `âœ“ Completado en ${elapsed}s Â· score: $${bestScore.toFixed(0)}`;
     renderCompressionPanel();
     recalc();
   } catch (err) {
     console.error(err);
     status.style.color = '#b73232';
-    status.textContent = `✗ Error: ${err.message || err}`;
+    status.textContent = `âœ— Error: ${err.message || err}`;
   } finally {
     btn.disabled = false;
   }
@@ -3387,7 +3387,7 @@ function saveCSVCache(text, filename) {
     }));
     return true;
   } catch (e) {
-    console.warn('No se pudo cachear el CSV (¿localStorage lleno?):', e);
+    console.warn('No se pudo cachear el CSV (Â¿localStorage lleno?):', e);
     return false;
   }
 }
@@ -3408,10 +3408,10 @@ function updateCacheStatus() {
   const ageDays = Math.floor((Date.now() - cache.savedAt) / 86400000);
   const ageLabel = ageDays === 0 ? 'hoy' : ageDays === 1 ? 'ayer' : `hace ${ageDays}d`;
   const rowsCount = currentRows ? currentRows.length : '?';
-  status.innerHTML = `<span style="color:var(--good)">✓</span> en caché: <b>${cache.filename || 'csv'}</b> (${rowsCount} filas, ${ageLabel}) <button id="clearCsvCacheBtn" type="button" title="Borrar caché y obligar a re-subir CSV" style="background:transparent;border:1px solid var(--blue-200);color:var(--ink-soft);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;margin-left:6px">✕ limpiar</button>`;
+  status.innerHTML = `<span style="color:var(--good)">âœ“</span> en cachÃ©: <b>${cache.filename || 'csv'}</b> (${rowsCount} filas, ${ageLabel}) <button id="clearCsvCacheBtn" type="button" title="Borrar cachÃ© y obligar a re-subir CSV" style="background:transparent;border:1px solid var(--blue-200);color:var(--ink-soft);border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;margin-left:6px">âœ• limpiar</button>`;
   const btn = document.getElementById('clearCsvCacheBtn');
   if (btn) btn.addEventListener('click', () => {
-    if (!confirm('¿Borrar el CSV cacheado? Tendrás que volver a subirlo para ver los datos.')) return;
+    if (!confirm('Â¿Borrar el CSV cacheado? TendrÃ¡s que volver a subirlo para ver los datos.')) return;
     clearCSVCache();
     currentRows = null;
     recalc();
@@ -3434,7 +3434,7 @@ function saveEntries(entries) {
 function applyEntries(rows, entries) {
   const byDate = new Map(rows.map(r => [r.date, r]));
   for (const [date, vals] of Object.entries(entries)) {
-    // JSON.stringify convierte NaN → null, JSON.parse no lo devuelve a NaN.
+    // JSON.stringify convierte NaN â†’ null, JSON.parse no lo devuelve a NaN.
     // Reconvertimos los nulls a NaN para que isFinite() funcione correctamente.
     const cleaned = {};
     for (const [k, v] of Object.entries(vals)) {
@@ -3471,7 +3471,7 @@ function upsertRow(row) {
 
 // ---- Missing-day detection -----------------------------------------------
 // Weekdays between (last data date + 1) and yesterday that aren't in the data.
-// Holidays will get falsely flagged — user can dismiss them with "Skip".
+// Holidays will get falsely flagged â€” user can dismiss them with "Skip".
 function detectMissing(rows) {
   if (!rows || rows.length === 0) return [];
   const dataDates = new Set(rows.map(r => r.date));
@@ -3502,7 +3502,7 @@ function renderMissingBanner(missing) {
   if (missing.length === 0) { banner.style.display = 'none'; return; }
   banner.style.display = '';
   document.getElementById('missingTitle').textContent =
-    `⚠ ${missing.length} sesión${missing.length === 1 ? '' : 'es'} sin datos`;
+    `âš  ${missing.length} sesiÃ³n${missing.length === 1 ? '' : 'es'} sin datos`;
   const rows = missing.map(date => `
     <tr data-date="${date}">
       <td><b>${date}</b></td>
@@ -3525,8 +3525,8 @@ function renderMissingBanner(missing) {
   `).join('');
   document.getElementById('missingContent').innerHTML = `
     <div style="font-size:12px;color:#6b5b2e;margin-bottom:6px">
-      Días laborables entre el último cierre y hoy que no están en los datos.
-      <b>IV/HV/IVR/IVP/IVCHG/PCV son opcionales</b> — déjalos vacíos si no los tienes y se omiten del cálculo.
+      DÃ­as laborables entre el Ãºltimo cierre y hoy que no estÃ¡n en los datos.
+      <b>IV/HV/IVR/IVP/IVCHG/PCV son opcionales</b> â€” dÃ©jalos vacÃ­os si no los tienes y se omiten del cÃ¡lculo.
       Si alguno fue festivo de mercado, pulsa <b>Skip</b> para ignorarlo.
     </div>
     <table class="missing">
@@ -3545,13 +3545,13 @@ let currentRows = null;
 function recalc() {
   const info = document.getElementById('info');
   if (!currentRows) {
-    info.textContent = 'No data loaded yet — pick a CSV file with the "CSV file" selector above.';
+    info.textContent = 'No data loaded yet â€” pick a CSV file with the "CSV file" selector above.';
     info.style.color = '#b00';
     renderTrendCard(); // also update on the empty case
     return;
   }
   info.style.color = '#444';
-  // ALWAYS render the trend card first — it has its own try/catch and depends only on currentRows.
+  // ALWAYS render the trend card first â€” it has its own try/catch and depends only on currentRows.
   // If anything later in recalc throws, at least the trend is updated.
   renderTrendCard();
   try {
@@ -3559,7 +3559,7 @@ function recalc() {
   } catch (err) {
     console.error('[recalc] error en pipeline:', err);
     info.style.color = '#b00';
-    info.textContent = `⚠ Error en recalc: ${err.message} (revisa F12 Console)`;
+    info.textContent = `âš  Error en recalc: ${err.message} (revisa F12 Console)`;
   }
 }
 
@@ -3620,14 +3620,14 @@ renderCompressionPanel();
 renderTrendCard();
 updateFavoritesCardCount();
 
-// Gap panel toggle (collapse/expand) — persists state in localStorage
+// Gap panel toggle (collapse/expand) â€” persists state in localStorage
 loadGapPanelState();
 document.getElementById('gapPanelToggle').addEventListener('click', () => {
   const isHidden = document.getElementById('gapPanelBody').style.display === 'none';
   setGapPanelCollapsed(!isHidden);
 });
 
-// Gap acceptance checkboxes — toggle bucket → recompute everything
+// Gap acceptance checkboxes â€” toggle bucket â†’ recompute everything
 document.getElementById('gapPanelBody').addEventListener('change', (e) => {
   if (!e.target.classList.contains('gap-accept-cb')) return;
   const idx = parseInt(e.target.dataset.bucket, 10);
@@ -3675,7 +3675,7 @@ async function fetchYahooOHLC(symbol, dateStr) {
 
   if (data.chart && data.chart.error) throw new Error(data.chart.error.description || 'Error de Yahoo');
   const result = data.chart && data.chart.result && data.chart.result[0];
-  if (!result) throw new Error('Respuesta vacía de Yahoo');
+  if (!result) throw new Error('Respuesta vacÃ­a de Yahoo');
   const ts = result.timestamp || [];
   const q  = result.indicators && result.indicators.quote && result.indicators.quote[0];
   if (!q) throw new Error('Sin datos OHLC');
@@ -3694,7 +3694,7 @@ async function fetchYahooOHLC(symbol, dateStr) {
                actualDate: d, requested: dateStr };
     }
   }
-  throw new Error('No hay datos para ' + dateStr + ' (¿es fin de semana o festivo?)');
+  throw new Error('No hay datos para ' + dateStr + ' (Â¿es fin de semana o festivo?)');
 }
 
 // ---- Top-right "Add session data" form ----------------------------------
@@ -3720,11 +3720,11 @@ document.getElementById('entryForm').addEventListener('submit', (e) => {
     pcv:    num('entryPcv'),
   };
   if (!row.date || [row.close, row.high, row.low, row.vix].some(v => !isFinite(v))) {
-    fb.className = 'feedback err'; fb.textContent = 'Faltan campos básicos o no son numéricos (IV/HV/IVR/IVP/IVCHG/PCV son opcionales).';
+    fb.className = 'feedback err'; fb.textContent = 'Faltan campos bÃ¡sicos o no son numÃ©ricos (IV/HV/IVR/IVP/IVCHG/PCV son opcionales).';
     return;
   }
   if (row.high < row.low) {
-    fb.className = 'feedback err'; fb.textContent = 'High < Low — revisa los valores.';
+    fb.className = 'feedback err'; fb.textContent = 'High < Low â€” revisa los valores.';
     return;
   }
   upsertRow(row);
@@ -3735,8 +3735,8 @@ document.getElementById('entryForm').addEventListener('submit', (e) => {
   if (isFinite(row.ivPctl)) optionals.push('IVP');
   if (isFinite(row.ivChg))  optionals.push('IVCHG');
   if (isFinite(row.pcv))    optionals.push('PCV');
-  const note = optionals.length ? ` · con ${optionals.join(' + ')}` : ' · sin variables opcionales';
-  fb.className = 'feedback'; fb.textContent = `✓ ${row.date} guardado${note}.`;
+  const note = optionals.length ? ` Â· con ${optionals.join(' + ')}` : ' Â· sin variables opcionales';
+  fb.className = 'feedback'; fb.textContent = `âœ“ ${row.date} guardado${note}.`;
   ['entryOpen','entryClose','entryHigh','entryLow','entryVix','entryIv','entryHv','entryIvr','entryIvp','entryIvchg','entryPcv']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('entryDate').value = '';
@@ -3786,23 +3786,23 @@ document.getElementById('fetchOpenBtn').addEventListener('click', async () => {
   const btn = document.getElementById('fetchOpenBtn');
   btn.disabled = true;
   const originalText = btn.textContent;
-  btn.textContent = '⏳';
+  btn.textContent = 'â³';
   fb.className = 'feedback';
-  fb.textContent = 'Consultando Yahoo Finance…';
+  fb.textContent = 'Consultando Yahoo Financeâ€¦';
   try {
     const ohlc = await fetchYahooOHLC('^GSPC', date);
     if (!isFinite(ohlc.open)) throw new Error('Open no disponible');
     document.getElementById('entryOpen').value = ohlc.open.toFixed(2);
     if (ohlc.actualDate && ohlc.actualDate !== date) {
       fb.className = 'feedback err';
-      fb.textContent = `⚠ ${date} no tiene datos (¿festivo?). Usado el más reciente: ${ohlc.actualDate} → Open ${ohlc.open.toFixed(2)}`;
+      fb.textContent = `âš  ${date} no tiene datos (Â¿festivo?). Usado el mÃ¡s reciente: ${ohlc.actualDate} â†’ Open ${ohlc.open.toFixed(2)}`;
     } else {
-      fb.textContent = `✓ Open de ${date} obtenido de Yahoo: ${ohlc.open.toFixed(2)}`;
+      fb.textContent = `âœ“ Open de ${date} obtenido de Yahoo: ${ohlc.open.toFixed(2)}`;
     }
   } catch (e) {
     console.error('[Yahoo fetch]', e);
     fb.className = 'feedback err';
-    fb.textContent = `✗ ${e.message}. Métela manualmente desde Barchart.`;
+    fb.textContent = `âœ— ${e.message}. MÃ©tela manualmente desde Barchart.`;
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
@@ -3814,7 +3814,7 @@ document.getElementById('reload').addEventListener('click', recalc);
 document.getElementById('regimeTable').addEventListener('change', recalc);
 document.getElementById('initialCapital').addEventListener('change', recalc);
 
-// Compression panel: any change → read state → recalc
+// Compression panel: any change â†’ read state â†’ recalc
 document.getElementById('compressionTable').addEventListener('change', () => {
   readCompressionVarsFromUI();
   recalc();
@@ -3832,7 +3832,7 @@ function openDataModal() {
   const modal = document.getElementById('dataModal');
   if (!modal) {
     console.error('[Data view] #dataModal not found in DOM!');
-    alert('Error: el modal #dataModal no existe. Probablemente caché del navegador. Pulsa Ctrl+F5.');
+    alert('Error: el modal #dataModal no existe. Probablemente cachÃ© del navegador. Pulsa Ctrl+F5.');
     return;
   }
   console.log('[Data view] Modal element found, currentRows:', currentRows ? currentRows.length + ' filas' : 'null');
@@ -3852,7 +3852,7 @@ function renderDataView() {
     console.error('[Data view] FATAL render error:', err);
     content.innerHTML = `
       <div style="background:#fee2e2;color:#7a1010;padding:16px;border:2px solid #b73232;border-radius:6px;font-family:monospace;font-size:12px">
-        <b style="font-size:14px">❌ Error al renderizar la tabla:</b><br><br>
+        <b style="font-size:14px">âŒ Error al renderizar la tabla:</b><br><br>
         <b>${err.name}:</b> ${err.message}<br><br>
         <b>Stack:</b>
         <pre style="white-space:pre-wrap;background:#fff;padding:10px;border-radius:3px;margin-top:6px;font-size:10px">${err.stack || '(sin stack)'}</pre>
@@ -3876,8 +3876,8 @@ function _renderDataViewInner(content, countEl) {
   // ALWAYS show a diagnostic banner so we can see the state regardless
   const diag = `
     <div style="padding:10px 14px;background:#fff7df;color:#5a4a18;border:1px solid #c9a227;border-radius:5px;margin-bottom:10px;font-size:12px">
-      <b>📊 Estado:</b>
-      <code style="background:#fff;padding:1px 5px;border-radius:3px">currentRows = ${currentRows === null ? 'null' : (currentRows === undefined ? 'undefined' : currentRows.length + ' filas')}</code> ·
+      <b>ðŸ“Š Estado:</b>
+      <code style="background:#fff;padding:1px 5px;border-radius:3px">currentRows = ${currentRows === null ? 'null' : (currentRows === undefined ? 'undefined' : currentRows.length + ' filas')}</code> Â·
       <code style="background:#fff;padding:1px 5px;border-radius:3px">localStorage = ${Object.keys(manual).length} entradas manuales</code>
     </div>
   `;
@@ -3894,10 +3894,10 @@ function _renderDataViewInner(content, countEl) {
     }
     content.innerHTML = diag + `
       <div style="padding:30px;text-align:center;color:#444;background:#fff;border-radius:5px">
-        <div style="font-size:30px">📭</div>
-        <div style="margin-top:6px;font-size:14px"><b>currentRows está vacío.</b></div>
+        <div style="font-size:30px">ðŸ“­</div>
+        <div style="margin-top:6px;font-size:14px"><b>currentRows estÃ¡ vacÃ­o.</b></div>
         <div style="font-size:12px;margin-top:6px;color:#666">Esto significa que el CSV no se ha cargado en memoria, aunque las entradas manuales sigan guardadas en el navegador.</div>
-        <div style="font-size:12px;margin-top:6px;color:#666">Recarga la página y vuelve a seleccionar el CSV con el selector "CSV file" en Controls.</div>
+        <div style="font-size:12px;margin-top:6px;color:#666">Recarga la pÃ¡gina y vuelve a seleccionar el CSV con el selector "CSV file" en Controls.</div>
       </div>
       ${extra}`;
     countEl.textContent = '0 filas';
@@ -3908,7 +3908,7 @@ function _renderDataViewInner(content, countEl) {
   const lastDate = currentRows[currentRows.length - 1].date;
   const cutoffDate = new Date(lastDate); cutoffDate.setDate(cutoffDate.getDate() - 30);
   const cutoffISO = cutoffDate.toISOString().slice(0, 10);
-  console.log('[Data view] filter:', filter, '· cutoff:', cutoffISO);
+  console.log('[Data view] filter:', filter, 'Â· cutoff:', cutoffISO);
 
   let rows = currentRows.slice().reverse();
   if (filter === 'recent')        rows = rows.filter(r => r.date >= cutoffISO);
@@ -3920,12 +3920,12 @@ function _renderDataViewInner(content, countEl) {
   const total = currentRows.length;
   const shown = rows.length;
   const manualCount = Object.keys(manual).length;
-  countEl.textContent = `${shown} de ${total} filas mostradas · ${manualCount} entradas manuales`;
+  countEl.textContent = `${shown} de ${total} filas mostradas Â· ${manualCount} entradas manuales`;
 
   if (rows.length === 0) {
     content.innerHTML = diag + `
       <div style="padding:30px;text-align:center;color:#444;background:#fff;border-radius:5px">
-        <div style="font-size:30px">🔎</div>
+        <div style="font-size:30px">ðŸ”Ž</div>
         <div style="margin-top:6px">El filtro <b>"${filter}"</b> no devuelve ninguna fila.</div>
         <div style="font-size:11px;margin-top:6px;color:#666">Cambia a "Todas las filas" para ver el dataset completo.</div>
       </div>`;
@@ -3937,7 +3937,7 @@ function _renderDataViewInner(content, countEl) {
     const num = (v === null || v === undefined || v === '') ? NaN : Number(v);
     return isFinite(num)
       ? `<td style="background:inherit;color:#000;padding:3px 8px;border-bottom:1px solid #ddd;text-align:right;font-variant-numeric:tabular-nums">${num.toFixed(dec)}</td>`
-      : `<td style="background:inherit;color:#bbb;padding:3px 8px;border-bottom:1px solid #ddd;text-align:right">—</td>`;
+      : `<td style="background:inherit;color:#bbb;padding:3px 8px;border-bottom:1px solid #ddd;text-align:right">â€”</td>`;
   };
 
   const bodyParts = [];
@@ -3955,11 +3955,11 @@ function _renderDataViewInner(content, countEl) {
       const hasMissing = !isFinite(num(r.iv)) || !isFinite(num(r.hv)) || !isFinite(num(r.ivPctl)) || !isFinite(num(r.ivChg)) || !isFinite(num(r.pcv));
       const rowBg = isManual ? '#fff7df' : (hasMissing ? '#fdf3ec' : '#fff');
       const dateColor = isManual ? '#8a6d10' : '#0c1f33';
-      // Botón editar SIEMPRE disponible (filas CSV o manuales).
+      // BotÃ³n editar SIEMPRE disponible (filas CSV o manuales).
       // Al editar una fila de CSV, se crea un override en localStorage.
-      const editBtn = ` <button class="edit-entry-btn" data-date="${r.date}" style="margin-left:6px;background:${isManual ? '#c9a227' : '#cfe1f2'};color:${isManual ? '#0a0a0a' : '#0c1f33'};border:none;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;font-weight:600" title="${isManual ? 'Editar entrada manual' : 'Crear override de fila CSV'}">✏️ Editar</button>`;
+      const editBtn = ` <button class="edit-entry-btn" data-date="${r.date}" style="margin-left:6px;background:${isManual ? '#c9a227' : '#cfe1f2'};color:${isManual ? '#0a0a0a' : '#0c1f33'};border:none;border-radius:3px;padding:1px 6px;font-size:10px;cursor:pointer;font-weight:600" title="${isManual ? 'Editar entrada manual' : 'Crear override de fila CSV'}">âœï¸ Editar</button>`;
       bodyParts.push(`<tr style="background:${rowBg}">
-        <td style="background:${rowBg};color:${dateColor};padding:3px 8px;border-bottom:1px solid #ddd;font-weight:500">${r.date || '(sin fecha)'}${isManual ? ' ✎' : ''}${editBtn}</td>
+        <td style="background:${rowBg};color:${dateColor};padding:3px 8px;border-bottom:1px solid #ddd;font-weight:500">${r.date || '(sin fecha)'}${isManual ? ' âœŽ' : ''}${editBtn}</td>
         ${cell(r.close)}${cell(r.high)}${cell(r.low)}${cell(r.vix)}
         ${cell(r.iv, 3)}${cell(r.hv, 3)}
         ${cell(r.ivRank, 1)}${cell(r.ivPctl, 1)}${cell(r.ivChg, 4)}
@@ -3971,10 +3971,10 @@ function _renderDataViewInner(content, countEl) {
     }
   }
   const body = bodyParts.join('');
-  console.log('[Data view] Rendered', bodyParts.length, 'rows ·', badRows, 'bad rows skipped · body length:', body.length);
+  console.log('[Data view] Rendered', bodyParts.length, 'rows Â·', badRows, 'bad rows skipped Â· body length:', body.length);
 
   const errBanner = badRows > 0
-    ? `<div style="padding:8px 12px;background:#fee2e2;color:#7a1010;border:1px solid #b73232;border-radius:5px;margin-bottom:8px;font-size:12px">⚠ ${badRows} filas no pudieron renderizarse — ver consola.</div>`
+    ? `<div style="padding:8px 12px;background:#fee2e2;color:#7a1010;border:1px solid #b73232;border-radius:5px;margin-bottom:8px;font-size:12px">âš  ${badRows} filas no pudieron renderizarse â€” ver consola.</div>`
     : '';
 
   content.innerHTML = diag + errBanner + `
@@ -4034,12 +4034,12 @@ function populateFormFromEntry(date) {
   const fb = document.getElementById('entryFeedback');
   fb.className = 'feedback';
   fb.textContent = source === 'manual'
-    ? `✏️ Editando entrada manual ${date}. Modifica y pulsa Add para sobrescribir.`
-    : `✏️ Editando fila CSV ${date}. Al pulsar Add, se creará un override en localStorage que prevalecerá sobre el CSV.`;
+    ? `âœï¸ Editando entrada manual ${date}. Modifica y pulsa Add para sobrescribir.`
+    : `âœï¸ Editando fila CSV ${date}. Al pulsar Add, se crearÃ¡ un override en localStorage que prevalecerÃ¡ sobre el CSV.`;
   document.querySelector('header').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// Event delegation — robust against any DOM-loading order issues
+// Event delegation â€” robust against any DOM-loading order issues
 document.addEventListener('click', (e) => {
   if (e.target.closest('#openDataView')) {
     console.log('[Data view] Click detected, opening modal');
@@ -4110,7 +4110,7 @@ document.getElementById('favoritesModal').addEventListener('click', (e) => {
     const det = document.getElementById('fav-details-' + id);
     const isHidden = det.style.display === 'none';
     det.style.display = isHidden ? '' : 'none';
-    e.target.textContent = isHidden ? '▲ Ocultar variables' : '▼ Ver todas las variables';
+    e.target.textContent = isHidden ? 'â–² Ocultar variables' : 'â–¼ Ver todas las variables';
   }
 });
 document.getElementById('favoritesModal').addEventListener('change', (e) => {
@@ -4175,7 +4175,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('agentModal').style.display === 'flex') closeAgentModal();
 });
 
-// Render the desglose table — historical operations with strikes & outcome.
+// Render the desglose table â€” historical operations with strikes & outcome.
 function renderDesglose() {
   const table = document.getElementById('desgloseTable');
   const summary = document.getElementById('desgloseSummary');
@@ -4208,12 +4208,12 @@ function renderDesglose() {
 
     let cls, status;
     if (!b.trade) { cls = 'notrade-row'; status = 'NO-TRADE'; noTrade++; }
-    else if (r.close >= b.upper) { cls = 'loss-row'; status = '✗ Call hit'; losses++; }
-    else if (r.close <= b.lower) { cls = 'loss-row'; status = '✗ Put hit';  losses++; }
-    else if (callTouched && putTouched) { cls = 'touched-row'; status = '⚠ Tocó ambos'; touched++; }
-    else if (callTouched)               { cls = 'touched-row'; status = '⚠ Tocó call';  touched++; }
-    else if (putTouched)                { cls = 'touched-row'; status = '⚠ Tocó put';   touched++; }
-    else                                { cls = 'win-row';     status = '✓ Limpio';     cleanWins++; }
+    else if (r.close >= b.upper) { cls = 'loss-row'; status = 'âœ— Call hit'; losses++; }
+    else if (r.close <= b.lower) { cls = 'loss-row'; status = 'âœ— Put hit';  losses++; }
+    else if (callTouched && putTouched) { cls = 'touched-row'; status = 'âš  TocÃ³ ambos'; touched++; }
+    else if (callTouched)               { cls = 'touched-row'; status = 'âš  TocÃ³ call';  touched++; }
+    else if (putTouched)                { cls = 'touched-row'; status = 'âš  TocÃ³ put';   touched++; }
+    else                                { cls = 'win-row';     status = 'âœ“ Limpio';     cleanWins++; }
 
     rows.push({ cls, date: r.date, prevClose: prev.close, callStrike, distCall, putStrike, distPut, close: r.close, status,
                 callTouched, putTouched });
@@ -4231,12 +4231,12 @@ function renderDesglose() {
     const d = new Date(last.date); do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
     const tomorrow = d.toISOString().slice(0, 10);
     pendingHtml = `<tr class="pending-row">
-      <td><b>${tomorrow}</b> ⏳</td>
+      <td><b>${tomorrow}</b> â³</td>
       <td>${last.close.toFixed(2)}</td>
       <td class="strike-call">${callStrike}</td>
       <td>+${distCall.toFixed(3)}%</td>
       <td class="strike-put">${putStrike}</td>
-      <td>−${distPut.toFixed(3)}%</td>
+      <td>âˆ’${distPut.toFixed(3)}%</td>
       <td><i>pendiente</i></td>
       <td><i>pendiente</i></td>
     </tr>`;
@@ -4251,7 +4251,7 @@ function renderDesglose() {
       <td class="strike-call">${r.callStrike}</td>
       <td>+${r.distCall.toFixed(3)}%</td>
       <td class="strike-put">${r.putStrike}</td>
-      <td>−${r.distPut.toFixed(3)}%</td>
+      <td>âˆ’${r.distPut.toFixed(3)}%</td>
       <td>${r.close.toFixed(2)}</td>
       <td>${r.status}</td>
     </tr>`).join('');
@@ -4264,22 +4264,22 @@ function renderDesglose() {
       <th>% dist call</th>
       <th>Put vendida</th>
       <th>% dist put</th>
-      <th>Cierre día</th>
+      <th>Cierre dÃ­a</th>
       <th>Resultado</th>
     </tr></thead>
     <tbody>${pendingHtml}${bodyRows}</tbody>`;
 
   const totalOp = cleanWins + touched + losses;
-  const wrStrict = totalOp > 0 ? (cleanWins / totalOp * 100).toFixed(1) : '—';
-  const wrClose  = totalOp > 0 ? ((cleanWins + touched) / totalOp * 100).toFixed(1) : '—';
+  const wrStrict = totalOp > 0 ? (cleanWins / totalOp * 100).toFixed(1) : 'â€”';
+  const wrClose  = totalOp > 0 ? ((cleanWins + touched) / totalOp * 100).toFixed(1) : 'â€”';
   summary.innerHTML = `
-    <b>${rows.length}</b> días totales ·
-    <b style="color:var(--good)">${cleanWins} limpios</b> ·
-    <b style="color:#b06000">${touched} tocados</b> ·
-    <b style="color:var(--bad)">${losses} losses</b> ·
-    <b>${noTrade} no-trade</b> ·
-    WR estricto: <b>${wrStrict}%</b> · WR close: <b>${wrClose}%</b>
-    ${pendingHtml ? '· operación pendiente para próxima sesión arriba en amarillo' : ''}
+    <b>${rows.length}</b> dÃ­as totales Â·
+    <b style="color:var(--good)">${cleanWins} limpios</b> Â·
+    <b style="color:#b06000">${touched} tocados</b> Â·
+    <b style="color:var(--bad)">${losses} losses</b> Â·
+    <b>${noTrade} no-trade</b> Â·
+    WR estricto: <b>${wrStrict}%</b> Â· WR close: <b>${wrClose}%</b>
+    ${pendingHtml ? 'Â· operaciÃ³n pendiente para prÃ³xima sesiÃ³n arriba en amarillo' : ''}
   `;
 }
 
@@ -4289,11 +4289,11 @@ document.getElementById('toggleDesglose').addEventListener('click', () => {
   const btn = document.getElementById('toggleDesglose');
   if (panel.style.display === 'none') {
     panel.style.display = '';
-    btn.textContent = '📋 Ocultar desglose de operaciones';
+    btn.textContent = 'ðŸ“‹ Ocultar desglose de operaciones';
     renderDesglose();
   } else {
     panel.style.display = 'none';
-    btn.textContent = '📋 Mostrar desglose de operaciones';
+    btn.textContent = 'ðŸ“‹ Mostrar desglose de operaciones';
   }
 });
 
@@ -4312,15 +4312,15 @@ document.getElementById('toggleTrades').addEventListener('click', () => {
 });
 
 // ==========================================================================
-// COMPRESSOR ANALYST — exhaustive search of compression model parameters
+// COMPRESSOR ANALYST â€” exhaustive search of compression model parameters
 // ==========================================================================
 // Grid (deterministic order):
-//   λ:    [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]                     6 values
-//   Cmin: [0.3, 0.4, 0.5, 0.6]                               4 values (≥ 0.3)
-//   Cmax: [0.55, 0.65, 0.75, 0.85]                           4 values (≤ 0.85)
+//   Î»:    [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]                     6 values
+//   Cmin: [0.3, 0.4, 0.5, 0.6]                               4 values (â‰¥ 0.3)
+//   Cmax: [0.55, 0.65, 0.75, 0.85]                           4 values (â‰¤ 0.85)
 //   Vref: [14, 16, 18, 20, 22]                               5 values
 //   Variable subsets: 2^6 = 64 (binary mask, bit i = COMPRESSION_VARS[i])
-// With Cmax > Cmin constraint: ≈ 21,000 combinations per window.
+// With Cmax > Cmin constraint: â‰ˆ 21,000 combinations per window.
 const COMPRESSOR_GRID = {
   lambda: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
   cmin:   [0.3, 0.4, 0.5, 0.6],
@@ -4328,7 +4328,7 @@ const COMPRESSOR_GRID = {
   vref:   [14, 16, 18, 20, 22],
 };
 
-// Score a single (λ, Cmin, Cmax, Vref, mask) config on a window.
+// Score a single (Î», Cmin, Cmax, Vref, mask) config on a window.
 // Inline, no allocations. Reads sigmas from baseBands and current weights from compressionVars.
 function scoreCompressorConfig(rows, baseBands, baseRegimes, windowDays, lambda, cmin, cmax, vref, mask) {
   const start = Math.max(1, rows.length - windowDays);
@@ -4437,9 +4437,9 @@ async function runCompressorAgent() {
     };
 
     const periods = [
-      { key: '1m', label: 'Mejora 1 — 1 mes',   days: 21  },
-      { key: '3m', label: 'Mejora 2 — 3 meses', days: 63  },
-      { key: '6m', label: 'Mejora 3 — 6 meses', days: 126 },
+      { key: '1m', label: 'Mejora 1 â€” 1 mes',   days: 21  },
+      { key: '3m', label: 'Mejora 2 â€” 3 meses', days: 63  },
+      { key: '6m', label: 'Mejora 3 â€” 6 meses', days: 126 },
     ];
 
     document.getElementById('compressorResults').innerHTML = '';
@@ -4449,7 +4449,7 @@ async function runCompressorAgent() {
     for (let pIdx = 0; pIdx < periods.length; pIdx++) {
       const p = periods[pIdx];
       const windowBaseline = baseScore(p.days);
-      status.textContent = `[${pIdx + 1}/3 · ${p.label}] explorando ~21.500 combos…`;
+      status.textContent = `[${pIdx + 1}/3 Â· ${p.label}] explorando ~21.500 combosâ€¦`;
       const tWin = performance.now();
       const result = await searchCompressorWindow(
         currentRows, baseBands, baseRegimes, p.days, windowBaseline,
@@ -4464,12 +4464,12 @@ async function runCompressorAgent() {
       await new Promise(r => setTimeout(r, 0));
     }
     fill.style.width = '100%';
-    status.textContent = `✓ Completado en ${((performance.now() - t0) / 1000).toFixed(1)}s.`;
+    status.textContent = `âœ“ Completado en ${((performance.now() - t0) / 1000).toFixed(1)}s.`;
     setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 1800);
   } catch (err) {
     console.error('runCompressorAgent error:', err);
     status.style.color = '#b73232';
-    status.textContent = `✗ Error: ${err.message || err}`;
+    status.textContent = `âœ— Error: ${err.message || err}`;
   } finally {
     btn.disabled = false;
   }
@@ -4482,14 +4482,14 @@ function renderCompressorCard(period, baselineScore, result) {
   const card = document.createElement('div');
   card.className = 'mix-card';
 
-  const fmt$ = v => (v >= 0 ? '+$' : '−$') + Math.abs(v).toFixed(0);
+  const fmt$ = v => (v >= 0 ? '+$' : 'âˆ’$') + Math.abs(v).toFixed(0);
 
   if (!result.bestConfig) {
     card.innerHTML = `
       <h4>${period.label}</h4>
       <div style="font-size:12px;color:var(--ink-soft)">
-        Ninguna combinación supera la configuración actual (baseline: ${fmt$(baselineScore)}).
-        <br>El modelo actual ya es óptimo para esta ventana, o necesitas tunear pesos antes.
+        Ninguna combinaciÃ³n supera la configuraciÃ³n actual (baseline: ${fmt$(baselineScore)}).
+        <br>El modelo actual ya es Ã³ptimo para esta ventana, o necesitas tunear pesos antes.
       </div>`;
     container.appendChild(card);
     return;
@@ -4506,24 +4506,24 @@ function renderCompressorCard(period, baselineScore, result) {
   card.innerHTML = `
     <h4>${period.label}</h4>
     <div class="iter-info">
-      <span>Baseline → Mejor</span>
-      <span>${fmt$(baselineScore)} → <b style="color:var(--good)">${fmt$(result.bestScore)}</b> (${fmt$(delta)})</span>
+      <span>Baseline â†’ Mejor</span>
+      <span>${fmt$(baselineScore)} â†’ <b style="color:var(--good)">${fmt$(result.bestScore)}</b> (${fmt$(delta)})</span>
     </div>
     <div class="threshold-block">
-      <div class="th-label">Parámetros del modelo</div>
+      <div class="th-label">ParÃ¡metros del modelo</div>
       <div class="th-vals">
-        λ = <b>${cfg.lambda}</b> · C<sub>min</sub> = <b>${cfg.cmin}</b> · C<sub>max</sub> = <b>${cfg.cmax}</b> · V<sub>ref</sub> = <b>${cfg.vref}</b>
+        Î» = <b>${cfg.lambda}</b> Â· C<sub>min</sub> = <b>${cfg.cmin}</b> Â· C<sub>max</sub> = <b>${cfg.cmax}</b> Â· V<sub>ref</sub> = <b>${cfg.vref}</b>
       </div>
     </div>
     <div class="threshold-block">
       <div class="th-label">Variables activas (${activeVars.length}/6)</div>
       <div class="th-vals">
         ${activeVars.length === 0
-          ? '<i style="color:var(--ink-soft)">Ninguna — sólo aplica el clamp [Cmin, Cmax]</i>'
-          : activeVars.map(v => `<span class="changed">${v}</span>`).join(' · ')}
+          ? '<i style="color:var(--ink-soft)">Ninguna â€” sÃ³lo aplica el clamp [Cmin, Cmax]</i>'
+          : activeVars.map(v => `<span class="changed">${v}</span>`).join(' Â· ')}
       </div>
     </div>
-    <button class="apply-btn" data-compressor-period="${period.key}">Aplicar esta configuración</button>
+    <button class="apply-btn" data-compressor-period="${period.key}">Aplicar esta configuraciÃ³n</button>
   `;
   container.appendChild(card);
 }
@@ -4553,14 +4553,14 @@ function applyCompressorProposal(periodKey) {
 function openCompressorModal()  { document.getElementById('compressorModal').style.display = 'flex'; }
 function closeCompressorModal() { document.getElementById('compressorModal').style.display = 'none'; }
 
-// Safe wrapper around Plotly — never crashes the rest of the pipeline
+// Safe wrapper around Plotly â€” never crashes the rest of the pipeline
 // if Plotly failed to load from CDN.
 function safePlotly(elementId, traces, layout, config) {
   if (typeof Plotly === 'undefined') {
     const el = document.getElementById(elementId);
     if (el && !el.dataset.plotlyWarned) {
       el.dataset.plotlyWarned = '1';
-      el.innerHTML = '<div style="padding:20px;text-align:center;color:#b73232;background:#fee;border:1px solid #b73232;border-radius:5px;font-size:13px"><b>⚠ Plotly no disponible</b><br>Refresca la página cuando vuelvas a tener internet.</div>';
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:#b73232;background:#fee;border:1px solid #b73232;border-radius:5px;font-size:13px"><b>âš  Plotly no disponible</b><br>Refresca la pÃ¡gina cuando vuelvas a tener internet.</div>';
     }
     return;
   }
@@ -4586,15 +4586,15 @@ document.querySelectorAll('.theme-btn').forEach(b => {
   b.addEventListener('click', () => applyTheme(b.dataset.theme));
 });
 
-// Auto-load priority: cached CSV → fetch (http only) → manual entries only
+// Auto-load priority: cached CSV â†’ fetch (http only) â†’ manual entries only
 const AUTO_LOAD_NAMES = ['SPX-VIX.fin.csv', 'data.csv'];
 (async () => {
-  // 1. Cached CSV — works regardless of file:// vs http
+  // 1. Cached CSV â€” works regardless of file:// vs http
   const cache = loadCSVCache();
   if (cache && cache.text) {
     try {
       currentRows = applyEntries(parseCSV(cache.text), loadEntries());
-      console.log(`[CSV cache] Cargadas ${currentRows.length} filas de "${cache.filename}" (${((Date.now() - cache.savedAt)/86400000).toFixed(1)} días en caché)`);
+      console.log(`[CSV cache] Cargadas ${currentRows.length} filas de "${cache.filename}" (${((Date.now() - cache.savedAt)/86400000).toFixed(1)} dÃ­as en cachÃ©)`);
       recalc();
       updateCacheStatus();
       return;
@@ -4633,7 +4633,7 @@ const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/Quique805/SPX-IC/main
 
 async function loadAutoFetchedOHLC() {
   if (!currentRows) {
-    console.log('[Auto OHLC] currentRows no disponible aún, reintentando en 2s');
+    console.log('[Auto OHLC] currentRows no disponible aÃºn, reintentando en 2s');
     setTimeout(loadAutoFetchedOHLC, 2000);
     return;
   }
@@ -4641,7 +4641,7 @@ async function loadAutoFetchedOHLC() {
     const url = `${GITHUB_RAW_BASE}/data/daily-ohlc.json?t=${Date.now()}`;
     const r = await fetch(url);
     if (!r.ok) {
-      console.log('[Auto OHLC] No disponible aún (status ' + r.status + '). Esperando primer run del Action.');
+      console.log('[Auto OHLC] No disponible aÃºn (status ' + r.status + '). Esperando primer run del Action.');
       return;
     }
     const data = await r.json();
@@ -4669,7 +4669,7 @@ async function loadAutoFetchedOHLC() {
     if (added > 0 || filled > 0) {
       currentRows.sort((a, b) => new Date(a.date) - new Date(b.date));
       enrichRows(currentRows);
-      console.log(`[Auto OHLC] ${added} días nuevos, ${filled} campos rellenados desde GitHub`);
+      console.log(`[Auto OHLC] ${added} dÃ­as nuevos, ${filled} campos rellenados desde GitHub`);
       recalc();
     } else {
       console.log('[Auto OHLC] Sin cambios respecto a datos existentes');
@@ -4682,39 +4682,45 @@ async function loadAutoFetchedOHLC() {
 setTimeout(loadAutoFetchedOHLC, 3000);
 
 // ---- Auto-loaded chains from GitHub Action ------------------------------
-async function loadAutoFetchedChains() {
-  const listEl = document.getElementById('autoChainsList');
+async function loadAutoFetchedChains(kind = 'entry') {
+  const isClose = kind === 'close';
+  const listEl = document.getElementById(isClose ? 'autoCloseChainsList' : 'autoChainsList');
   const lastEl = document.getElementById('chainsLastUpdate');
   if (!listEl) return;
+
+  const indexFile = isClose ? 'chains-close-index.json' : 'chains-index.json';
+  const folder = isClose ? 'chains-close' : 'chains';
+  const label = isClose ? 'Cierre CBOE (22:32 Madrid)' : 'Entrada CBOE delayed (16:07 Madrid)';
+
   try {
-    const indexUrl = `${GITHUB_RAW_BASE}/data/chains-index.json?t=${Date.now()}`;
+    const indexUrl = `${GITHUB_RAW_BASE}/data/${indexFile}?t=${Date.now()}`;
     const r = await fetch(indexUrl);
     if (!r.ok) {
-      listEl.innerHTML = '<div style="font-size:12px;color:var(--ink-soft);text-align:center;padding:14px">Aún no hay cadenas auto-descargadas. Esperando primer run del Action.</div>';
-      if (lastEl) lastEl.textContent = 'aún no disponible';
+      listEl.innerHTML = `<div style="font-size:12px;color:var(--ink-soft);text-align:center;padding:14px">Aún no hay cadenas de ${isClose ? 'cierre' : 'entrada'} auto-descargadas.</div>`;
+      if (!isClose && lastEl) lastEl.textContent = 'aún no disponible';
       return;
     }
     const idx = await r.json();
-    if (lastEl) lastEl.textContent = idx.lastUpdated ? formatMadridTime(idx.lastUpdated) : '—';
+    if (!isClose && lastEl) lastEl.textContent = idx.lastUpdated ? formatMadridTime(idx.lastUpdated) : '—';
     const dates = (idx.dates || []).slice().reverse();
     if (dates.length === 0) {
-      listEl.innerHTML = '<div style="font-size:12px;color:var(--ink-soft);text-align:center;padding:14px">Sin cadenas todavía.</div>';
+      listEl.innerHTML = `<div style="font-size:12px;color:var(--ink-soft);text-align:center;padding:14px">Sin cadenas de ${isClose ? 'cierre' : 'entrada'} todavía.</div>`;
       return;
     }
     listEl.innerHTML = `
       <div style="font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">
-        Cadenas auto-descargadas de CBOE (${dates.length})
+        ${label} (${dates.length})
       </div>
       ${dates.map(d => `
         <div class="auto-chain-item">
           <div>
             <span class="ac-date">${d}</span>
-            <span class="ac-meta"> · CBOE delayed</span>
+            <span class="ac-meta"> · ${isClose ? 'snapshot cierre' : 'snapshot entrada'}</span>
           </div>
-          <button class="auto-chain-view" data-date="${d}">👁 Ver</button>
+          <button class="auto-chain-view" data-date="${d}" data-kind="${kind}">👁 Ver</button>
         </div>`).join('')}`;
     listEl.querySelectorAll('.auto-chain-view').forEach(btn => {
-      btn.addEventListener('click', () => viewAutoChain(btn.dataset.date));
+      btn.addEventListener('click', () => viewAutoChain(btn.dataset.date, btn.dataset.kind));
     });
   } catch (e) {
     console.warn('[Auto chains] Error:', e.message);
@@ -4722,25 +4728,28 @@ async function loadAutoFetchedChains() {
   }
 }
 
-async function viewAutoChain(date) {
+async function viewAutoChain(date, kind = 'entry') {
   const preview = document.getElementById('chainPreview');
   if (!preview) return;
   preview.style.display = '';
   preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   preview.innerHTML = '<div style="padding:14px;text-align:center">Cargando cadena…</div>';
   try {
-    const url = `${GITHUB_RAW_BASE}/data/chains/${date}.json?t=${Date.now()}`;
+    const folder = kind === 'close' ? 'chains-close' : 'chains';
+    const url = `${GITHUB_RAW_BASE}/data/${folder}/${date}.json?t=${Date.now()}`;
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const c = await r.json();
     const expirations = Object.entries(c.expirations || {});
     const fmt = v => isFinite(v) && v !== null ? Number(v).toFixed(2) : '—';
     const fmtIV = v => isFinite(v) && v !== null ? (Number(v) * 100).toFixed(1) + '%' : '—';
+    const badge = (c.kind || kind) === 'close' ? 'Cierre sesión' : 'Entrada sesión';
     let html = `<div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
-      <b>Cadena ${c.date}</b> · Spot: <b>${fmt(c.spot)}</b> · Capturada: <b>${formatMadridTime(c.capturedAt)} (Madrid)</b>
+      <b>${badge} · Cadena ${c.date}</b> · Spot: <b>${fmt(c.spot)}</b> · Capturada: <b>${formatMadridTime(c.capturedAt)} (Madrid)</b>
     </div>`;
     for (const [exp, data] of expirations) {
-      const rows = data.strikes.map(s => `<tr>
+      const strikes = Array.isArray(data.strikes) ? data.strikes : [];
+      const rows = strikes.map(s => `<tr>
         <td>${s.strike}</td>
         <td class="call-cell">${fmt(s.call_bid)}</td>
         <td class="call-cell">${fmt(s.call_ask)}</td>
@@ -4752,7 +4761,7 @@ async function viewAutoChain(date) {
       html += `
         <details ${data.dte === 0 ? 'open' : ''} style="margin-bottom:8px">
           <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--navy-700);padding:6px 0">
-            Vencimiento ${exp} (${data.dte} DTE) · ${data.strikes.length} strikes
+            Vencimiento ${exp} (${data.dte} DTE) · ${strikes.length} strikes
           </summary>
           <table class="chain-table" style="margin-top:6px">
             <thead><tr>
@@ -4773,10 +4782,9 @@ async function viewAutoChain(date) {
     preview.innerHTML = `<div style="color:var(--bad);padding:14px">Error cargando cadena: ${e.message}</div>`;
   }
 }
-
 // ---- Madrid timezone helpers --------------------------------------------
 function formatMadridTime(isoUtc) {
-  if (!isoUtc) return '—';
+  if (!isoUtc) return 'â€”';
   try {
     const d = new Date(isoUtc);
     return d.toLocaleString('es-ES', {
@@ -4792,19 +4800,19 @@ function getMadridDST() {
     timeZone: 'Europe/Madrid', timeZoneName: 'short'
   }).formatToParts(new Date());
   const tz = parts.find(p => p.type === 'timeZoneName');
-  return tz ? tz.value : '—';
+  return tz ? tz.value : 'â€”';
 }
 
 function updateScheduleBar() {
   const dst = getMadridDST();
-  const dstLabel = dst === 'CEST' ? '☀ Verano (CEST, UTC+2)' :
-                   dst === 'CET'  ? '❄ Invierno (CET, UTC+1)' : dst;
+  const dstLabel = dst === 'CEST' ? 'â˜€ Verano (CEST, UTC+2)' :
+                   dst === 'CET'  ? 'â„ Invierno (CET, UTC+1)' : dst;
   const dstEl = document.getElementById('chainsCurrentDST');
   if (dstEl) dstEl.textContent = dstLabel;
 
-  // Cron hardcoded en el YAML — actualízalo aquí también si cambias el YAML
-  // Verano (CEST):  cron 0 14 * * 1-5  →  cronUTC = 14
-  // Invierno (CET): cron 0 15 * * 1-5  →  cronUTC = 15
+  // Cron hardcoded en el YAML â€” actualÃ­zalo aquÃ­ tambiÃ©n si cambias el YAML
+  // Verano (CEST):  cron 0 14 * * 1-5  â†’  cronUTC = 14
+  // Invierno (CET): cron 0 15 * * 1-5  â†’  cronUTC = 15
   const cronUTC = dst === 'CEST' ? 14 : 15;
   const madridHour = dst === 'CEST' ? cronUTC + 2 : cronUTC + 1;
   const nyHour     = dst === 'CEST' ? cronUTC - 4 : cronUTC - 5;
@@ -4820,11 +4828,29 @@ const editBtn = document.getElementById('editScheduleBtn');
 if (editBtn) {
   editBtn.addEventListener('click', () => {
     window.open('https://github.com/Quique805/SPX-IC/edit/main/.github/workflows/daily-fetch.yml', '_blank');
-    alert('Abriendo el YAML en GitHub.\n\nObjetivo: que la captura siempre sea a las 16:00 Madrid (= 10:00 NY = 30 min tras apertura).\n\n• VERANO (CEST):  - cron: \'0 14 * * 1-5\'  ← actualmente activo\n• INVIERNO (CET): - cron: \'0 15 * * 1-5\'\n\nCuando España cambie de hora (último domingo de marzo y de octubre), comenta una línea y descomenta la otra. Después actualiza también la línea cronUTC en script.js (función updateScheduleBar) para que coincida.\n\nDespués pulsa "Commit changes" abajo.');
+    alert('Abriendo el YAML en GitHub.\n\nObjetivo: que la captura siempre sea a las 16:00 Madrid (= 10:00 NY = 30 min tras apertura).\n\nâ€¢ VERANO (CEST):  - cron: \'0 14 * * 1-5\'  â† actualmente activo\nâ€¢ INVIERNO (CET): - cron: \'0 15 * * 1-5\'\n\nCuando EspaÃ±a cambie de hora (Ãºltimo domingo de marzo y de octubre), comenta una lÃ­nea y descomenta la otra. DespuÃ©s actualiza tambiÃ©n la lÃ­nea cronUTC en script.js (funciÃ³n updateScheduleBar) para que coincida.\n\nDespuÃ©s pulsa "Commit changes" abajo.');
+  });
+}
+
+function initChainTabs() {
+  document.querySelectorAll('.chain-auto-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.chainTab;
+      document.querySelectorAll('.chain-auto-tab').forEach(b => b.classList.toggle('active', b === btn));
+      const entry = document.getElementById('autoChainsList');
+      const close = document.getElementById('autoCloseChainsList');
+      if (entry) entry.style.display = tab === 'entry' ? '' : 'none';
+      if (close) close.style.display = tab === 'close' ? '' : 'none';
+      const preview = document.getElementById('chainPreview');
+      if (preview) preview.style.display = 'none';
+    });
   });
 }
 
 setTimeout(() => {
-  loadAutoFetchedChains();
+  loadAutoFetchedChains('entry');
+  loadAutoFetchedChains('close');
+  initChainTabs();
   updateScheduleBar();
 }, 1500);
+

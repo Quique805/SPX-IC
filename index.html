@@ -1748,6 +1748,38 @@
     [data-theme="dark"] .auto-chain-item {
       background: #1a1d1a;
     }
+
+    .chain-auto-tabs {
+      display: flex;
+      gap: 8px;
+      margin: 10px 0 12px;
+      border-bottom: 1px solid var(--blue-200);
+    }
+    .chain-auto-tab {
+      border: 1px solid var(--blue-200);
+      border-bottom: none;
+      background: var(--blue-50);
+      color: var(--navy-700);
+      padding: 7px 14px;
+      border-radius: 6px 6px 0 0;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .chain-auto-tab.active {
+      background: var(--navy-700);
+      color: #fff;
+      border-color: var(--gold-500);
+      box-shadow: inset 0 3px 0 var(--gold-500);
+    }
+    [data-theme="dark"] .chain-auto-tab {
+      background: #151a16;
+      color: var(--ink-soft);
+    }
+    [data-theme="dark"] .chain-auto-tab.active {
+      background: var(--navy-700);
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -1830,7 +1862,12 @@
         </div>
       </div>
 
-      <div id="autoChainsList" style="margin-bottom:14px"></div>
+            <div class="chain-auto-tabs">
+        <button type="button" class="chain-auto-tab active" data-chain-tab="entry">Entrada · 16:07</button>
+        <button type="button" class="chain-auto-tab" data-chain-tab="close">Cierre · 22:32</button>
+      </div>
+      <div id="autoChainsList" class="chain-auto-panel" style="margin-bottom:14px"></div>
+      <div id="autoCloseChainsList" class="chain-auto-panel" style="display:none;margin-bottom:14px"></div>
 
       <div id="chainPreview" style="display:none;margin-top:14px"></div>
 
@@ -2329,4 +2366,5 @@
   <script src="script.js"></script>
 </body>
 </html>
+
 
