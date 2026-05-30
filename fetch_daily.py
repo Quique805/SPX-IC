@@ -1,17 +1,23 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Daily SPX data fetch for the Iron Condor dashboard.
-Fetches SPX & VIX OHLC from Yahoo + SPX option chain from CBOE.
-Writes to data/daily-ohlc.json (accumulating) and data/chains/YYYY-MM-DD.json (one per day).
+Fetches SPX & VIX OHLC from Yahoo + SPX option chains from CBOE.
+
+Outputs:
+- data/daily-ohlc.json                 accumulated OHLC
+- data/chains/YYYY-MM-DD.json          entry snapshot (~16:07 Madrid)
+- data/chains-close/YYYY-MM-DD.json    close snapshot (~22:32 Madrid)
 """
 import json, os, re, sys, urllib.request
-from datetime import datetime, date, timezone
-from zoneinfo import ZoneInfo  # Python 3.9+, viene con stdlib
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 DATA_DIR = "data"
 CHAINS_DIR = os.path.join(DATA_DIR, "chains")
+CLOSE_CHAINS_DIR = os.path.join(DATA_DIR, "chains-close")
 OHLC_FILE = os.path.join(DATA_DIR, "daily-ohlc.json")
 CHAINS_INDEX = os.path.join(DATA_DIR, "chains-index.json")
+CLOSE_CHAINS_INDEX = os.path.join(DATA_DIR, "chains-close-index.json")
 UA = "Mozilla/5.0 (compatible; SPX-IC-bot/1.0)"
 
 # NYSE full-close holidays. Update yearly.
@@ -26,8 +32,10 @@ NYSE_HOLIDAYS = {
 
 def is_trading_day(d):
     """True if d (datetime.date) is a NYSE trading day (Mon-Fri, not a holiday)."""
-    if d.weekday() >= 5: return False  # 5=Sat, 6=Sun
-    if d.isoformat() in NYSE_HOLIDAYS: return False
+    if d.weekday() >= 5:
+        return False
+    if d.isoformat() in NYSE_HOLIDAYS:
+        return False
     return True
 
 def http_get_json(url, timeout=30):
@@ -44,124 +52,154 @@ def fetch_yahoo_ohlc(symbol, range_="10d"):
     out = []
     for i, t in enumerate(ts):
         d = datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%d")
-        out.append({"date": d, "open": q["open"][i], "high": q["high"][i],
-                    "low": q["low"][i], "close": q["close"][i]})
+        out.append({
+            "date": d,
+            "open": q["open"][i],
+            "high": q["high"][i],
+            "low": q["low"][i],
+            "close": q["close"][i],
+        })
     return out
 
 OPTION_RE = re.compile(r"^(SPXW?)(\d{2})(\d{2})(\d{2})([CP])(\d{8})$")
+
 def parse_option(opt):
     m = OPTION_RE.match(opt.get("option", ""))
-    if not m: return None
+    if not m:
+        return None
     _, yy, mm, dd, t, strike_str = m.groups()
-    return {"expiration": f"20{yy}-{mm}-{dd}", "type": "call" if t == "C" else "put",
-            "strike": int(strike_str) / 1000,
-            "bid": opt.get("bid"), "ask": opt.get("ask"),
-            "last": opt.get("last_trade_price"), "iv": opt.get("iv"),
-            "volume": opt.get("volume"), "oi": opt.get("open_interest"),
-            "delta": opt.get("delta")}
+    return {
+        "expiration": f"20{yy}-{mm}-{dd}",
+        "type": "call" if t == "C" else "put",
+        "strike": int(strike_str) / 1000,
+        "bid": opt.get("bid"),
+        "ask": opt.get("ask"),
+        "last": opt.get("last_trade_price"),
+        "iv": opt.get("iv"),
+        "volume": opt.get("volume"),
+        "oi": opt.get("open_interest"),
+        "delta": opt.get("delta"),
+    }
 
 def merge_strikes(options, expiration, spot, max_pct=5.0):
-    by_strike, lo, hi = {}, spot * (1 - max_pct/100), spot * (1 + max_pct/100)
+    by_strike = {}
+    lo, hi = spot * (1 - max_pct / 100), spot * (1 + max_pct / 100)
     for opt in options:
-        if opt is None or opt["expiration"] != expiration: continue
+        if opt is None or opt["expiration"] != expiration:
+            continue
         s = opt["strike"]
-        if s < lo or s > hi: continue
-        if s not in by_strike: by_strike[s] = {"strike": s}
+        if s < lo or s > hi:
+            continue
+        if s not in by_strike:
+            by_strike[s] = {"strike": s}
         prefix = "call" if opt["type"] == "call" else "put"
         for f in ("bid", "ask", "last", "iv", "volume", "oi", "delta"):
             by_strike[s][f"{prefix}_{f}"] = opt[f]
     return sorted(by_strike.values(), key=lambda x: x["strike"])
 
 def load_json_safe(path):
-    if not os.path.exists(path): return None
+    if not os.path.exists(path):
+        return None
     try:
-        with open(path) as f: return json.load(f)
-    except Exception: return None
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 def save_json(path, data):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w") as f: json.dump(data, f, indent=2, default=str)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2, default=str)
+
+def madrid_phase(now_madrid):
+    """Return open/entry/close/off based on Madrid market workflow windows."""
+    if now_madrid.hour < 16:
+        return "open"
+    if now_madrid.hour >= 22:
+        return "close"
+    return "entry"
 
 def main():
-    today_d = date.today()
+    now_madrid = datetime.now(ZoneInfo("Europe/Madrid"))
+    today_d = now_madrid.date()
     today = today_d.isoformat()
     now_iso = datetime.now(timezone.utc).isoformat()
-    print(f"[{now_iso}] SPX-IC daily fetch starting (today={today}, weekday={today_d.strftime('%A')})...")
+    phase = madrid_phase(now_madrid)
+    print(f"[{now_iso}] SPX-IC fetch starting (today={today}, madrid={now_madrid:%H:%M}, phase={phase})")
 
     if not is_trading_day(today_d):
-        reason = "fin de semana" if today_d.weekday() >= 5 else "festivo NYSE"
-        print(f"  ⏭  Saltando: hoy es {reason}. No se descarga nada.")
+        reason = "weekend" if today_d.weekday() >= 5 else "NYSE holiday"
+        print(f"  SKIP: today is {reason}. No data fetched.")
         return
 
     os.makedirs(CHAINS_DIR, exist_ok=True)
+    os.makedirs(CLOSE_CHAINS_DIR, exist_ok=True)
 
     # Yahoo OHLC
     spx_rows, vix_rows = [], []
     try:
         spx_rows = fetch_yahoo_ohlc("^GSPC")
-        print(f"  ✓ Yahoo SPX: {len(spx_rows)} días")
+        print(f"  OK Yahoo SPX: {len(spx_rows)} days")
     except Exception as e:
-        print(f"  ✗ Yahoo SPX: {e}", file=sys.stderr)
+        print(f"  ERR Yahoo SPX: {e}", file=sys.stderr)
     try:
         vix_rows = fetch_yahoo_ohlc("^VIX")
-        print(f"  ✓ Yahoo VIX: {len(vix_rows)} días")
+        print(f"  OK Yahoo VIX: {len(vix_rows)} days")
     except Exception as e:
-        print(f"  ✗ Yahoo VIX: {e}", file=sys.stderr)
+        print(f"  ERR Yahoo VIX: {e}", file=sys.stderr)
 
-    def r_int(v): return round(v) if v is not None else None  # SPX → entero
-    def r_vix(v): return round(v, 1) if v is not None else None  # VIX → 1 decimal
+    def r_int(v):
+        return round(v) if v is not None else None
+    def r_vix(v):
+        return round(v, 1) if v is not None else None
 
     if spx_rows or vix_rows:
         existing = load_json_safe(OHLC_FILE) or {"byDate": {}}
         by_date = existing.get("byDate", {})
         for row in spx_rows:
             d = row["date"]
-            if d not in by_date: by_date[d] = {}
-            # Open: solo se fija la primera vez (preserva el valor capturado al
-            # abrir mercado; runs posteriores no lo tocan aunque Yahoo glitchee).
+            if d not in by_date:
+                by_date[d] = {}
             new_open = r_int(row["open"])
             if by_date[d].get("spx_open") is None and new_open is not None:
                 by_date[d]["spx_open"] = new_open
-            # High/Low/Close: siempre se actualizan (evolucionan durante la sesión,
-            # solo son definitivos tras 22:00 Madrid).
-            if row["high"] is not None: by_date[d]["spx_high"] = r_int(row["high"])
-            if row["low"] is not None: by_date[d]["spx_low"] = r_int(row["low"])
-            if row["close"] is not None: by_date[d]["spx_close"] = r_int(row["close"])
+            if row["high"] is not None:
+                by_date[d]["spx_high"] = r_int(row["high"])
+            if row["low"] is not None:
+                by_date[d]["spx_low"] = r_int(row["low"])
+            if row["close"] is not None:
+                by_date[d]["spx_close"] = r_int(row["close"])
         for row in vix_rows:
             d = row["date"]
-            if d not in by_date: by_date[d] = {}
+            if d not in by_date:
+                by_date[d] = {}
             new_vix_open = r_vix(row["open"])
             if by_date[d].get("vix_open") is None and new_vix_open is not None:
                 by_date[d]["vix_open"] = new_vix_open
-            if row["close"] is not None: by_date[d]["vix_close"] = r_vix(row["close"])
+            if row["close"] is not None:
+                by_date[d]["vix_close"] = r_vix(row["close"])
         save_json(OHLC_FILE, {"lastUpdated": now_iso, "byDate": by_date})
-        print(f"  ✓ OHLC: {len(by_date)} fechas guardadas")
+        print(f"  OK OHLC: {len(by_date)} dates saved")
 
-    # Cross-check: si la última vela de Yahoo no es de hoy, NYSE no operó hoy
-    # (festivo no listado, fallo de feed, etc.) → no escribir cadena con fecha falsa.
+    # Cross-check: if Yahoo does not have today's daily bar yet, market is not open.
     latest_spx = spx_rows[-1]["date"] if spx_rows else None
     if latest_spx and latest_spx != today:
-        print(f"  ⏭  Última vela SPX es {latest_spx}, no {today}. NYSE parece cerrado → omito cadena.")
+        print(f"  SKIP chain: latest SPX bar is {latest_spx}, not {today}.")
         print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
         return
 
-    # Guardia horaria: la fase Open (15:32 Madrid) NO debe capturar cadena, porque
-    # CBOE tiene ~15 min de delay público → a las 15:32 Madrid devuelve datos de
-    # 15:17 Madrid, que es PRE-mercado (NYSE abre 15:30). Solo capturamos a partir
-    # de 16:00 Madrid (con la fase Chain a 16:07, CBOE entrega datos de +22min de
-    # apertura, ya estables). zoneinfo gestiona DST automáticamente.
-    now_madrid = datetime.now(ZoneInfo("Europe/Madrid"))
-    if now_madrid.hour < 16:
-        print(f"  ⏭  Hora Madrid {now_madrid:%H:%M} < 16:00. Salto cadena (fase pre-Chain, datos CBOE serían pre-mercado).")
+    if phase == "open":
+        print(f"  SKIP chain: Madrid {now_madrid:%H:%M} is Open phase. CBOE delayed data would be pre-market.")
         print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
         return
 
-    # Dedup: si la cadena de hoy ya está capturada (otro cron disparó antes), no la
-    # sobrescribimos. Queremos preservar el primer snapshot — el más cercano a +30
-    # min de apertura, antes de que cambien las primas.
-    chain_file = os.path.join(CHAINS_DIR, f"{today}.json")
+    chain_kind = "close" if phase == "close" else "entry"
+    chain_dir = CLOSE_CHAINS_DIR if chain_kind == "close" else CHAINS_DIR
+    chain_index_file = CLOSE_CHAINS_INDEX if chain_kind == "close" else CHAINS_INDEX
+    chain_file = os.path.join(chain_dir, f"{today}.json")
+
     if os.path.exists(chain_file):
-        print(f"  ⏭  Cadena de hoy ya existe ({chain_file}). Omito CBOE para preservar snapshot original.")
+        print(f"  SKIP chain: {chain_kind} snapshot already exists ({chain_file}).")
         print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
         return
 
@@ -172,30 +210,33 @@ def main():
         spot = d.get("current_price") or d.get("last") or d.get("price")
         options = [parse_option(o) for o in d.get("options", [])]
         options = [o for o in options if o is not None]
-        print(f"  ✓ CBOE: spot={spot}, {len(options)} opciones")
+        print(f"  OK CBOE: spot={spot}, {len(options)} options")
 
-        # Solo capturamos el vencimiento del propio día (0DTE).
         relevant = []
         for e in sorted(set(o["expiration"] for o in options)):
             ed = datetime.strptime(e, "%Y-%m-%d").date()
             dte = (ed - today_d).days
-            if dte == 0: relevant.append((e, dte))
+            if dte == 0:
+                relevant.append((e, dte))
 
-        chain_out = {"date": today, "capturedAt": now_iso, "spot": spot, "expirations": {}}
+        chain_out = {"date": today, "kind": chain_kind, "capturedAt": now_iso, "spot": spot, "expirations": {}}
         for e, dte in relevant:
-            chain_out["expirations"][e] = {"dte": dte,
-                "strikes": merge_strikes(options, e, spot, max_pct=5.0)}
+            chain_out["expirations"][e] = {
+                "dte": dte,
+                "strikes": merge_strikes(options, e, spot, max_pct=5.0),
+            }
         save_json(chain_file, chain_out)
-        print(f"  ✓ Chain: {chain_file} ({len(relevant)} expiraciones)")
+        print(f"  OK Chain {chain_kind}: {chain_file} ({len(relevant)} expirations)")
 
-        index = load_json_safe(CHAINS_INDEX) or {"dates": []}
+        index = load_json_safe(chain_index_file) or {"dates": []}
         if today not in index["dates"]:
-            index["dates"].append(today); index["dates"].sort()
+            index["dates"].append(today)
+            index["dates"].sort()
         index["lastUpdated"] = now_iso
-        save_json(CHAINS_INDEX, index)
-        print(f"  ✓ Índice: {len(index['dates'])} fechas con chain")
+        save_json(chain_index_file, index)
+        print(f"  OK Index {chain_kind}: {len(index['dates'])} chain dates")
     except Exception as e:
-        print(f"  ✗ CBOE: {e}", file=sys.stderr)
+        print(f"  ERR CBOE: {e}", file=sys.stderr)
 
     print(f"[{datetime.now(timezone.utc).isoformat()}] Done.")
 
