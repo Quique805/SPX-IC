@@ -4933,6 +4933,7 @@ function computeGammaLevels(chain) {
   return {
     date: chain.date,
     capturedAt: chain.capturedAt,
+    sourceLabel: chain._sourceLabel || 'cadena cargada',
     spot,
     expiration: exp.date,
     dte: exp.data.dte,
@@ -4949,15 +4950,16 @@ function computeGammaLevels(chain) {
 }
 
 async function fetchGammaChain(date) {
-  const sources = [
-    { folder: 'chains-close', label: 'cierre' },
-    { folder: 'chains', label: 'histórico cierre/entrada' }
+  const candidates = [
+    { url: `data/chains-close/${date}.json?t=${Date.now()}`, label: 'cierre local/Pages' },
+    { url: `data/chains/${date}.json?t=${Date.now()}`, label: 'histórico local/Pages' },
+    { url: `${GITHUB_RAW_BASE}/data/chains-close/${date}.json?t=${Date.now()}`, label: 'cierre GitHub' },
+    { url: `${GITHUB_RAW_BASE}/data/chains/${date}.json?t=${Date.now()}`, label: 'histórico GitHub' }
   ];
   let lastErr = null;
-  for (const src of sources) {
+  for (const src of candidates) {
     try {
-      const url = `${GITHUB_RAW_BASE}/data/${src.folder}/${date}.json?t=${Date.now()}`;
-      const r = await fetch(url);
+      const r = await fetch(src.url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const chain = await r.json();
       chain._sourceLabel = src.label;
@@ -5011,7 +5013,7 @@ function renderGammaCard(levels) {
           </div>
         </div>
         <div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px">
-          Vencimiento usado: ${levels.expiration} · DTE original: ${levels.dte} · T efectivo: ${levels.effectiveDte} sesión · Captura: ${formatMadridTime(levels.capturedAt)}
+          Fuente: ${levels.sourceLabel} · Vencimiento usado: ${levels.expiration} · DTE original: ${levels.dte} · T efectivo: ${levels.effectiveDte} sesión · Captura: ${formatMadridTime(levels.capturedAt)}
         </div>
         <table class="chain-table">
           <thead><tr>
@@ -5042,10 +5044,19 @@ async function renderGammaLevelsPanel() {
     ? renderGammaCard(r.levels)
     : `<div class="auto-chain-item" style="color:var(--bad)">No se pudo calcular ${r.date}: ${r.error}</div>`
   ).join('');
+  const datePills = GAMMA_LEVEL_DATES.map(date => {
+    const ok = results.find(r => r.date === date && r.ok);
+    const color = ok ? 'var(--good)' : 'var(--bad)';
+    const bg = ok ? 'rgba(39,174,96,0.12)' : 'rgba(207,76,76,0.12)';
+    return `<span style="display:inline-block;border:1px solid ${color};background:${bg};color:${color};border-radius:4px;padding:3px 7px;margin:2px;font-weight:700">${date}</span>`;
+  }).join('');
   panel.innerHTML = `
     <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
       <b>Niveles Gamma estimados</b> · Black-Scholes con IV por strike, Open Interest y T mínimo de 1 sesión para cadenas 0DTE.
       El Vol Trigger es una aproximación por cambio de signo del Net GEX estimado.
+      <div style="margin-top:8px">
+        <b>Cadenas objetivo:</b> ${datePills}
+      </div>
     </div>
     ${cards}`;
 }
