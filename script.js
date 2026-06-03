@@ -4971,6 +4971,71 @@ async function fetchGammaChain(date) {
   throw lastErr || new Error('cadena no encontrada');
 }
 
+async function fetchEntryChain(date) {
+  const candidates = [
+    { url: `data/chains/${date}.json?t=${Date.now()}`, label: 'entrada local/Pages' },
+    { url: `${GITHUB_RAW_BASE}/data/chains/${date}.json?t=${Date.now()}`, label: 'entrada GitHub' }
+  ];
+  let lastErr = null;
+  for (const src of candidates) {
+    try {
+      const r = await fetch(src.url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const chain = await r.json();
+      chain._sourceLabel = src.label;
+      return chain;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('cadena de entrada no encontrada');
+}
+
+function findOptionStrike(chain, targetStrike) {
+  const exp = getBestExpiration(chain);
+  const strikes = exp && Array.isArray(exp.data.strikes) ? exp.data.strikes : [];
+  const target = Number(targetStrike);
+  if (!strikes.length || !Number.isFinite(target)) return null;
+  return strikes.reduce((best, s) => {
+    const dist = Math.abs(Number(s.strike) - target);
+    return !best || dist < best.dist ? { row: s, dist } : best;
+  }, null);
+}
+
+async function computeEntryPremiumsForLevels(levels) {
+  const entryDate = gammaNextSessionDate(levels.date);
+  if (!entryDate) return { entryDate, ok: false, error: 'fecha objetivo no válida' };
+  try {
+    const chain = await fetchEntryChain(entryDate);
+    const callHit = findOptionStrike(chain, levels.callWall && levels.callWall.strike);
+    const putHit = findOptionStrike(chain, levels.putWall && levels.putWall.strike);
+    if (!callHit || !putHit) throw new Error('strikes no encontrados');
+    return {
+      ok: true,
+      entryDate,
+      sourceLabel: chain._sourceLabel,
+      capturedAt: chain.capturedAt,
+      spot: Number(chain.spot),
+      call: {
+        targetStrike: Number(levels.callWall.strike),
+        strike: Number(callHit.row.strike),
+        bid: Number(callHit.row.call_bid),
+        ask: Number(callHit.row.call_ask),
+        dist: callHit.dist
+      },
+      put: {
+        targetStrike: Number(levels.putWall.strike),
+        strike: Number(putHit.row.strike),
+        bid: Number(putHit.row.put_bid),
+        ask: Number(putHit.row.put_ask),
+        dist: putHit.dist
+      }
+    };
+  } catch (e) {
+    return { ok: false, entryDate, error: e.message };
+  }
+}
+
 async function fetchGammaIndexDates() {
   const candidates = [
     `data/chains-close-index.json?t=${Date.now()}`,
@@ -5088,6 +5153,43 @@ function renderGammaSessionChart(levels) {
   </div>`;
 }
 
+function renderGammaPremiumCard(levels) {
+  const p = levels.entryPremiums;
+  if (!p) return '';
+  if (!p.ok) {
+    return `<div style="background:var(--blue-50);border:1px dashed var(--blue-200);border-radius:5px;padding:10px;font-size:12px;color:var(--ink-soft);margin-top:8px">
+      <b>Primas entrada ${p.entryDate || '—'}</b><br>No hay cadena de entrada para calcular ventas: ${p.error || 'sin datos'}.
+    </div>`;
+  }
+  const callWarn = p.call.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.call.targetStrike, 0)})</span>` : '';
+  const putWarn = p.put.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.put.targetStrike, 0)})</span>` : '';
+  const total = (Number(p.call.bid) || 0) + (Number(p.put.bid) || 0);
+  return `<div style="background:var(--blue-50);border:1px solid var(--gold-500);border-radius:5px;padding:10px;font-size:12px;margin-top:8px">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Primas en cadena de entrada</div>
+        <b>${p.entryDate}</b>
+      </div>
+      <div style="text-align:right;color:var(--gold-700);font-weight:700">
+        Total venta ${fmtGammaNum(total, 2)}
+      </div>
+    </div>
+    <div style="display:grid;gap:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <span>Venta de call ${fmtGammaNum(p.call.strike, 0)}${callWarn}</span>
+        <b class="call-cell">${fmtGammaNum(p.call.bid, 2)}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <span>Venta de put ${fmtGammaNum(p.put.strike, 0)}${putWarn}</span>
+        <b class="put-cell">${fmtGammaNum(p.put.bid, 2)}</b>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--ink-soft);margin-top:8px">
+      Fuente: ${p.sourceLabel} · Spot entrada: ${fmtGammaNum(p.spot, 2)} · Captura: ${formatMadridTime(p.capturedAt)}
+    </div>
+  </div>`;
+}
+
 function renderGammaCard(levels) {
   const cw = levels.callWall;
   const pw = levels.putWall;
@@ -5108,6 +5210,7 @@ function renderGammaCard(levels) {
     ? `${volTriggerPctRaw.toFixed(1)}%`
     : '—';
   const sessionChart = renderGammaSessionChart(levels);
+  const premiumCard = renderGammaPremiumCard(levels);
   const topRows = levels.topRows.map(r => `<tr>
     <td>${fmtGammaNum(r.strike, 0)}</td>
     <td class="call-cell">${fmtGammaNum(r.callOi, 0)}</td>
@@ -5162,7 +5265,7 @@ function renderGammaCard(levels) {
               <tbody>${topRows}</tbody>
             </table>
           </div>
-          <div>${sessionChart}</div>
+          <div>${sessionChart}${premiumCard}</div>
         </div>
       </div>
     </details>`;
@@ -5183,6 +5286,7 @@ async function renderGammaLevelsPanel() {
       const chain = await fetchGammaChain(date);
       const levels = computeGammaLevels(chain);
       if (!levels) throw new Error('estructura insuficiente');
+      levels.entryPremiums = await computeEntryPremiumsForLevels(levels);
       results.push({ ok: true, date, levels });
     } catch (e) {
       results.push({ ok: false, date, error: e.message });
