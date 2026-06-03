@@ -5009,7 +5009,11 @@ async function computeEntryPremiumsForLevels(levels) {
     const chain = await fetchEntryChain(entryDate);
     const callHit = findOptionStrike(chain, levels.callWall && levels.callWall.strike);
     const putHit = findOptionStrike(chain, levels.putWall && levels.putWall.strike);
-    if (!callHit || !putHit) throw new Error('strikes no encontrados');
+    const callProtectTarget = Number(levels.callWall && levels.callWall.strike) + 20;
+    const putProtectTarget = Number(levels.putWall && levels.putWall.strike) - 20;
+    const callProtectHit = findOptionStrike(chain, callProtectTarget);
+    const putProtectHit = findOptionStrike(chain, putProtectTarget);
+    if (!callHit || !putHit || !callProtectHit || !putProtectHit) throw new Error('strikes no encontrados');
     return {
       ok: true,
       entryDate,
@@ -5023,12 +5027,26 @@ async function computeEntryPremiumsForLevels(levels) {
         ask: Number(callHit.row.call_ask),
         dist: callHit.dist
       },
+      callProtection: {
+        targetStrike: callProtectTarget,
+        strike: Number(callProtectHit.row.strike),
+        bid: Number(callProtectHit.row.call_bid),
+        ask: Number(callProtectHit.row.call_ask),
+        dist: callProtectHit.dist
+      },
       put: {
         targetStrike: Number(levels.putWall.strike),
         strike: Number(putHit.row.strike),
         bid: Number(putHit.row.put_bid),
         ask: Number(putHit.row.put_ask),
         dist: putHit.dist
+      },
+      putProtection: {
+        targetStrike: putProtectTarget,
+        strike: Number(putProtectHit.row.strike),
+        bid: Number(putProtectHit.row.put_bid),
+        ask: Number(putProtectHit.row.put_ask),
+        dist: putProtectHit.dist
       }
     };
   } catch (e) {
@@ -5163,15 +5181,19 @@ function renderGammaPremiumCard(levels) {
   }
   const callWarn = p.call.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.call.targetStrike, 0)})</span>` : '';
   const putWarn = p.put.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.put.targetStrike, 0)})</span>` : '';
-  const total = (Number(p.call.bid) || 0) + (Number(p.put.bid) || 0);
+  const callProtWarn = p.callProtection.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.callProtection.targetStrike, 0)})</span>` : '';
+  const putProtWarn = p.putProtection.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.putProtection.targetStrike, 0)})</span>` : '';
+  const grossCredit = (Number(p.call.bid) || 0) + (Number(p.put.bid) || 0);
+  const protectionCost = (Number(p.callProtection.ask) || 0) + (Number(p.putProtection.ask) || 0);
+  const netCredit = grossCredit - protectionCost;
   return `<div style="background:var(--blue-50);border:1px solid var(--gold-500);border-radius:5px;padding:10px;font-size:12px;margin-top:8px">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Primas en cadena de entrada</div>
+        <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Iron Condor en cadena de entrada</div>
         <b>${p.entryDate}</b>
       </div>
       <div style="text-align:right;color:var(--gold-700);font-weight:700">
-        Total venta ${fmtGammaNum(total, 2)}
+        Neto ${fmtGammaNum(netCredit, 2)}
       </div>
     </div>
     <div style="display:grid;gap:6px">
@@ -5180,12 +5202,31 @@ function renderGammaPremiumCard(levels) {
         <b class="call-cell">${fmtGammaNum(p.call.bid, 2)}</b>
       </div>
       <div style="display:flex;justify-content:space-between;gap:8px">
+        <span>Compra call ${fmtGammaNum(p.callProtection.strike, 0)}${callProtWarn}</span>
+        <b class="call-cell">-${fmtGammaNum(p.callProtection.ask, 2)}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:8px">
         <span>Venta de put ${fmtGammaNum(p.put.strike, 0)}${putWarn}</span>
         <b class="put-cell">${fmtGammaNum(p.put.bid, 2)}</b>
       </div>
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <span>Compra put ${fmtGammaNum(p.putProtection.strike, 0)}${putProtWarn}</span>
+        <b class="put-cell">-${fmtGammaNum(p.putProtection.ask, 2)}</b>
+      </div>
+      <div style="border-top:1px solid var(--blue-200);margin-top:2px;padding-top:6px;display:grid;gap:4px">
+        <div style="display:flex;justify-content:space-between;gap:8px;color:var(--ink-soft)">
+          <span>Prima recibida ventas</span><b>${fmtGammaNum(grossCredit, 2)}</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:8px;color:var(--ink-soft)">
+          <span>Coste protecciones</span><b>-${fmtGammaNum(protectionCost, 2)}</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;color:${netCredit >= 0 ? 'var(--good)' : 'var(--bad)'}">
+          <span><b>Ingresado neto</b></span><b>${fmtGammaNum(netCredit, 2)}</b>
+        </div>
+      </div>
     </div>
     <div style="font-size:10px;color:var(--ink-soft);margin-top:8px">
-      Fuente: ${p.sourceLabel} · Spot entrada: ${fmtGammaNum(p.spot, 2)} · Captura: ${formatMadridTime(p.capturedAt)}
+      Protección: 20 puntos más OTM · Fuente: ${p.sourceLabel} · Spot entrada: ${fmtGammaNum(p.spot, 2)} · Captura: ${formatMadridTime(p.capturedAt)}
     </div>
   </div>`;
 }
