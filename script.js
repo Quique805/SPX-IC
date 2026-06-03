@@ -5001,6 +5001,19 @@ function renderGammaCard(levels) {
   const pw = levels.putWall;
   const vt = levels.volTrigger;
   const tone = levels.netAtSpot >= 0 ? 'var(--good)' : 'var(--bad)';
+  const callWallStrike = cw ? Number(cw.strike) : NaN;
+  const putWallStrike = pw ? Number(pw.strike) : NaN;
+  const volTriggerStrike = Number(vt);
+  const wallRange = callWallStrike - putWallStrike;
+  const volTriggerPctRaw = wallRange > 0
+    ? ((volTriggerStrike - putWallStrike) / wallRange) * 100
+    : NaN;
+  const volTriggerPct = Number.isFinite(volTriggerPctRaw)
+    ? Math.max(0, Math.min(100, volTriggerPctRaw))
+    : NaN;
+  const volTriggerPctLabel = Number.isFinite(volTriggerPctRaw)
+    ? `${volTriggerPctRaw.toFixed(1)}%`
+    : '—';
   const topRows = levels.topRows.map(r => `<tr>
     <td>${fmtGammaNum(r.strike, 0)}</td>
     <td class="call-cell">${fmtGammaNum(r.callOi, 0)}</td>
@@ -5031,6 +5044,16 @@ function renderGammaCard(levels) {
           <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
             <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Net GEX spot</div>
             <b style="color:${tone}">${fmtGammaNum(levels.netAtSpot, 0)}</b>
+          </div>
+          <div style="background:var(--blue-50);border:1px solid var(--gold-500);border-radius:5px;padding:8px">
+            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Vol Trigger en Walls</div>
+            <b>${volTriggerPctLabel}</b>
+            <div style="height:7px;background:rgba(12,45,78,0.14);border-radius:99px;margin-top:6px;overflow:hidden">
+              <div style="height:100%;width:${Number.isFinite(volTriggerPct) ? volTriggerPct : 0}%;background:linear-gradient(90deg,var(--blue-500),var(--gold-500));border-radius:99px"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--ink-soft);margin-top:3px">
+              <span>Put Wall</span><span>Call Wall</span>
+            </div>
           </div>
         </div>
         <div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px">
