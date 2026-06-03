@@ -5231,6 +5231,73 @@ function renderGammaPremiumCard(levels) {
   </div>`;
 }
 
+function computeGammaHitStats(results, startDate = '2026-06-02') {
+  const stats = {
+    startDate,
+    total: 0,
+    wins: 0,
+    losses: 0,
+    upperTouches: 0,
+    lowerTouches: 0,
+    pending: 0
+  };
+  for (const r of results) {
+    if (!r.ok || !r.levels) continue;
+    const sessionDate = gammaNextSessionDate(r.levels.date);
+    if (!sessionDate || sessionDate < startDate) continue;
+    const { row } = getGammaSessionRow(r.levels.date);
+    const callWall = r.levels.callWall ? Number(r.levels.callWall.strike) : NaN;
+    const putWall = r.levels.putWall ? Number(r.levels.putWall.strike) : NaN;
+    const high = row ? Number(row.high) : NaN;
+    const low = row ? Number(row.low) : NaN;
+    if (![callWall, putWall, high, low].every(Number.isFinite)) {
+      stats.pending++;
+      continue;
+    }
+    stats.total++;
+    const upperTouch = high >= callWall;
+    const lowerTouch = low <= putWall;
+    if (upperTouch) stats.upperTouches++;
+    if (lowerTouch) stats.lowerTouches++;
+    if (upperTouch || lowerTouch) stats.losses++;
+    else stats.wins++;
+  }
+  return stats;
+}
+
+function renderGammaHitStats(stats) {
+  const winRate = stats.total > 0 ? (stats.wins / stats.total * 100).toFixed(1) + '%' : '—';
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0 4px">
+    <div style="background:#fff;border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+      <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Operaciones</div>
+      <b>${stats.total}</b>
+    </div>
+    <div style="background:#fff;border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+      <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Aciertos</div>
+      <b style="color:var(--good)">${stats.wins}</b>
+    </div>
+    <div style="background:#fff;border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+      <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Fallos</div>
+      <b style="color:var(--bad)">${stats.losses}</b>
+    </div>
+    <div style="background:#fff;border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+      <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Toques arriba</div>
+      <b style="color:var(--bad)">${stats.upperTouches}</b>
+    </div>
+    <div style="background:#fff;border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+      <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Toques abajo</div>
+      <b style="color:var(--bad)">${stats.lowerTouches}</b>
+    </div>
+    <div style="background:#fff;border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+      <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Win rate</div>
+      <b>${winRate}</b>
+    </div>
+  </div>
+  <div style="font-size:10px;color:var(--ink-soft);margin-top:6px">
+    Contador desde ${stats.startDate}. Cuenta una operación cuando existe OHLC de la sesión objetivo. Pendientes sin OHLC: ${stats.pending}.
+  </div>`;
+}
+
 function renderGammaCard(levels) {
   const cw = levels.callWall;
   const pw = levels.putWall;
@@ -5343,6 +5410,7 @@ async function renderGammaLevelsPanel() {
     const bg = ok ? 'rgba(39,174,96,0.12)' : 'rgba(207,76,76,0.12)';
     return `<span style="display:inline-block;border:1px solid ${color};background:${bg};color:${color};border-radius:4px;padding:3px 7px;margin:2px;font-weight:700">${date}</span>`;
   }).join('');
+  const gammaStats = computeGammaHitStats(results, '2026-06-02');
   panel.innerHTML = `
     <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
       <b>Niveles Gamma estimados</b> · Black-Scholes con IV por strike, Open Interest y T mínimo de 1 sesión para cadenas 0DTE.
@@ -5350,6 +5418,7 @@ async function renderGammaLevelsPanel() {
       <div style="margin-top:8px">
         <b>Cadenas calculadas:</b> ${datePills}
       </div>
+      ${renderGammaHitStats(gammaStats)}
     </div>
     ${cards}`;
 }
