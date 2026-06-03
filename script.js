@@ -4996,20 +4996,96 @@ function fmtGammaNum(v, digits = 0) {
   return Number.isFinite(Number(v)) ? Number(v).toLocaleString('es-ES', { maximumFractionDigits: digits }) : '—';
 }
 
-function gammaNextSessionLabel(dateStr) {
-  if (!dateStr) return 'PARA EL DÍA —';
+function gammaNextSessionDate(dateStr) {
+  if (!dateStr) return null;
   const [y, m, d] = String(dateStr).split('-').map(Number);
-  if (!y || !m || !d) return 'PARA EL DÍA —';
+  if (!y || !m || !d) return null;
   const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() + 1);
   while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) {
     dt.setUTCDate(dt.getUTCDate() + 1);
   }
+  return dt.toISOString().slice(0, 10);
+}
+
+function gammaNextSessionLabel(dateStr) {
+  if (!dateStr) return 'PARA EL DÍA —';
+  const nextDate = gammaNextSessionDate(dateStr);
+  if (!nextDate) return 'PARA EL DÍA —';
+  const [y, m, d] = nextDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
   const months = [
     'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
     'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
   ];
   return `PARA EL DÍA ${dt.getUTCDate()} DE ${months[dt.getUTCMonth()]}`;
+}
+
+function getGammaSessionRow(chainDate) {
+  const target = gammaNextSessionDate(chainDate);
+  if (!target || !currentRows) return { target, row: null };
+  return { target, row: currentRows.find(r => r.date === target) || null };
+}
+
+function renderGammaSessionChart(levels) {
+  const { target, row } = getGammaSessionRow(levels.date);
+  const callWall = levels.callWall ? Number(levels.callWall.strike) : NaN;
+  const putWall = levels.putWall ? Number(levels.putWall.strike) : NaN;
+  if (!target) return '';
+  if (!row) {
+    return `<div style="background:var(--blue-50);border:1px dashed var(--blue-200);border-radius:5px;padding:10px;font-size:12px;color:var(--ink-soft)">
+      <b>Sesión ${target}</b><br>No hay OHLC cargado todavía para comprobar el día.
+    </div>`;
+  }
+
+  const o = Number(row.open), h = Number(row.high), l = Number(row.low), c = Number(row.close);
+  if (![o, h, l, c, callWall, putWall].every(Number.isFinite)) {
+    return `<div style="background:var(--blue-50);border:1px dashed var(--blue-200);border-radius:5px;padding:10px;font-size:12px;color:var(--ink-soft)">
+      <b>Sesión ${target}</b><br>OHLC incompleto para dibujar el gráfico.
+    </div>`;
+  }
+
+  const vals = [o, h, l, c, callWall, putWall];
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const pad = Math.max((maxV - minV) * 0.12, 10);
+  const yMin = minV - pad;
+  const yMax = maxV + pad;
+  const y = v => 116 - ((v - yMin) / (yMax - yMin || 1)) * 92;
+  const xs = [28, 92, 156, 220];
+  const points = [[xs[0], y(o)], [xs[1], y(h)], [xs[2], y(l)], [xs[3], y(c)]];
+  const path = points.map((p, i) => `${i ? 'L' : 'M'} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const yCall = y(callWall);
+  const yPut = y(putWall);
+  const closeInside = c <= callWall && c >= putWall;
+  const rangeInside = h <= callWall && l >= putWall;
+  const statusColor = rangeInside ? 'var(--good)' : 'var(--bad)';
+  const statusText = rangeInside ? 'Sesión dentro' : 'Tocó wall';
+  const closeText = closeInside ? 'Cierre dentro' : 'Cierre fuera';
+
+  return `<div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:6px">
+      <div>
+        <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Comprobación OHLC</div>
+        <b style="font-size:13px">${target}</b>
+      </div>
+      <div style="text-align:right;font-size:10px;color:${statusColor};font-weight:700">
+        ${statusText}<br><span style="color:${closeInside ? 'var(--good)' : 'var(--bad)'}">${closeText}</span>
+      </div>
+    </div>
+    <svg viewBox="0 0 248 132" width="100%" height="132" role="img" aria-label="OHLC contra Call Wall y Put Wall">
+      <line x1="18" x2="232" y1="${yCall.toFixed(1)}" y2="${yCall.toFixed(1)}" stroke="#2f6fb0" stroke-width="2" stroke-dasharray="5 4"/>
+      <line x1="18" x2="232" y1="${yPut.toFixed(1)}" y2="${yPut.toFixed(1)}" stroke="#7b4ab8" stroke-width="2" stroke-dasharray="5 4"/>
+      <path d="${path}" fill="none" stroke="#c9a227" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      ${points.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${i === 3 ? 4 : 3}" fill="${i === 3 ? (closeInside ? '#23824d' : '#b73232') : '#c9a227'}"/>`).join('')}
+      <text x="20" y="${Math.max(10, yCall - 5).toFixed(1)}" font-size="9" fill="#2f6fb0">Call Wall ${fmtGammaNum(callWall, 0)}</text>
+      <text x="20" y="${Math.min(126, yPut + 12).toFixed(1)}" font-size="9" fill="#7b4ab8">Put Wall ${fmtGammaNum(putWall, 0)}</text>
+      ${['O','H','L','C'].map((label, i) => `<text x="${xs[i]}" y="128" text-anchor="middle" font-size="9" fill="#496276">${label}</text>`).join('')}
+    </svg>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:10px;color:var(--ink-soft);text-align:center">
+      <span>O ${fmtGammaNum(o, 0)}</span><span>H ${fmtGammaNum(h, 0)}</span><span>L ${fmtGammaNum(l, 0)}</span><span>C ${fmtGammaNum(c, 0)}</span>
+    </div>
+  </div>`;
 }
 
 function renderGammaCard(levels) {
@@ -5031,6 +5107,7 @@ function renderGammaCard(levels) {
   const volTriggerPctLabel = Number.isFinite(volTriggerPctRaw)
     ? `${volTriggerPctRaw.toFixed(1)}%`
     : '—';
+  const sessionChart = renderGammaSessionChart(levels);
   const topRows = levels.topRows.map(r => `<tr>
     <td>${fmtGammaNum(r.strike, 0)}</td>
     <td class="call-cell">${fmtGammaNum(r.callOi, 0)}</td>
@@ -5045,43 +5122,48 @@ function renderGammaCard(levels) {
         ${sessionLabel} · Cadena ${levels.date} · Spot ${fmtGammaNum(levels.spot, 2)} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
       </summary>
       <div style="padding:0 12px 12px">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:10px">
-          <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
-            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Call Wall</div>
-            <b>${fmtGammaNum(cw && cw.strike, 0)}</b>
-          </div>
-          <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
-            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Put Wall</div>
-            <b>${fmtGammaNum(pw && pw.strike, 0)}</b>
-          </div>
-          <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
-            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Vol Trigger</div>
-            <b>${fmtGammaNum(vt, 0)}</b>
-          </div>
-          <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
-            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Net GEX spot</div>
-            <b style="color:${tone}">${fmtGammaNum(levels.netAtSpot, 0)}</b>
-          </div>
-          <div style="background:var(--blue-50);border:1px solid var(--gold-500);border-radius:5px;padding:8px">
-            <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Vol Trigger en Walls</div>
-            <b>${volTriggerPctLabel}</b>
-            <div style="height:7px;background:rgba(12,45,78,0.14);border-radius:99px;margin-top:6px;overflow:hidden">
-              <div style="height:100%;width:${Number.isFinite(volTriggerPct) ? volTriggerPct : 0}%;background:linear-gradient(90deg,var(--blue-500),var(--gold-500));border-radius:99px"></div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,330px);gap:12px;align-items:start">
+          <div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:10px">
+              <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+                <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Call Wall</div>
+                <b>${fmtGammaNum(cw && cw.strike, 0)}</b>
+              </div>
+              <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+                <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Put Wall</div>
+                <b>${fmtGammaNum(pw && pw.strike, 0)}</b>
+              </div>
+              <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+                <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Vol Trigger</div>
+                <b>${fmtGammaNum(vt, 0)}</b>
+              </div>
+              <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+                <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Net GEX spot</div>
+                <b style="color:${tone}">${fmtGammaNum(levels.netAtSpot, 0)}</b>
+              </div>
+              <div style="background:var(--blue-50);border:1px solid var(--gold-500);border-radius:5px;padding:8px">
+                <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Vol Trigger en Walls</div>
+                <b>${volTriggerPctLabel}</b>
+                <div style="height:7px;background:rgba(12,45,78,0.14);border-radius:99px;margin-top:6px;overflow:hidden">
+                  <div style="height:100%;width:${Number.isFinite(volTriggerPct) ? volTriggerPct : 0}%;background:linear-gradient(90deg,var(--blue-500),var(--gold-500));border-radius:99px"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--ink-soft);margin-top:3px">
+                  <span>Put Wall</span><span>Call Wall</span>
+                </div>
+              </div>
             </div>
-            <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--ink-soft);margin-top:3px">
-              <span>Put Wall</span><span>Call Wall</span>
+            <div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px">
+              Fuente: ${levels.sourceLabel} · Vencimiento usado: ${levels.expiration} · DTE original: ${levels.dte} · T efectivo: ${levels.effectiveDte} sesión · Captura: ${formatMadridTime(levels.capturedAt)}
             </div>
+            <table class="chain-table">
+              <thead><tr>
+                <th>Strike</th><th>Call OI</th><th>Call GEX</th><th>Put OI</th><th>Put GEX</th><th>Net GEX</th>
+              </tr></thead>
+              <tbody>${topRows}</tbody>
+            </table>
           </div>
+          <div>${sessionChart}</div>
         </div>
-        <div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px">
-          Fuente: ${levels.sourceLabel} · Vencimiento usado: ${levels.expiration} · DTE original: ${levels.dte} · T efectivo: ${levels.effectiveDte} sesión · Captura: ${formatMadridTime(levels.capturedAt)}
-        </div>
-        <table class="chain-table">
-          <thead><tr>
-            <th>Strike</th><th>Call OI</th><th>Call GEX</th><th>Put OI</th><th>Put GEX</th><th>Net GEX</th>
-          </tr></thead>
-          <tbody>${topRows}</tbody>
-        </table>
       </div>
     </details>`;
 }
