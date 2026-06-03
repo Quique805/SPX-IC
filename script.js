@@ -4996,10 +4996,27 @@ function fmtGammaNum(v, digits = 0) {
   return Number.isFinite(Number(v)) ? Number(v).toLocaleString('es-ES', { maximumFractionDigits: digits }) : '—';
 }
 
+function gammaNextSessionLabel(dateStr) {
+  if (!dateStr) return 'PARA EL DÍA —';
+  const [y, m, d] = String(dateStr).split('-').map(Number);
+  if (!y || !m || !d) return 'PARA EL DÍA —';
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) {
+    dt.setUTCDate(dt.getUTCDate() + 1);
+  }
+  const months = [
+    'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+    'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+  ];
+  return `PARA EL DÍA ${dt.getUTCDate()} DE ${months[dt.getUTCMonth()]}`;
+}
+
 function renderGammaCard(levels) {
   const cw = levels.callWall;
   const pw = levels.putWall;
   const vt = levels.volTrigger;
+  const sessionLabel = gammaNextSessionLabel(levels.date);
   const tone = levels.netAtSpot >= 0 ? 'var(--good)' : 'var(--bad)';
   const callWallStrike = cw ? Number(cw.strike) : NaN;
   const putWallStrike = pw ? Number(pw.strike) : NaN;
@@ -5025,7 +5042,7 @@ function renderGammaCard(levels) {
   return `
     <details class="auto-chain-item" open style="display:block;padding:0;margin-bottom:12px">
       <summary style="cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-700)">
-        ${levels.date} · Spot ${fmtGammaNum(levels.spot, 2)} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
+        ${sessionLabel} · Cadena ${levels.date} · Spot ${fmtGammaNum(levels.spot, 2)} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
       </summary>
       <div style="padding:0 12px 12px">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:10px">
