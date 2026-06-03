@@ -4833,7 +4833,7 @@ if (editBtn) {
 }
 
 // ---- Gamma levels from close chains --------------------------------------
-const GAMMA_LEVEL_DATES = ['2026-05-11', '2026-05-13', '2026-05-14', '2026-05-15', '2026-05-18'];
+const GAMMA_LEGACY_CLOSE_DATES = ['2026-05-11', '2026-05-13', '2026-05-14', '2026-05-15', '2026-05-18'];
 const GAMMA_RISK_FREE_RATE = 0.045;
 const GAMMA_CONTRACT_MULT = 100;
 const GAMMA_MIN_T = 1 / 252;
@@ -4971,6 +4971,27 @@ async function fetchGammaChain(date) {
   throw lastErr || new Error('cadena no encontrada');
 }
 
+async function fetchGammaIndexDates() {
+  const candidates = [
+    `data/chains-close-index.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/chains-close-index.json?t=${Date.now()}`
+  ];
+  const dates = [];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const idx = await r.json();
+      if (Array.isArray(idx.dates)) dates.push(...idx.dates);
+    } catch (e) {
+      console.warn('[Gamma index] No se pudo cargar', url, e.message);
+    }
+  }
+  return [...new Set([...dates, ...GAMMA_LEGACY_CLOSE_DATES])]
+    .filter(Boolean)
+    .sort((a, b) => String(b).localeCompare(String(a)));
+}
+
 function fmtGammaNum(v, digits = 0) {
   return Number.isFinite(Number(v)) ? Number(v).toLocaleString('es-ES', { maximumFractionDigits: digits }) : '—';
 }
@@ -5029,8 +5050,13 @@ async function renderGammaLevelsPanel() {
   const panel = document.getElementById('gammaLevelsPanel');
   if (!panel) return;
   panel.innerHTML = '<div style="padding:14px;text-align:center">Calculando niveles gamma…</div>';
+  const gammaDates = await fetchGammaIndexDates();
+  if (!gammaDates.length) {
+    panel.innerHTML = '<div style="padding:14px;text-align:center;color:var(--bad)">No hay cadenas de cierre disponibles para calcular niveles gamma.</div>';
+    return;
+  }
   const results = [];
-  for (const date of GAMMA_LEVEL_DATES) {
+  for (const date of gammaDates) {
     try {
       const chain = await fetchGammaChain(date);
       const levels = computeGammaLevels(chain);
@@ -5044,7 +5070,7 @@ async function renderGammaLevelsPanel() {
     ? renderGammaCard(r.levels)
     : `<div class="auto-chain-item" style="color:var(--bad)">No se pudo calcular ${r.date}: ${r.error}</div>`
   ).join('');
-  const datePills = GAMMA_LEVEL_DATES.map(date => {
+  const datePills = gammaDates.map(date => {
     const ok = results.find(r => r.date === date && r.ok);
     const color = ok ? 'var(--good)' : 'var(--bad)';
     const bg = ok ? 'rgba(39,174,96,0.12)' : 'rgba(207,76,76,0.12)';
@@ -5055,7 +5081,7 @@ async function renderGammaLevelsPanel() {
       <b>Niveles Gamma estimados</b> · Black-Scholes con IV por strike, Open Interest y T mínimo de 1 sesión para cadenas 0DTE.
       El Vol Trigger es una aproximación por cambio de signo del Net GEX estimado.
       <div style="margin-top:8px">
-        <b>Cadenas objetivo:</b> ${datePills}
+        <b>Cadenas calculadas:</b> ${datePills}
       </div>
     </div>
     ${cards}`;
@@ -5074,8 +5100,7 @@ function initChainTabs() {
       if (gamma) gamma.style.display = tab === 'gamma' ? '' : 'none';
       const preview = document.getElementById('chainPreview');
       if (preview) preview.style.display = 'none';
-      if (tab === 'gamma' && gamma && !gamma.dataset.loaded) {
-        gamma.dataset.loaded = '1';
+      if (tab === 'gamma' && gamma) {
         renderGammaLevelsPanel();
       }
     });
