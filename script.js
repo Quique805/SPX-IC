@@ -5255,9 +5255,33 @@ function renderGammaPremiumCard(levels) {
   </div>`;
 }
 
-function computeGammaHitStats(results, startDate = '2026-06-02') {
+function getGammaRiskFlags(levels) {
+  const cw = levels.callWall;
+  const pw = levels.putWall;
+  const vt = levels.volTrigger;
+  const callWallStrike = cw ? Number(cw.strike) : NaN;
+  const putWallStrike = pw ? Number(pw.strike) : NaN;
+  const volTriggerStrike = Number(vt);
+  const wallRange = callWallStrike - putWallStrike;
+  const volTriggerPctRaw = wallRange > 0
+    ? ((volTriggerStrike - putWallStrike) / wallRange) * 100
+    : NaN;
+  const volTriggerAlert = Number.isFinite(volTriggerPctRaw) && (volTriggerPctRaw < 15 || volTriggerPctRaw > 70);
+  const gap = getGammaOpeningGap(levels.date);
+  const gapAlert = gap.ok && gap.alert;
+  return {
+    gap,
+    gapAlert,
+    volTriggerPctRaw,
+    volTriggerAlert,
+    noTradeDay: volTriggerAlert || gapAlert
+  };
+}
+
+function computeGammaHitStats(results, startChainDate = '2026-06-01') {
   const stats = {
-    startDate,
+    startDate: startChainDate,
+    sessionsAnalyzed: 0,
     total: 0,
     wins: 0,
     losses: 0,
@@ -5267,8 +5291,7 @@ function computeGammaHitStats(results, startDate = '2026-06-02') {
   };
   for (const r of results) {
     if (!r.ok || !r.levels) continue;
-    const sessionDate = gammaNextSessionDate(r.levels.date);
-    if (!sessionDate || sessionDate < startDate) continue;
+    if (!r.levels.date || r.levels.date < startChainDate) continue;
     const { row } = getGammaSessionRow(r.levels.date);
     const callWall = r.levels.callWall ? Number(r.levels.callWall.strike) : NaN;
     const putWall = r.levels.putWall ? Number(r.levels.putWall.strike) : NaN;
@@ -5278,6 +5301,10 @@ function computeGammaHitStats(results, startDate = '2026-06-02') {
       stats.pending++;
       continue;
     }
+    stats.sessionsAnalyzed++;
+    const risk = getGammaRiskFlags(r.levels);
+    if (risk.noTradeDay) continue;
+
     stats.total++;
     const upperTouch = high >= callWall;
     const lowerTouch = low <= putWall;
@@ -5292,6 +5319,10 @@ function computeGammaHitStats(results, startDate = '2026-06-02') {
 function renderGammaHitStats(stats) {
   const winRate = stats.total > 0 ? (stats.wins / stats.total * 100).toFixed(1) + '%' : '—';
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0 4px">
+    <div style="background:#fff;border:1px solid var(--blue-200);border-radius:5px;padding:8px">
+      <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Sesiones analizadas</div>
+      <b>${stats.sessionsAnalyzed}</b>
+    </div>
     <div style="background:#fff;border:1px solid var(--blue-200);border-radius:5px;padding:8px">
       <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Operaciones</div>
       <b>${stats.total}</b>
@@ -5318,7 +5349,7 @@ function renderGammaHitStats(stats) {
     </div>
   </div>
   <div style="font-size:10px;color:var(--ink-soft);margin-top:6px">
-    Contador desde ${stats.startDate}. Cuenta una operación cuando existe OHLC de la sesión objetivo. Pendientes sin OHLC: ${stats.pending}.
+    Contador desde cadena ${stats.startDate}. Las sesiones marcadas NO OPERAR cuentan como analizadas, pero no como operaciones. Pendientes sin OHLC: ${stats.pending}.
   </div>`;
 }
 
@@ -5341,11 +5372,12 @@ function renderGammaCard(levels) {
   const volTriggerPctLabel = Number.isFinite(volTriggerPctRaw)
     ? `${volTriggerPctRaw.toFixed(1)}%`
     : '—';
-  const volTriggerAlert = Number.isFinite(volTriggerPctRaw) && (volTriggerPctRaw < 15 || volTriggerPctRaw > 70);
-  const gap = getGammaOpeningGap(levels.date);
+  const risk = getGammaRiskFlags(levels);
+  const volTriggerAlert = risk.volTriggerAlert;
+  const gap = risk.gap;
   const gapLabel = gap.ok ? `${gap.pct >= 0 ? '+' : ''}${gap.pct.toFixed(2)}%` : '—';
-  const gapAlert = gap.ok && gap.alert;
-  const noTradeDay = volTriggerAlert || gapAlert;
+  const gapAlert = risk.gapAlert;
+  const noTradeDay = risk.noTradeDay;
   const dayBorder = noTradeDay ? '2px solid var(--bad)' : '1px solid var(--blue-200)';
   const dayShadow = noTradeDay ? '0 0 0 2px rgba(207,76,76,0.08)' : 'none';
   const sessionChart = renderGammaSessionChart(levels);
@@ -5448,7 +5480,7 @@ async function renderGammaLevelsPanel() {
     const bg = ok ? 'rgba(39,174,96,0.12)' : 'rgba(207,76,76,0.12)';
     return `<span style="display:inline-block;border:1px solid ${color};background:${bg};color:${color};border-radius:4px;padding:3px 7px;margin:2px;font-weight:700">${date}</span>`;
   }).join('');
-  const gammaStats = computeGammaHitStats(results, '2026-06-02');
+  const gammaStats = computeGammaHitStats(results, '2026-06-01');
   panel.innerHTML = `
     <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
       <b>Niveles Gamma estimados</b> · Black-Scholes con IV por strike, Open Interest y T mínimo de 1 sesión para cadenas 0DTE.
