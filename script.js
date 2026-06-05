@@ -5136,7 +5136,6 @@ function getGammaOpeningGap(chainDate) {
 
 function renderGammaSessionChart(levels) {
   const { target, row } = getGammaSessionRow(levels.date);
-  const gap = getGammaOpeningGap(levels.date);
   const callWall = levels.callWall ? Number(levels.callWall.strike) : NaN;
   const putWall = levels.putWall ? Number(levels.putWall.strike) : NaN;
   if (!target) return '';
@@ -5170,10 +5169,6 @@ function renderGammaSessionChart(levels) {
   const statusColor = rangeInside ? 'var(--good)' : 'var(--bad)';
   const statusText = rangeInside ? 'Sesión dentro' : 'Tocó wall';
   const closeText = closeInside ? 'Cierre dentro' : 'Cierre fuera';
-  const gapLabel = gap.ok ? `${gap.pct >= 0 ? '+' : ''}${gap.pct.toFixed(2)}%` : '—';
-  const gapColor = gap.ok && gap.alert ? 'var(--bad)' : 'var(--ink-soft)';
-  const gapBg = gap.ok && gap.alert ? 'rgba(207,76,76,0.12)' : 'rgba(12,45,78,0.06)';
-  const gapBorder = gap.ok && gap.alert ? 'var(--bad)' : 'var(--blue-200)';
 
   return `<div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:6px">
@@ -5184,10 +5179,6 @@ function renderGammaSessionChart(levels) {
       <div style="text-align:right;font-size:10px;color:${statusColor};font-weight:700">
         ${statusText}<br><span style="color:${closeInside ? 'var(--good)' : 'var(--bad)'}">${closeText}</span>
       </div>
-    </div>
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;background:${gapBg};border:1px solid ${gapBorder};border-radius:4px;padding:5px 7px;margin-bottom:7px;font-size:10px">
-      <span style="color:var(--ink-soft)">Gap apertura vs cierre previo</span>
-      <b style="color:${gapColor}">${gap.ok && gap.alert ? '⚠ ' : ''}${gapLabel}</b>
     </div>
     <svg viewBox="0 0 248 132" width="100%" height="132" role="img" aria-label="OHLC contra Call Wall y Put Wall">
       <line x1="18" x2="232" y1="${yCall.toFixed(1)}" y2="${yCall.toFixed(1)}" stroke="#2f6fb0" stroke-width="2" stroke-dasharray="5 4"/>
@@ -5200,9 +5191,6 @@ function renderGammaSessionChart(levels) {
     </svg>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:10px;color:var(--ink-soft);text-align:center">
       <span>O ${fmtGammaNum(o, 0)}</span><span>H ${fmtGammaNum(h, 0)}</span><span>L ${fmtGammaNum(l, 0)}</span><span>C ${fmtGammaNum(c, 0)}</span>
-    </div>
-    <div style="font-size:9px;color:var(--ink-soft);margin-top:5px;text-align:center">
-      ${gap.ok ? `Gap calculado con cierre ${gap.prevDate}: ${fmtGammaNum(gap.prevClose, 0)} → apertura ${target}: ${fmtGammaNum(gap.open, 0)}` : `Gap no calculable: ${gap.error || 'sin datos'}`}
     </div>
   </div>`;
 }
@@ -5353,6 +5341,13 @@ function renderGammaCard(levels) {
   const volTriggerPctLabel = Number.isFinite(volTriggerPctRaw)
     ? `${volTriggerPctRaw.toFixed(1)}%`
     : '—';
+  const volTriggerAlert = Number.isFinite(volTriggerPctRaw) && (volTriggerPctRaw < 15 || volTriggerPctRaw > 70);
+  const gap = getGammaOpeningGap(levels.date);
+  const gapLabel = gap.ok ? `${gap.pct >= 0 ? '+' : ''}${gap.pct.toFixed(2)}%` : '—';
+  const gapAlert = gap.ok && gap.alert;
+  const noTradeDay = volTriggerAlert || gapAlert;
+  const dayBorder = noTradeDay ? '2px solid var(--bad)' : '1px solid var(--blue-200)';
+  const dayShadow = noTradeDay ? '0 0 0 2px rgba(207,76,76,0.08)' : 'none';
   const sessionChart = renderGammaSessionChart(levels);
   const premiumCard = renderGammaPremiumCard(levels);
   const topRows = levels.topRows.map(r => `<tr>
@@ -5364,9 +5359,9 @@ function renderGammaCard(levels) {
     <td>${fmtGammaNum(r.netGex, 0)}</td>
   </tr>`).join('');
   return `
-    <details class="auto-chain-item" open style="display:block;padding:0;margin-bottom:12px">
+    <details class="auto-chain-item" open style="display:block;padding:0;margin-bottom:12px;border:${dayBorder};box-shadow:${dayShadow}">
       <summary style="cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-700)">
-        ${sessionLabel} · Cadena ${levels.date} · Spot ${fmtGammaNum(levels.spot, 2)} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
+        ${noTradeDay ? 'NO OPERAR · ' : ''}${sessionLabel} · Cadena ${levels.date} · Spot ${fmtGammaNum(levels.spot, 2)} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
       </summary>
       <div style="padding:0 12px 12px">
         <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,330px);gap:12px;align-items:start">
@@ -5390,12 +5385,19 @@ function renderGammaCard(levels) {
               </div>
               <div style="background:var(--blue-50);border:1px solid var(--gold-500);border-radius:5px;padding:8px">
                 <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Vol Trigger en Walls</div>
-                <b>${volTriggerPctLabel}</b>
+                <b style="color:${volTriggerAlert ? 'var(--bad)' : 'inherit'}">${volTriggerAlert ? '⚠ ' : ''}${volTriggerPctLabel}</b>
                 <div style="height:7px;background:rgba(12,45,78,0.14);border-radius:99px;margin-top:6px;overflow:hidden">
-                  <div style="height:100%;width:${Number.isFinite(volTriggerPct) ? volTriggerPct : 0}%;background:linear-gradient(90deg,var(--blue-500),var(--gold-500));border-radius:99px"></div>
+                  <div style="height:100%;width:${Number.isFinite(volTriggerPct) ? volTriggerPct : 0}%;background:${volTriggerAlert ? 'var(--bad)' : 'linear-gradient(90deg,var(--blue-500),var(--gold-500))'};border-radius:99px"></div>
                 </div>
                 <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--ink-soft);margin-top:3px">
                   <span>Put Wall</span><span>Call Wall</span>
+                </div>
+              </div>
+              <div style="background:${gapAlert ? 'rgba(207,76,76,0.12)' : 'var(--blue-50)'};border:1px solid ${gapAlert ? 'var(--bad)' : 'var(--blue-200)'};border-radius:5px;padding:8px">
+                <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Gap apertura</div>
+                <b style="color:${gapAlert ? 'var(--bad)' : 'inherit'}">${gapAlert ? '⚠ ' : ''}${gapLabel}</b>
+                <div style="font-size:9px;color:var(--ink-soft);margin-top:4px">
+                  ${gap.ok ? `${gap.prevDate} cierre ${fmtGammaNum(gap.prevClose, 0)} → ${gap.target} apertura ${fmtGammaNum(gap.open, 0)}` : `No calculable: ${gap.error || 'sin datos'}`}
                 </div>
               </div>
             </div>
