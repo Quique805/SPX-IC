@@ -5110,8 +5110,33 @@ function getGammaSessionRow(chainDate) {
   return { target, row: currentRows.find(r => r.date === target) || null };
 }
 
+function getGammaOpeningGap(chainDate) {
+  const target = gammaNextSessionDate(chainDate);
+  if (!target || !currentRows) return { target, ok: false, error: 'sin fecha objetivo' };
+  const idx = currentRows.findIndex(r => r.date === target);
+  if (idx < 1) return { target, ok: false, error: 'sin cierre previo' };
+  const row = currentRows[idx];
+  const prev = currentRows[idx - 1];
+  const open = Number(row.open);
+  const prevClose = Number(prev.close);
+  if (!Number.isFinite(open) || !Number.isFinite(prevClose) || prevClose <= 0) {
+    return { target, ok: false, error: 'open o cierre previo no disponible' };
+  }
+  const pct = (open - prevClose) / prevClose * 100;
+  return {
+    ok: true,
+    target,
+    open,
+    prevDate: prev.date,
+    prevClose,
+    pct,
+    alert: Math.abs(pct) >= 0.50
+  };
+}
+
 function renderGammaSessionChart(levels) {
   const { target, row } = getGammaSessionRow(levels.date);
+  const gap = getGammaOpeningGap(levels.date);
   const callWall = levels.callWall ? Number(levels.callWall.strike) : NaN;
   const putWall = levels.putWall ? Number(levels.putWall.strike) : NaN;
   if (!target) return '';
@@ -5145,6 +5170,10 @@ function renderGammaSessionChart(levels) {
   const statusColor = rangeInside ? 'var(--good)' : 'var(--bad)';
   const statusText = rangeInside ? 'Sesión dentro' : 'Tocó wall';
   const closeText = closeInside ? 'Cierre dentro' : 'Cierre fuera';
+  const gapLabel = gap.ok ? `${gap.pct >= 0 ? '+' : ''}${gap.pct.toFixed(2)}%` : '—';
+  const gapColor = gap.ok && gap.alert ? 'var(--bad)' : 'var(--ink-soft)';
+  const gapBg = gap.ok && gap.alert ? 'rgba(207,76,76,0.12)' : 'rgba(12,45,78,0.06)';
+  const gapBorder = gap.ok && gap.alert ? 'var(--bad)' : 'var(--blue-200)';
 
   return `<div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:6px">
@@ -5155,6 +5184,10 @@ function renderGammaSessionChart(levels) {
       <div style="text-align:right;font-size:10px;color:${statusColor};font-weight:700">
         ${statusText}<br><span style="color:${closeInside ? 'var(--good)' : 'var(--bad)'}">${closeText}</span>
       </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;background:${gapBg};border:1px solid ${gapBorder};border-radius:4px;padding:5px 7px;margin-bottom:7px;font-size:10px">
+      <span style="color:var(--ink-soft)">Gap apertura vs cierre previo</span>
+      <b style="color:${gapColor}">${gap.ok && gap.alert ? '⚠ ' : ''}${gapLabel}</b>
     </div>
     <svg viewBox="0 0 248 132" width="100%" height="132" role="img" aria-label="OHLC contra Call Wall y Put Wall">
       <line x1="18" x2="232" y1="${yCall.toFixed(1)}" y2="${yCall.toFixed(1)}" stroke="#2f6fb0" stroke-width="2" stroke-dasharray="5 4"/>
@@ -5167,6 +5200,9 @@ function renderGammaSessionChart(levels) {
     </svg>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:10px;color:var(--ink-soft);text-align:center">
       <span>O ${fmtGammaNum(o, 0)}</span><span>H ${fmtGammaNum(h, 0)}</span><span>L ${fmtGammaNum(l, 0)}</span><span>C ${fmtGammaNum(c, 0)}</span>
+    </div>
+    <div style="font-size:9px;color:var(--ink-soft);margin-top:5px;text-align:center">
+      ${gap.ok ? `Gap calculado con cierre ${gap.prevDate}: ${fmtGammaNum(gap.prevClose, 0)} → apertura ${target}: ${fmtGammaNum(gap.open, 0)}` : `Gap no calculable: ${gap.error || 'sin datos'}`}
     </div>
   </div>`;
 }
