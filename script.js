@@ -5493,6 +5493,77 @@ async function renderGammaLevelsPanel() {
     ${cards}`;
 }
 
+async function renderGammaChartsPanel() {
+  const panel = document.getElementById('gammaChartsPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div style="padding:14px;text-align:center">Calculando evolución NET GEX SPOT…</div>';
+
+  const gammaDates = (await fetchGammaIndexDates())
+    .filter(date => date >= '2026-06-01')
+    .sort((a, b) => String(a).localeCompare(String(b)));
+  const points = [];
+  for (const date of gammaDates) {
+    try {
+      const chain = await fetchGammaChain(date);
+      const levels = computeGammaLevels(chain);
+      if (levels && Number.isFinite(Number(levels.netAtSpot))) {
+        points.push({
+          date,
+          value: Number(levels.netAtSpot),
+          sessionDate: gammaNextSessionDate(date)
+        });
+      }
+    } catch (e) {
+      console.warn('[Gamma charts] No se pudo calcular', date, e.message);
+    }
+  }
+
+  if (!points.length) {
+    panel.innerHTML = '<div style="padding:14px;text-align:center;color:var(--bad)">No hay cadenas de cierre desde el 1 de junio para graficar NET GEX SPOT.</div>';
+    return;
+  }
+
+  panel.innerHTML = `
+    <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+      <b>Evolución NET GEX SPOT</b> · ${points.length} cadenas de cierre desde el 1 de junio de 2026.
+    </div>
+    <div id="netGexSpotChart" style="width:100%;height:430px"></div>
+    <div style="background:rgba(201,162,39,0.12);border:1px solid var(--gold-500);border-left:4px solid var(--gold-500);border-radius:5px;padding:11px 14px;margin-top:12px;font-size:12px;color:var(--ink)">
+      <b>Aviso:</b> Pendiente de encontrar el nivel de gamma positiva para aplicar el filtro de las celdas BE1:BJ8 del excel
+    </div>`;
+
+  const trace = {
+    x: points.map(p => p.date),
+    y: points.map(p => p.value),
+    type: 'scatter',
+    mode: 'lines+markers',
+    name: 'NET GEX SPOT',
+    customdata: points.map(p => p.sessionDate),
+    line: { color: '#6b4bb6', width: 3 },
+    marker: {
+      size: 9,
+      color: points.map(p => p.value >= 0 ? '#23824d' : '#b73232'),
+      line: { color: '#ffffff', width: 1 }
+    },
+    hovertemplate: 'Cadena: %{x}<br>Para sesión: %{customdata}<br>NET GEX SPOT: %{y:,.0f}<extra></extra>'
+  };
+  const layout = {
+    margin: { t: 25, r: 25, b: 55, l: 85 },
+    paper_bgcolor: '#ffffff',
+    plot_bgcolor: '#f3f8fc',
+    font: { family: 'Segoe UI, sans-serif', color: '#0c1f33' },
+    xaxis: { title: 'Fecha cadena de cierre', type: 'date', gridcolor: '#dce7f1' },
+    yaxis: { title: 'NET GEX SPOT', zeroline: true, zerolinecolor: '#b73232', zerolinewidth: 2, gridcolor: '#dce7f1' },
+    shapes: [{
+      type: 'line', xref: 'paper', x0: 0, x1: 1, yref: 'y', y0: 0, y1: 0,
+      line: { color: '#b73232', width: 2, dash: 'dash' }
+    }],
+    showlegend: false,
+    hovermode: 'x unified'
+  };
+  safePlotly('netGexSpotChart', [trace], layout, { responsive: true, displayModeBar: false });
+}
+
 function initChainTabs() {
   document.querySelectorAll('.chain-auto-tab').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -5501,13 +5572,18 @@ function initChainTabs() {
       const entry = document.getElementById('autoChainsList');
       const close = document.getElementById('autoCloseChainsList');
       const gamma = document.getElementById('gammaLevelsPanel');
+      const charts = document.getElementById('gammaChartsPanel');
       if (entry) entry.style.display = tab === 'entry' ? '' : 'none';
       if (close) close.style.display = tab === 'close' ? '' : 'none';
       if (gamma) gamma.style.display = tab === 'gamma' ? '' : 'none';
+      if (charts) charts.style.display = tab === 'charts' ? '' : 'none';
       const preview = document.getElementById('chainPreview');
       if (preview) preview.style.display = 'none';
       if (tab === 'gamma' && gamma) {
         renderGammaLevelsPanel();
+      }
+      if (tab === 'charts' && charts) {
+        renderGammaChartsPanel();
       }
     });
   });
