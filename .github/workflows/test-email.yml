@@ -1,0 +1,57 @@
+name: Test Resend Email
+
+on:
+  workflow_dispatch:
+
+jobs:
+  send-test-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send test email with Resend
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          api_key = os.environ.get("RESEND_API_KEY")
+          email_to = os.environ.get("ALERT_EMAIL_TO")
+          if not api_key:
+              raise SystemExit("Missing GitHub secret: RESEND_API_KEY")
+          if not email_to:
+              raise SystemExit("Missing GitHub secret: ALERT_EMAIL_TO")
+
+          payload = {
+              "from": "SPX-IC Dashboard <onboarding@resend.dev>",
+              "to": [email_to],
+              "subject": "SPX-IC - Prueba de notificacion",
+              "html": """
+                <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #cbd8e5;border-radius:6px;overflow:hidden">
+                  <div style="background:#123a60;color:white;padding:18px 22px">
+                    <h2 style="margin:0">SPX-IC Dashboard</h2>
+                  </div>
+                  <div style="padding:22px;color:#172b3a">
+                    <h3 style="margin-top:0;color:#23824d">Conexion completada</h3>
+                    <p>GitHub Actions ha enviado correctamente este email mediante Resend.</p>
+                    <p>Esta es solo una prueba tecnica. Todavia no contiene una senal de operacion.</p>
+                  </div>
+                </div>
+              """
+          }
+
+          request = urllib.request.Request(
+              "https://api.resend.com/emails",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Authorization": f"Bearer {api_key}",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              result = json.loads(response.read().decode("utf-8"))
+              print("Resend accepted email. ID:", result.get("id"))
+          PY

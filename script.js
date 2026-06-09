@@ -5392,6 +5392,38 @@ function computeGammaHitStats(results, startChainDate = '2026-06-01') {
   return stats;
 }
 
+function applyPostLossCapitalWarnings(results, startChainDate = '2026-06-01') {
+  const chronological = results
+    .filter(r => r.ok && r.levels && r.levels.date >= startChainDate)
+    .slice()
+    .sort((a, b) => String(a.levels.date).localeCompare(String(b.levels.date)));
+  let previousOperableFailed = false;
+
+  for (const r of chronological) {
+    const levels = r.levels;
+    levels.reduceCapitalAfterLoss = false;
+    const risk = getGammaRiskFlags(levels);
+    if (risk.noTradeDay) continue;
+
+    // NO OPERAR sessions between two trades do not consume the warning.
+    levels.reduceCapitalAfterLoss = previousOperableFailed;
+
+    const { row } = getGammaSessionRow(levels.date);
+    const callWall = levels.callWall ? Number(levels.callWall.strike) : NaN;
+    const putWall = levels.putWall ? Number(levels.putWall.strike) : NaN;
+    const high = row ? Number(row.high) : NaN;
+    const low = row ? Number(row.low) : NaN;
+    if (![callWall, putWall, high, low].every(Number.isFinite)) {
+      // The next operable session has been identified, but its result is pending.
+      break;
+    }
+    const opex = getQuarterlyOpexStatus(gammaNextSessionDate(levels.date));
+    const upperTouch = high >= callWall;
+    const lowerTouch = !opex.isOpexDay && low <= putWall;
+    previousOperableFailed = upperTouch || lowerTouch;
+  }
+}
+
 function renderGammaHitStats(stats) {
   const winRate = stats.total > 0 ? (stats.wins / stats.total * 100).toFixed(1) + '%' : '—';
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0 4px">
@@ -5461,6 +5493,9 @@ function renderGammaCard(levels) {
     : opex.isOpexWeek
       ? `<div style="background:rgba(201,162,39,0.10);border:1px solid var(--gold-500);border-radius:5px;padding:7px 10px;margin-bottom:10px;font-size:12px;color:var(--gold-700)"><b>Semana de vencimiento trimestral OPEX</b> · Fecha principal: ${formatSpanishLongDate(opex.event.date)}</div>`
       : '';
+  const capitalWarning = levels.reduceCapitalAfterLoss && !noTradeDay
+    ? `<div style="background:rgba(207,76,76,0.12);border:1px solid var(--bad);border-left:5px solid var(--bad);border-radius:5px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:var(--bad)"><b>GESTIÓN DE RIESGO:</b> solo operar con el 50% del capital destinado. Es la siguiente operación ejecutable después de un fallo.</div>`
+    : '';
   const dayBorder = noTradeDay ? '2px solid var(--bad)' : '1px solid var(--blue-200)';
   const dayShadow = noTradeDay ? '0 0 0 2px rgba(207,76,76,0.08)' : 'none';
   const sessionChart = renderGammaSessionChart(levels);
@@ -5480,6 +5515,7 @@ function renderGammaCard(levels) {
       </summary>
       <div style="padding:0 12px 12px">
         ${opexMessage}
+        ${capitalWarning}
         <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,330px);gap:12px;align-items:start">
           <div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:10px">
@@ -5554,6 +5590,7 @@ async function renderGammaLevelsPanel() {
       results.push({ ok: false, date, error: e.message });
     }
   }
+  applyPostLossCapitalWarnings(results, '2026-06-01');
   const cards = results.map(r => r.ok
     ? renderGammaCard(r.levels)
     : `<div class="auto-chain-item" style="color:var(--bad)">No se pudo calcular ${r.date}: ${r.error}</div>`
