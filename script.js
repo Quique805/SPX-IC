@@ -4837,6 +4837,19 @@ const GAMMA_LEGACY_CLOSE_DATES = ['2026-05-11', '2026-05-13', '2026-05-14', '202
 const GAMMA_RISK_FREE_RATE = 0.045;
 const GAMMA_CONTRACT_MULT = 100;
 const GAMMA_MIN_T = 1 / 252;
+const QUARTERLY_OPEX_DATES = [
+  { date: '2026-06-18', note: 'jueves, ajustado por festivo' },
+  { date: '2026-09-18' }, { date: '2026-12-18' },
+  { date: '2027-03-19' }, { date: '2027-06-18' }, { date: '2027-09-17' }, { date: '2027-12-17' },
+  { date: '2028-03-17' }, { date: '2028-06-16' }, { date: '2028-09-15' }, { date: '2028-12-15' },
+  { date: '2029-03-16' }, { date: '2029-06-15' }, { date: '2029-09-21' }, { date: '2029-12-21' },
+  { date: '2030-03-15' }, { date: '2030-06-21' }, { date: '2030-09-20' }, { date: '2030-12-20' },
+  { date: '2031-03-21' }, { date: '2031-06-20' }, { date: '2031-09-19' }, { date: '2031-12-19' },
+  { date: '2032-03-19' }, { date: '2032-06-18' }, { date: '2032-09-17' }, { date: '2032-12-17' },
+  { date: '2033-03-18' }, { date: '2033-06-17' }, { date: '2033-09-16' }, { date: '2033-12-16' },
+  { date: '2034-03-17' }, { date: '2034-06-16' }, { date: '2034-09-15' }, { date: '2034-12-15' },
+  { date: '2035-03-16' }, { date: '2035-06-15' }, { date: '2035-09-21' }, { date: '2035-12-21' }
+];
 
 function normalPdf(x) {
   return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
@@ -5104,6 +5117,58 @@ function gammaNextSessionLabel(dateStr) {
   return `PARA EL DÍA ${dt.getUTCDate()} DE ${months[dt.getUTCMonth()]}`;
 }
 
+function isoWeekMonday(dateStr) {
+  const [y, m, d] = String(dateStr || '').split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() - day + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+function getQuarterlyOpexStatus(sessionDate) {
+  if (!sessionDate) return { isOpexDay: false, isOpexWeek: false, event: null };
+  const exact = QUARTERLY_OPEX_DATES.find(e => e.date === sessionDate) || null;
+  const week = isoWeekMonday(sessionDate);
+  const event = exact || QUARTERLY_OPEX_DATES.find(e => isoWeekMonday(e.date) === week) || null;
+  return { isOpexDay: Boolean(exact), isOpexWeek: Boolean(event), event };
+}
+
+function formatSpanishLongDate(dateStr) {
+  const [y, m, d] = String(dateStr || '').split('-').map(Number);
+  if (!y || !m || !d) return dateStr || '—';
+  const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return `${d} de ${months[m - 1]} de ${y}`;
+}
+
+function renderGammaDataInputPanel() {
+  const panel = document.getElementById('gammaDataInputPanel');
+  if (!panel) return;
+  const byYear = QUARTERLY_OPEX_DATES.reduce((acc, event) => {
+    const year = event.date.slice(0, 4);
+    (acc[year] ||= []).push(event);
+    return acc;
+  }, {});
+  panel.innerHTML = `
+    <div style="display:flex;gap:8px;border-bottom:1px solid var(--blue-200);margin-bottom:12px">
+      <button type="button" class="chain-auto-tab active" style="margin-bottom:-1px">Hora Bruja Trimestral</button>
+    </div>
+    <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+      <b>Hora Bruja Trimestral</b><br>
+      Durante la semana se muestra el aviso OPEX. En la fecha exacta, la estrategia ejecuta únicamente el call spread: venta CW y compra de protección call.
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:10px">
+      ${Object.entries(byYear).map(([year, events]) => `
+        <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px">
+          <div style="font-weight:800;color:var(--navy-700);margin-bottom:7px">${year}</div>
+          ${events.map(event => `
+            <div style="padding:5px 0;border-top:1px solid rgba(12,45,78,0.10);font-size:12px">
+              <b>${formatSpanishLongDate(event.date)}</b>${event.note ? `<br><span style="font-size:10px;color:var(--bad)">${event.note}</span>` : ''}
+            </div>`).join('')}
+        </div>`).join('')}
+    </div>`;
+}
+
 function getGammaSessionRow(chainDate) {
   const target = gammaNextSessionDate(chainDate);
   if (!target || !currentRows) return { target, row: null };
@@ -5164,11 +5229,16 @@ function renderGammaSessionChart(levels) {
   const path = points.map((p, i) => `${i ? 'L' : 'M'} ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
   const yCall = y(callWall);
   const yPut = y(putWall);
-  const closeInside = c <= callWall && c >= putWall;
-  const rangeInside = h <= callWall && l >= putWall;
+  const opex = getQuarterlyOpexStatus(target);
+  const closeInside = opex.isOpexDay ? c <= callWall : (c <= callWall && c >= putWall);
+  const rangeInside = opex.isOpexDay ? h <= callWall : (h <= callWall && l >= putWall);
   const statusColor = rangeInside ? 'var(--good)' : 'var(--bad)';
-  const statusText = rangeInside ? 'Sesión dentro' : 'Tocó wall';
-  const closeText = closeInside ? 'Cierre dentro' : 'Cierre fuera';
+  const statusText = opex.isOpexDay
+    ? (rangeInside ? 'Call spread dentro' : 'Tocó Call Wall')
+    : (rangeInside ? 'Sesión dentro' : 'Tocó wall');
+  const closeText = opex.isOpexDay
+    ? (closeInside ? 'Cierre bajo CW' : 'Cierre sobre CW')
+    : (closeInside ? 'Cierre dentro' : 'Cierre fuera');
 
   return `<div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:6px">
@@ -5207,13 +5277,14 @@ function renderGammaPremiumCard(levels) {
   const putWarn = p.put.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.put.targetStrike, 0)})</span>` : '';
   const callProtWarn = p.callProtection.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.callProtection.targetStrike, 0)})</span>` : '';
   const putProtWarn = p.putProtection.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.putProtection.targetStrike, 0)})</span>` : '';
-  const grossCredit = (Number(p.call.bid) || 0) + (Number(p.put.bid) || 0);
-  const protectionCost = (Number(p.callProtection.ask) || 0) + (Number(p.putProtection.ask) || 0);
+  const opex = getQuarterlyOpexStatus(p.entryDate);
+  const grossCredit = (Number(p.call.bid) || 0) + (opex.isOpexDay ? 0 : (Number(p.put.bid) || 0));
+  const protectionCost = (Number(p.callProtection.ask) || 0) + (opex.isOpexDay ? 0 : (Number(p.putProtection.ask) || 0));
   const netCredit = grossCredit - protectionCost;
   return `<div style="background:var(--blue-50);border:1px solid var(--gold-500);border-radius:5px;padding:10px;font-size:12px;margin-top:8px">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">Iron Condor en cadena de entrada</div>
+        <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">${opex.isOpexDay ? 'Call spread OPEX en cadena de entrada' : 'Iron Condor en cadena de entrada'}</div>
         <b>${p.entryDate}</b>
       </div>
       <div style="text-align:right;color:var(--gold-700);font-weight:700">
@@ -5229,14 +5300,18 @@ function renderGammaPremiumCard(levels) {
         <span>Compra call ${fmtGammaNum(p.callProtection.strike, 0)}${callProtWarn}</span>
         <b class="call-cell">-${fmtGammaNum(p.callProtection.ask, 2)}</b>
       </div>
-      <div style="display:flex;justify-content:space-between;gap:8px">
-        <span>Venta de put ${fmtGammaNum(p.put.strike, 0)}${putWarn}</span>
-        <b class="put-cell">${fmtGammaNum(p.put.bid, 2)}</b>
-      </div>
-      <div style="display:flex;justify-content:space-between;gap:8px">
-        <span>Compra put ${fmtGammaNum(p.putProtection.strike, 0)}${putProtWarn}</span>
-        <b class="put-cell">-${fmtGammaNum(p.putProtection.ask, 2)}</b>
-      </div>
+      ${opex.isOpexDay ? `
+        <div style="background:rgba(201,162,39,0.12);border:1px solid var(--gold-500);border-radius:4px;padding:6px 8px;color:var(--gold-700);font-weight:700">
+          Hora Bruja Trimestral: no se abre el lado put.
+        </div>` : `
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span>Venta de put ${fmtGammaNum(p.put.strike, 0)}${putWarn}</span>
+          <b class="put-cell">${fmtGammaNum(p.put.bid, 2)}</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span>Compra put ${fmtGammaNum(p.putProtection.strike, 0)}${putProtWarn}</span>
+          <b class="put-cell">-${fmtGammaNum(p.putProtection.ask, 2)}</b>
+        </div>`}
       <div style="border-top:1px solid var(--blue-200);margin-top:2px;padding-top:6px;display:grid;gap:4px">
         <div style="display:flex;justify-content:space-between;gap:8px;color:var(--ink-soft)">
           <span>Prima recibida ventas</span><b>${fmtGammaNum(grossCredit, 2)}</b>
@@ -5250,7 +5325,7 @@ function renderGammaPremiumCard(levels) {
       </div>
     </div>
     <div style="font-size:10px;color:var(--ink-soft);margin-top:8px">
-      Protección: 20 puntos más OTM · Fuente: ${p.sourceLabel} · Spot entrada: ${fmtGammaNum(p.spot, 2)} · Captura: ${formatMadridTime(p.capturedAt)}
+      ${opex.isOpexDay ? 'Operativa especial OPEX: solo lado call · ' : ''}Protección: 20 puntos más OTM · Fuente: ${p.sourceLabel} · Spot entrada: ${fmtGammaNum(p.spot, 2)} · Captura: ${formatMadridTime(p.capturedAt)}
     </div>
   </div>`;
 }
@@ -5307,7 +5382,8 @@ function computeGammaHitStats(results, startChainDate = '2026-06-01') {
 
     stats.total++;
     const upperTouch = high >= callWall;
-    const lowerTouch = low <= putWall;
+    const opex = getQuarterlyOpexStatus(gammaNextSessionDate(r.levels.date));
+    const lowerTouch = !opex.isOpexDay && low <= putWall;
     if (upperTouch) stats.upperTouches++;
     if (lowerTouch) stats.lowerTouches++;
     if (upperTouch || lowerTouch) stats.losses++;
@@ -5378,6 +5454,13 @@ function renderGammaCard(levels) {
   const gapLabel = gap.ok ? `${gap.pct >= 0 ? '+' : ''}${gap.pct.toFixed(2)}%` : '—';
   const gapAlert = risk.gapAlert;
   const noTradeDay = risk.noTradeDay;
+  const sessionDate = gammaNextSessionDate(levels.date);
+  const opex = getQuarterlyOpexStatus(sessionDate);
+  const opexMessage = opex.isOpexDay
+    ? `<div style="background:rgba(201,162,39,0.16);border:1px solid var(--gold-500);border-left:5px solid var(--gold-500);border-radius:5px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:var(--gold-700)"><b>HORA BRUJA TRIMESTRAL:</b> hoy solo se vende la CW con su protección. No se abre la PW.</div>`
+    : opex.isOpexWeek
+      ? `<div style="background:rgba(201,162,39,0.10);border:1px solid var(--gold-500);border-radius:5px;padding:7px 10px;margin-bottom:10px;font-size:12px;color:var(--gold-700)"><b>Semana de vencimiento trimestral OPEX</b> · Fecha principal: ${formatSpanishLongDate(opex.event.date)}</div>`
+      : '';
   const dayBorder = noTradeDay ? '2px solid var(--bad)' : '1px solid var(--blue-200)';
   const dayShadow = noTradeDay ? '0 0 0 2px rgba(207,76,76,0.08)' : 'none';
   const sessionChart = renderGammaSessionChart(levels);
@@ -5396,6 +5479,7 @@ function renderGammaCard(levels) {
         ${noTradeDay ? 'NO OPERAR · ' : ''}${sessionLabel} · Cadena ${levels.date} · Spot ${fmtGammaNum(levels.spot, 2)} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
       </summary>
       <div style="padding:0 12px 12px">
+        ${opexMessage}
         <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,330px);gap:12px;align-items:start">
           <div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin-bottom:10px">
@@ -5573,10 +5657,12 @@ function initChainTabs() {
       const close = document.getElementById('autoCloseChainsList');
       const gamma = document.getElementById('gammaLevelsPanel');
       const charts = document.getElementById('gammaChartsPanel');
+      const dataInput = document.getElementById('gammaDataInputPanel');
       if (entry) entry.style.display = tab === 'entry' ? '' : 'none';
       if (close) close.style.display = tab === 'close' ? '' : 'none';
       if (gamma) gamma.style.display = tab === 'gamma' ? '' : 'none';
       if (charts) charts.style.display = tab === 'charts' ? '' : 'none';
+      if (dataInput) dataInput.style.display = tab === 'data-input' ? '' : 'none';
       const preview = document.getElementById('chainPreview');
       if (preview) preview.style.display = 'none';
       if (tab === 'gamma' && gamma) {
@@ -5584,6 +5670,9 @@ function initChainTabs() {
       }
       if (tab === 'charts' && charts) {
         renderGammaChartsPanel();
+      }
+      if (tab === 'data-input' && dataInput) {
+        renderGammaDataInputPanel();
       }
     });
   });
