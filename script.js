@@ -4646,21 +4646,26 @@ async function loadAutoFetchedOHLC() {
     }
     const data = await r.json();
     if (!data.byDate) return;
+    const hasOHLCValue = value =>
+      value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
     let added = 0, filled = 0;
     const byDate = new Map(currentRows.map(row => [row.date, row]));
     for (const [d, info] of Object.entries(data.byDate)) {
       if (byDate.has(d)) {
         const row = byDate.get(d);
-        if (!isFinite(row.open)  && isFinite(info.spx_open))  { row.open  = info.spx_open;  filled++; }
-        if (!isFinite(row.high)  && isFinite(info.spx_high))  { row.high  = info.spx_high;  filled++; }
-        if (!isFinite(row.low)   && isFinite(info.spx_low))   { row.low   = info.spx_low;   filled++; }
-        if (!isFinite(row.close) && isFinite(info.spx_close)) { row.close = info.spx_close; filled++; }
-        if (!isFinite(row.vix)   && isFinite(info.vix_close)) { row.vix   = info.vix_close; filled++; }
-      } else if (isFinite(info.spx_close)) {
+        if (!hasOHLCValue(row.open)  && hasOHLCValue(info.spx_open))  { row.open  = Number(info.spx_open);  filled++; }
+        if (!hasOHLCValue(row.high)  && hasOHLCValue(info.spx_high))  { row.high  = Number(info.spx_high);  filled++; }
+        if (!hasOHLCValue(row.low)   && hasOHLCValue(info.spx_low))   { row.low   = Number(info.spx_low);   filled++; }
+        if (!hasOHLCValue(row.close) && hasOHLCValue(info.spx_close)) { row.close = Number(info.spx_close); filled++; }
+        if (!hasOHLCValue(row.vix)   && hasOHLCValue(info.vix_close)) { row.vix   = Number(info.vix_close); filled++; }
+      } else if (hasOHLCValue(info.spx_close)) {
         currentRows.push({
           date: d,
-          open: info.spx_open, high: info.spx_high, low: info.spx_low,
-          close: info.spx_close, vix: info.vix_close,
+          open: hasOHLCValue(info.spx_open) ? Number(info.spx_open) : NaN,
+          high: hasOHLCValue(info.spx_high) ? Number(info.spx_high) : NaN,
+          low: hasOHLCValue(info.spx_low) ? Number(info.spx_low) : NaN,
+          close: Number(info.spx_close),
+          vix: hasOHLCValue(info.vix_close) ? Number(info.vix_close) : NaN,
           iv: NaN, hv: NaN, ivRank: NaN, ivPctl: NaN, ivChg: NaN, pcv: NaN,
         });
         added++;
@@ -4674,6 +4679,9 @@ async function loadAutoFetchedOHLC() {
     } else {
       console.log('[Auto OHLC] Sin cambios respecto a datos existentes');
     }
+    const remoteDates = Object.keys(data.byDate).sort();
+    const localDates = currentRows.map(row => row.date).filter(Boolean).sort();
+    console.log(`[Auto OHLC] Última fecha remota: ${remoteDates.at(-1) || '—'} · Última fecha dashboard: ${localDates.at(-1) || '—'}`);
   } catch (e) {
     console.warn('[Auto OHLC] Error:', e.message);
   }

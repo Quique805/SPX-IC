@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SPX-IC · Editor de tarjetas</title>
+  <style>
+    :root {
+      --navy: #123a60;
+      --navy-deep: #0c263e;
+      --blue-soft: #eef5fb;
+      --blue-line: #c7d8e8;
+      --gold: #c9a227;
+      --green: #23824d;
+      --red: #b73232;
+      --ink: #172b3a;
+      --muted: #617585;
+      --paper: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: #dfeaf3;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: var(--navy-deep);
+      color: #fff;
+      border-bottom: 3px solid var(--gold);
+    }
+    header h1 { margin: 0; font-size: 18px; letter-spacing: 0; }
+    header span { color: #d7e6f3; font-size: 11px; }
+    .tabs {
+      display: flex;
+      gap: 5px;
+      padding: 12px 14px 0;
+      overflow-x: auto;
+      background: var(--paper);
+      border-bottom: 1px solid var(--blue-line);
+    }
+    .tab {
+      border: 1px solid var(--blue-line);
+      border-bottom: 0;
+      background: var(--blue-soft);
+      color: var(--navy);
+      padding: 8px 12px;
+      border-radius: 5px 5px 0 0;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab.active { background: var(--navy); color: #fff; border-color: var(--gold); }
+    main {
+      display: grid;
+      grid-template-columns: minmax(260px, 330px) minmax(420px, 680px);
+      gap: 14px;
+      padding: 14px;
+      align-items: start;
+      justify-content: center;
+    }
+    .controls, .stage {
+      background: var(--paper);
+      border: 1px solid var(--blue-line);
+      border-radius: 6px;
+      padding: 14px;
+    }
+    .controls h2, .stage h2 { margin: 0 0 12px; font-size: 14px; color: var(--navy); }
+    label { display: block; margin: 10px 0 4px; font-size: 11px; font-weight: 700; color: var(--muted); }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--blue-line);
+      border-radius: 4px;
+      padding: 7px 8px;
+      font: inherit;
+      color: var(--ink);
+      background: #fff;
+    }
+    textarea { min-height: 68px; resize: vertical; }
+    .check { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12px; }
+    .check input { width: auto; }
+    .email-card {
+      max-width: 620px;
+      margin: auto;
+      border: 1px solid var(--blue-line);
+      border-top: 5px solid var(--green);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(12,38,62,.12);
+    }
+    .card-head { background: var(--navy); color: #fff; padding: 17px 19px; }
+    .card-head .eyebrow { font-size: 10px; text-transform: uppercase; color: #cbddea; font-weight: 700; }
+    .card-head h3 { margin: 4px 0 0; font-size: 21px; }
+    .card-body { padding: 17px 19px; }
+    .notice { padding: 10px 12px; border-radius: 4px; margin-bottom: 13px; font-size: 12px; font-weight: 700; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 13px; }
+    .metric { background: var(--blue-soft); border: 1px solid var(--blue-line); padding: 8px; border-radius: 4px; }
+    .metric small { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; font-weight: 700; }
+    .metric b { display: block; margin-top: 3px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    td { padding: 7px 5px; border-bottom: 1px solid #e1eaf1; }
+    td:last-child { text-align: right; font-weight: 700; }
+    .total { margin-top: 12px; padding-top: 10px; border-top: 2px solid var(--gold); display: flex; justify-content: space-between; font-weight: 800; }
+    .footer { margin-top: 14px; color: var(--muted); font-size: 10px; text-align: center; }
+    .hint { margin-top: 12px; padding: 9px; background: #fff8df; border: 1px solid var(--gold); border-radius: 4px; font-size: 11px; }
+    @media (max-width: 850px) {
+      main { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SPX-IC · Editor de tarjetas</h1>
+    <span>Diseño previo a la automatización por email</span>
+  </header>
+  <nav class="tabs">
+    <button class="tab active" data-kind="operable">Operable</button>
+    <button class="tab" data-kind="no-operable">No operable</button>
+    <button class="tab" data-kind="daily">Resumen del día</button>
+    <button class="tab" data-kind="weekly">Resumen semanal</button>
+  </nav>
+  <main>
+    <section class="controls">
+      <h2>Contenido editable</h2>
+      <label for="headline">Título</label>
+      <input id="headline">
+      <label for="message">Mensaje principal</label>
+      <textarea id="message"></textarea>
+      <label for="statusColor">Color de estado</label>
+      <select id="statusColor">
+        <option value="#23824d">Verde</option>
+        <option value="#b73232">Rojo</option>
+        <option value="#c9a227">Dorado</option>
+        <option value="#2f6fb0">Azul</option>
+      </select>
+      <label for="footerText">Pie / aviso</label>
+      <textarea id="footerText"></textarea>
+      <div class="hint">Los valores actuales son ejemplos. Cuando terminemos el diseño, Python sustituirá cada dato automáticamente.</div>
+    </section>
+    <section class="stage">
+      <h2>Vista previa del email</h2>
+      <article class="email-card" id="card">
+        <div class="card-head">
+          <div class="eyebrow">SPX-IC · Señal diaria · 16:07 Madrid</div>
+          <h3 id="previewHeadline"></h3>
+        </div>
+        <div class="card-body">
+          <div class="notice" id="previewMessage"></div>
+          <div id="previewContent"></div>
+          <div class="footer" id="previewFooter"></div>
+        </div>
+      </article>
+    </section>
+  </main>
+  <script>
+    const presets = {
+      operable: {
+        title: 'OPERAR · Iron Condor 0DTE',
+        message: 'La sesión supera los filtros de entrada. Ejecutar los niveles indicados.',
+        color: '#23824d',
+        footer: 'Precios de prima extraídos a las 15:52 hora Madrid.'
+      },
+      'no-operable': {
+        title: '🚫 NO OPERAR · Venta de volatilidad',
+        message: 'La sesión queda excluida por los filtros de riesgo del modelo.',
+        color: '#b73232',
+        footer: 'No se abrirá operación y no se enviará resumen nocturno de sesión.'
+      },
+      daily: {
+        title: 'RESUMEN DEL DÍA · Operación finalizada',
+        message: 'Resumen de las primas seleccionadas para la operación.',
+        color: '#2f6fb0',
+        footer: 'Resultado estimado por un contrato de IC ejercido.'
+      },
+      weekly: {
+        title: 'RESUMEN SEMANAL · SPX-IC',
+        message: 'Balance agregado de las sesiones operadas durante la semana.',
+        color: '#c9a227',
+        footer: 'Resumen enviado cada viernes después del cierre.'
+      }
+    };
+    let active = 'operable';
+    const $ = id => document.getElementById(id);
+    function render() {
+      const p = presets[active];
+      $('previewHeadline').textContent = p.title;
+      $('previewMessage').textContent = p.message;
+      $('previewMessage').style.background = p.color + '18';
+      $('previewMessage').style.border = '1px solid ' + p.color;
+      $('previewMessage').style.color = p.color;
+      $('card').style.borderTopColor = p.color;
+      $('previewFooter').textContent = p.footer;
+      $('previewContent').innerHTML = contentFor(active);
+      $('headline').value = p.title;
+      $('message').value = p.message;
+      $('statusColor').value = p.color;
+      $('footerText').value = p.footer;
+    }
+    function legsTable(rows) {
+      return `<table>${rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</table>`;
+    }
+    function contentFor(kind) {
+      if (kind === 'operable') {
+        return `
+          ${legsTable([
+            ['Compra Call', '7.370', '-0,55'],
+            ['Venta Call', '7.350', '+1,20'],
+            ['Venta Put', '7.230', '+1,45'],
+            ['Compra Put', '7.210', '-0,70']
+          ])}
+          <div class="total"><span>Crédito neto estimado</span><span>1,40</span></div>`;
+      }
+      if (kind === 'no-operable') {
+        return `
+          <div style="text-align:center;padding:20px 8px 12px">
+            <div style="font-size:48px;line-height:1">🚫</div>
+            <div style="margin-top:12px;font-weight:800;color:#b73232">Sin operación de venta de volatilidad para hoy</div>
+          </div>`;
+      }
+      if (kind === 'daily') {
+        return `
+          ${legsTable([
+            ['Compra Call', '7.370', '-0,55'],
+            ['Venta Call', '7.350', '+1,20'],
+            ['Venta Put', '7.230', '+1,45'],
+            ['Compra Put', '7.210', '-0,70']
+          ])}
+          <div class="total"><span>Resultado estimado</span><span style="color:#23824d">+$140</span></div>
+          <div style="font-size:10px;color:#617585;text-align:right;margin-top:4px">Por un contrato de IC ejercido</div>`;
+      }
+      return `
+        <table>
+          <tr style="background:#eaf6ee"><td><b>Lunes</b></td><td>Operado · Ganancia</td><td style="color:#23824d">+$140</td></tr>
+          <tr style="background:#fff"><td><b>Martes</b></td><td>No operado</td><td>—</td></tr>
+          <tr style="background:#fdeaea"><td><b>Miércoles</b></td><td>Operado · Pérdida</td><td style="color:#b73232">Pérdida</td></tr>
+          <tr style="background:#eaf6ee"><td><b>Jueves</b></td><td>Operado · Ganancia</td><td style="color:#23824d">+$125</td></tr>
+          <tr style="background:#fff"><td><b>Viernes</b></td><td>No operado</td><td>—</td></tr>
+        </table>
+        <div class="total"><span>Balance semanal conocido</span><span style="color:#23824d">+$265</span></div>
+        <div style="font-size:10px;color:#617585;margin-top:5px">Las pérdidas se identifican por toque del strike; su importe final puede depender del momento de cierre.</div>`;
+    }
+    function update() {
+      presets[active] = {
+        title: $('headline').value,
+        message: $('message').value,
+        color: $('statusColor').value,
+        footer: $('footerText').value
+      };
+      render();
+    }
+    document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
+      active = btn.dataset.kind;
+      document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+      render();
+    }));
+    ['headline','message','statusColor','footerText'].forEach(id => $(id).addEventListener('input', update));
+    render();
+  </script>
+</body>
+</html>
