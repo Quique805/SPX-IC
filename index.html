@@ -1,20 +1,20 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SPX Volatility Bands â€” Iron Condor</title>
+  <title>SPX Volatility Bands — Iron Condor</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"
           onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.2/plotly.min.js'"></script>
   <script>
     // Final fallback: if both CDNs fail, show a clear message rather than crashing
     window.addEventListener('load', function() {
       if (typeof Plotly === 'undefined') {
-        console.error('Plotly no se pudo cargar desde ningÃºn CDN.');
+        console.error('Plotly no se pudo cargar desde ningún CDN.');
         document.querySelectorAll('#chart, #vixChart, #equityChart, #vixAnalystChart').forEach(function(el) {
           el.innerHTML = '<div style="padding:30px;text-align:center;color:#b73232;background:#fee;border:1px solid #b73232;border-radius:5px">' +
-            '<b>âš  Plotly no se pudo cargar.</b><br>' +
-            'Compromba tu conexiÃ³n a internet o desbloquea cdn.plot.ly y cdnjs.cloudflare.com en tu firewall/antivirus.<br>' +
-            'Refresca la pÃ¡gina cuando vuelvas a tener red.</div>';
+            '<b>⚠ Plotly no se pudo cargar.</b><br>' +
+            'Comprueba tu conexión a internet o desbloquea cdn.plot.ly y cdnjs.cloudflare.com en tu firewall/antivirus.<br>' +
+            'Refresca la página cuando vuelvas a tener red.</div>';
         });
       }
     });
@@ -431,7 +431,7 @@
       border-bottom: 3px solid var(--gold-500);
     }
     .modal-header h2 { margin: 0; font-size: 16px; letter-spacing: 0.4px; }
-    .modal-header h2::before { content: 'â—† '; color: var(--gold-400); }
+    .modal-header h2::before { content: '◆ '; color: var(--gold-400); }
     #agentModalClose {
       background: transparent; color: #fff;
       border: 1px solid var(--gold-500);
@@ -1505,7 +1505,7 @@
       --good:     #5dc080;
     }
 
-    /* Body background â€” dark grayscale with subtle green and gold halos */
+    /* Body background — dark grayscale with subtle green and gold halos */
     [data-theme="dark"] body {
       background:
         radial-gradient(circle at 0% 0%, #1a2820 0%, transparent 38%),
@@ -1575,7 +1575,7 @@
     [data-theme="dark"] table.agent-params td:first-child { color: var(--gold-300); }
     [data-theme="dark"] table.agent-params tr.notrade td { background: #2a2418 !important; color: var(--gold-300); }
 
-    /* Legend (4th panel) â€” keep gold theme but darker */
+    /* Legend (4th panel) — keep gold theme but darker */
     [data-theme="dark"] .proposal.legend {
       background: linear-gradient(150deg, #2a2418 0%, #1a1d1a 100%);
       border-color: var(--gold-500);
@@ -1644,7 +1644,7 @@
       color: var(--ink); border-bottom-color: rgba(201,162,39,0.18);
     }
 
-    /* Header data entry (already navy â€” make slightly greener) */
+    /* Header data entry (already navy — make slightly greener) */
     [data-theme="dark"] header {
       background: linear-gradient(135deg, #050805 0%, #142418 100%);
     }
@@ -1654,7 +1654,7 @@
     }
     [data-theme="dark"] .entry-card input { background: #1a1d1a; color: var(--ink); }
 
-    /* Agent cards â€” keep dark but tinted greener */
+    /* Agent cards — keep dark but tinted greener */
     [data-theme="dark"] .agent-card {
       background: linear-gradient(135deg, #142418 0%, #050805 100%);
       border-color: var(--gold-500);
@@ -1663,7 +1663,7 @@
       background: linear-gradient(135deg, #1f3326 0%, #0c1410 100%);
     }
 
-    /* Info footer â€” green-tinted dark */
+    /* Info footer — green-tinted dark */
     [data-theme="dark"] #info {
       background: linear-gradient(90deg, #0c1410 0%, #142418 100%);
       color: var(--ink);
@@ -1783,15 +1783,15 @@
   </style>
 </head>
 <body>
-  <div class="theme-toggle" role="group" aria-label="Modo de visualizaciÃ³n">
-    <button class="theme-btn active" data-theme="light" type="button" title="Modo claro">â˜€</button>
-    <button class="theme-btn"        data-theme="dark"  type="button" title="Modo oscuro">ðŸŒ™</button>
+  <div class="theme-toggle" role="group" aria-label="Modo de visualización">
+    <button class="theme-btn active" data-theme="light" type="button" title="Modo claro">☀</button>
+    <button class="theme-btn"        data-theme="dark"  type="button" title="Modo oscuro">🌙</button>
   </div>
 
   <header>
     <div class="header-left">
       <h1>🦅 SPX <span class="accent">Volatility Bands</span> — Iron Condor Dashboard</h1>
-      <div class="sub">Ïƒ<sub>high/low</sub> = std rolling 90d &nbsp;Â·&nbsp; C<sub>t</sub> = sigmoid(IV/HV, VIX) âˆˆ [0.5, 0.95] &nbsp;Â·&nbsp; Bands<sub>t</sub> = Close<sub>t-1</sub> Ã— (1 Â± C<sub>t</sub> Ã— k Ã— mult Ã— Ïƒ)</div>
+      <div class="sub">σ<sub>high/low</sub> = std rolling 90d &nbsp;·&nbsp; C<sub>t</sub> = sigmoid(IV/HV, VIX) ∈ [0.5, 0.95] &nbsp;·&nbsp; Bands<sub>t</sub> = Close<sub>t-1</sub> × (1 ± C<sub>t</sub> × k × mult × σ)</div>
     </div>
     <div class="entry-card">
       <h3>Add session data</h3>
@@ -1799,7 +1799,7 @@
         <label>Date    <input type="date"   id="entryDate" required></label>
         <label>Open    <span style="display:inline-flex;gap:3px;align-items:center">
           <input type="number" id="entryOpen" step="0.01">
-          <button type="button" id="fetchOpenBtn" class="fetch-btn" title="Auto-rellenar Open desde Yahoo Finance (^GSPC)">ðŸ”„</button>
+          <button type="button" id="fetchOpenBtn" class="fetch-btn" title="Auto-rellenar Open desde Yahoo Finance (^GSPC)">🔄</button>
         </span></label>
         <label>Close   <input type="number" id="entryClose" step="0.01" required></label>
         <label>High    <input type="number" id="entryHigh"  step="0.01" required></label>
@@ -1814,7 +1814,7 @@
         <button type="submit">Add</button>
         <div class="feedback" id="entryFeedback"></div>
       </form>
-      <button type="button" id="openDataView" class="data-view-btn" title="Ver tabla de datos cargados">ðŸ“Š Ver datos cargados</button>
+      <button type="button" id="openDataView" class="data-view-btn" title="Ver tabla de datos cargados">📊 Ver datos cargados</button>
     </div>
   </header>
 
@@ -1823,7 +1823,7 @@
     <div class="modal-card">
       <div class="modal-header">
         <h2>Datos cargados (CSV + entradas manuales)</h2>
-        <button id="dataModalClose" type="button" aria-label="Cerrar">Ã—</button>
+        <button id="dataModalClose" type="button" aria-label="Cerrar">×</button>
       </div>
       <div class="modal-body">
         <div style="display:flex;gap:14px;align-items:center;margin-bottom:10px;font-size:12px;color:var(--ink-soft)">
@@ -1832,9 +1832,9 @@
             Filtro:
             <select id="dataModalFilter" style="padding:3px 6px;font-size:12px;border-radius:4px;border:1px solid var(--blue-200)">
               <option value="all">Todas las filas</option>
-              <option value="recent">Ãšltimos 30 dÃ­as</option>
-              <option value="manual">SÃ³lo entradas manuales</option>
-              <option value="missing">SÃ³lo filas con datos faltantes</option>
+              <option value="recent">Últimos 30 días</option>
+              <option value="manual">Sólo entradas manuales</option>
+              <option value="missing">Sólo filas con datos faltantes</option>
             </select>
           </label>
         </div>
@@ -1851,13 +1851,13 @@
 
       <div class="chains-status">
         <div class="chains-status-info">
-          <div>ðŸ“¥ <b>Ãšltima cadena auto-descargada:</b> <span id="chainsLastUpdate">cargandoâ€¦</span></div>
-          <div>â° <b>PrÃ³xima ejecuciÃ³n programada:</b> <span id="chainsNextRun">â€”</span></div>
+          <div>📥 <b>Última cadena auto-descargada:</b> <span id="chainsLastUpdate">cargando…</span></div>
+          <div>⏰ <b>Próxima ejecución programada:</b> <span id="chainsNextRun">—</span></div>
         </div>
         <div class="chains-schedule-toggle">
-          <div>Horario Madrid actual: <b id="chainsCurrentDST">â€”</b></div>
+          <div>Horario Madrid actual: <b id="chainsCurrentDST">—</b></div>
           <button id="editScheduleBtn" type="button" class="edit-schedule-btn" title="Abre el archivo YAML en GitHub para editar el cron del Action">
-            ðŸ“ Editar horario en GitHub
+            📝 Editar horario en GitHub
           </button>
         </div>
       </div>
@@ -1879,16 +1879,16 @@
 
       <details style="margin-top:14px">
         <summary style="cursor:pointer;font-size:12px;color:var(--ink-soft);padding:6px 0;font-weight:600">
-          ðŸ“‚ Subir CSV de Barchart manualmente (avanzado)
+          📂 Subir CSV de Barchart manualmente (avanzado)
         </summary>
         <div style="margin-top:10px">
           <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
             Subir manualmente un CSV de Barchart Premier (datos tiempo real) anula la cadena auto-descargada de CBOE para esa fecha.
           </div>
           <div class="upload-zone">
-            <label for="chainCSV">ðŸ“‚ Subir CSV de cadena</label>
+            <label for="chainCSV">📂 Subir CSV de cadena</label>
             <input type="file" id="chainCSV" accept=".csv" style="display:none">
-            <div class="help">Formato Barchart estÃ¡ndar.</div>
+            <div class="help">Formato Barchart estándar.</div>
           </div>
           <div id="chainSavedList" style="margin-top:14px"></div>
         </div>
@@ -1902,7 +1902,7 @@
           <input type="file" id="csvFile" accept=".csv">
           <span id="csvCacheStatus" style="font-size:11px;color:var(--ink-soft);margin-left:8px"></span>
         </label>
-        <label>Ïƒ lookback (days):
+        <label>σ lookback (days):
           <input type="number" id="lookback" value="90" step="1" min="10">
         </label>
         <label>Display window (days):
@@ -1918,10 +1918,10 @@
     </div>
 
     <div class="card">
-      <h2>Compression model â€” variable selection</h2>
+      <h2>Compression model — variable selection</h2>
       <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
-        Cada variable activa se estandariza y se multiplica por su peso. Z = Î£(wÂ·s).
-        C<sub>t</sub> = sigmoid(Î»Â·Z) clampeado a [Cmin, Cmax]. Bands<sub>t</sub> = Close<sub>prev</sub> Ã— (1 Â± C<sub>t</sub> Ã— k Ã— mult Ã— Ïƒ).
+        Cada variable activa se estandariza y se multiplica por su peso. Z = Σ(w·s).
+        C<sub>t</sub> = sigmoid(λ·Z) clampeado a [Cmin, Cmax]. Bands<sub>t</sub> = Close<sub>prev</sub> × (1 ± C<sub>t</sub> × k × mult × σ).
       </div>
       <table class="compression-vars" id="compressionTable">
         <thead>
@@ -1931,21 +1931,21 @@
             <th>Group</th>
             <th>Weight</th>
             <th>Std today</th>
-            <th>wÂ·s</th>
+            <th>w·s</th>
           </tr>
         </thead>
         <tbody><!-- filled by script --></tbody>
       </table>
       <div class="compression-params">
-        <label>Î» <input type="number" id="cParamLambda" step="0.1"  value="1.5"></label>
+        <label>λ <input type="number" id="cParamLambda" step="0.1"  value="1.5"></label>
         <label>C<sub>min</sub> <input type="number" id="cParamCmin" step="0.05" value="0.5"></label>
         <label>C<sub>max</sub> <input type="number" id="cParamCmax" step="0.05" value="0.95"></label>
         <label>V<sub>ref</sub> <input type="number" id="cParamVref" step="1"    value="18"></label>
-        <label>Î” trend
+        <label>Δ trend
           <input type="number" id="cParamShift" step="0.05" min="0" max="1" value="0.25">
-          <span class="info-tooltip" data-tip="Magnitud del desplazamiento de C_t por tendencia, como fracciÃ³n del rango [Cmin, Cmax]. Default 0.25 (25%). Aumenta para que la tendencia mueva mÃ¡s; baja para que el sigmoid mande mÃ¡s. En tendencia alcista, C_call sube y C_put baja en esa cantidad (bandas suben en precio). En bajista, lo opuesto.">â“˜</span>
+          <span class="info-tooltip" data-tip="Magnitud del desplazamiento de C_t por tendencia, como fracción del rango [Cmin, Cmax]. Default 0.25 (25%). Aumenta para que la tendencia mueva más; baja para que el sigmoid mande más. En tendencia alcista, C_call sube y C_put baja en esa cantidad (bandas suben en precio). En bajista, lo opuesto.">ⓘ</span>
         </label>
-        <button id="cRunOpt" type="button" class="mix-run-btn">â–¶ Run Optimization</button>
+        <button id="cRunOpt" type="button" class="mix-run-btn">▶ Run Optimization</button>
         <span class="mix-status" id="cOptStatus"></span>
       </div>
       <div id="cOptBreakdown" style="margin-top:10px;font-size:12px;color:var(--ink-soft)"></div>
@@ -1957,7 +1957,7 @@
         <table class="regimes" id="regimeTable">
           <thead>
             <tr>
-              <th>VIX â‰¤</th>
+              <th>VIX ≤</th>
               <th>Upper mult</th>
               <th>Lower mult</th>
               <th>k</th>
@@ -2003,7 +2003,7 @@
           <!-- filled by script -->
         </div>
 
-        <div class="agent-card jefe" id="jefeCard" style="order:6" title="Optimizador 'Jefe de mesa' â€” busca la mejor combinaciÃ³n que cumpla tus objetivos de distancia media">
+        <div class="agent-card jefe" id="jefeCard" style="order:6" title="Optimizador 'Jefe de mesa' — busca la mejor combinación que cumpla tus objetivos de distancia media">
           <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Jefe de mesa">
             <defs>
               <linearGradient id="jefeBg" x1="0" y1="0" x2="0" y2="1">
@@ -2157,16 +2157,16 @@
     <div id="favoritesModal" class="modal-overlay" style="display:none">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>â˜… Favoritos â€” configuraciones guardadas</h2>
-          <button id="favoritesModalClose" type="button" aria-label="Cerrar">Ã—</button>
+          <h2>★ Favoritos — configuraciones guardadas</h2>
+          <button id="favoritesModalClose" type="button" aria-label="Cerrar">×</button>
         </div>
         <div class="modal-body">
           <div class="modal-intro">
-            Cada favorito guarda <b>todas las variables modificables</b> del modelo (parÃ¡metros de compresiÃ³n, pesos de variables, regÃ­menes, capital inicial, lookback). Las stats se computan en el momento de guardar y persisten en el navegador entre sesiones.
+            Cada favorito guarda <b>todas las variables modificables</b> del modelo (parámetros de compresión, pesos de variables, regímenes, capital inicial, lookback). Las stats se computan en el momento de guardar y persisten en el navegador entre sesiones.
           </div>
           <div class="save-favorite-row">
-            <input type="text" id="newFavName" placeholder="Nombre de la configuraciÃ³n (opcional)" maxlength="60">
-            <button id="saveFavBtn">â­ Guardar configuraciÃ³n actual</button>
+            <input type="text" id="newFavName" placeholder="Nombre de la configuración (opcional)" maxlength="60">
+            <button id="saveFavBtn">⭐ Guardar configuración actual</button>
           </div>
           <div class="favorites-list" id="favoritesList"></div>
         </div>
@@ -2177,13 +2177,13 @@
     <div id="jefeModal" class="modal-overlay" style="display:none">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>ðŸ‘” Jefe de mesa â€” optimizador objetivo</h2>
-          <button id="jefeModalClose" type="button" aria-label="Cerrar">Ã—</button>
+          <h2>👔 Jefe de mesa — optimizador objetivo</h2>
+          <button id="jefeModalClose" type="button" aria-label="Cerrar">×</button>
         </div>
         <div class="modal-body">
-          <div class="jefe-banner">â˜… OptimizaciÃ³n sobre los Ãºltimos 3 meses â˜…</div>
+          <div class="jefe-banner">★ Optimización sobre los últimos 3 meses ★</div>
           <div class="modal-intro">
-            Especifica la <b>distancia media de strike</b> que quieres conseguir. El Jefe genera 10.000 configuraciones aleatorias variando todos los parÃ¡metros, filtra las que cumplen tu objetivo (con la tolerancia indicada) y te muestra las que tienen <b>mejor win rate estricto</b>.
+            Especifica la <b>distancia media de strike</b> que quieres conseguir. El Jefe genera 10.000 configuraciones aleatorias variando todos los parámetros, filtra las que cumplen tu objetivo (con la tolerancia indicada) y te muestra las que tienen <b>mejor win rate estricto</b>.
           </div>
           <div class="jefe-input-row">
             <label>Target call (%)
@@ -2192,13 +2192,13 @@
             <label>Target put (%)
               <input type="number" id="jefeTargetPut" step="0.05" value="1.80" min="0.3" max="3">
             </label>
-            <label>Tolerancia (Â±%)
+            <label>Tolerancia (±%)
               <input type="number" id="jefeTolerance" step="0.05" value="0.10" min="0.02" max="0.5">
             </label>
             <label>Muestras
               <input type="number" id="jefeSamples" step="1000" value="10000" min="1000" max="50000">
             </label>
-            <button class="mix-run-btn" id="jefeRunBtn">â–¶ Ejecutar</button>
+            <button class="mix-run-btn" id="jefeRunBtn">▶ Ejecutar</button>
           </div>
           <div class="progress-bar" id="jefeProgressBar" style="display:none">
             <div class="progress-fill" id="jefeProgressFill"></div>
@@ -2213,17 +2213,17 @@
     <div id="compressorModal" class="modal-overlay" style="display:none">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>Analista Compresor â€” optimizaciÃ³n del modelo C<sub>t</sub></h2>
-          <button id="compressorModalClose" type="button" aria-label="Cerrar">Ã—</button>
+          <h2>Analista Compresor — optimización del modelo C<sub>t</sub></h2>
+          <button id="compressorModalClose" type="button" aria-label="Cerrar">×</button>
         </div>
         <div class="modal-body">
           <div class="modal-intro">
-            BÃºsqueda exhaustiva sobre <b>Î», C<sub>min</sub>, C<sub>max</sub>, V<sub>ref</sub></b> + <b>todas las combinaciones de las 6 variables del modelo</b>.
-            Restricciones: C<sub>max</sub> â‰¤ 0.85, C<sub>min</sub> â‰¥ 0.3.
-            Maximiza P&amp;L sobre la ventana de entrenamiento. Los <b>pesos</b> de cada variable se mantienen en su valor actual (modifÃ­calos en el panel principal antes de ejecutar si quieres probar otros).
+            Búsqueda exhaustiva sobre <b>λ, C<sub>min</sub>, C<sub>max</sub>, V<sub>ref</sub></b> + <b>todas las combinaciones de las 6 variables del modelo</b>.
+            Restricciones: C<sub>max</sub> ≤ 0.85, C<sub>min</sub> ≥ 0.3.
+            Maximiza P&amp;L sobre la ventana de entrenamiento. Los <b>pesos</b> de cada variable se mantienen en su valor actual (modifícalos en el panel principal antes de ejecutar si quieres probar otros).
           </div>
           <div class="mix-controls">
-            <button class="mix-run-btn" id="compressorRunBtn">â–¶ Buscar mejores configuraciones</button>
+            <button class="mix-run-btn" id="compressorRunBtn">▶ Buscar mejores configuraciones</button>
             <span class="mix-status" id="compressorStatus">Listo para ejecutar.</span>
           </div>
           <div class="progress-bar" id="compressorProgressBar" style="display:none">
@@ -2239,29 +2239,29 @@
       <div class="modal-card">
         <div class="modal-header">
           <h2>Analista de Volatilidad</h2>
-          <button id="analystModalClose" type="button" aria-label="Cerrar">Ã—</button>
+          <button id="analystModalClose" type="button" aria-label="Cerrar">×</button>
         </div>
         <div class="modal-tabs">
-          <button class="modal-tab active" data-tab="vix">VIX &amp; PÃ©rdidas</button>
-          <button class="modal-tab" data-tab="upcoming">PrÃ³ximos eventos <span id="upcomingBadge" class="tab-badge" style="display:none">0</span></button>
-          <button class="modal-tab" data-tab="historical">HistÃ³rico macro</button>
-          <button class="modal-tab" data-tab="mix">â˜… MIX (iterativo)</button>
+          <button class="modal-tab active" data-tab="vix">VIX &amp; Pérdidas</button>
+          <button class="modal-tab" data-tab="upcoming">Próximos eventos <span id="upcomingBadge" class="tab-badge" style="display:none">0</span></button>
+          <button class="modal-tab" data-tab="historical">Histórico macro</button>
+          <button class="modal-tab" data-tab="mix">★ MIX (iterativo)</button>
         </div>
 
         <div class="tab-panel active" data-tab="vix">
           <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
-            VIX completo del histÃ³rico con cruces rojas en cada dÃ­a de pÃ©rdida real (close fuera de banda).
-            LÃ­neas doradas = umbrales de rÃ©gimen actuales.
+            VIX completo del histórico con cruces rojas en cada día de pérdida real (close fuera de banda).
+            Líneas doradas = umbrales de régimen actuales.
           </div>
           <div id="vixAnalystChart"></div>
         </div>
 
         <div class="tab-panel" data-tab="upcoming">
           <div class="upload-zone">
-            <label for="upcomingCSV">ðŸ“… Cargar CSV de eventos prÃ³ximos</label>
+            <label for="upcomingCSV">📅 Cargar CSV de eventos próximos</label>
             <input type="file" id="upcomingCSV" accept=".csv" style="display:none">
             <div class="help">
-              Formato: <code>date,event,category,importance</code> Â· importance = high/medium/low<br>
+              Formato: <code>date,event,category,importance</code> · importance = high/medium/low<br>
               Ej: <code>2026-05-14,FOMC meeting,FED,high</code>
             </div>
           </div>
@@ -2270,20 +2270,20 @@
 
         <div class="tab-panel" data-tab="historical">
           <div class="upload-zone">
-            <label for="historicalCSV">ðŸ“‚ Cargar CSV histÃ³rico de eventos macro</label>
+            <label for="historicalCSV">📂 Cargar CSV histórico de eventos macro</label>
             <input type="file" id="historicalCSV" accept=".csv" style="display:none">
-            <div class="help">Mismo formato que el de prÃ³ximos eventos.</div>
+            <div class="help">Mismo formato que el de próximos eventos.</div>
           </div>
           <div id="historicalCorrelation"></div>
         </div>
 
         <div class="tab-panel" data-tab="mix">
           <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">
-            <b>OptimizaciÃ³n iterativa</b>: alterna Quant (multiplicadores y k) â†” Analista (umbrales del VIX)
-            hasta que ningÃºn cambio mejora la equity. Ejecuta esto en las tres ventanas (1m / 3m / 6m) en paralelo.
+            <b>Optimización iterativa</b>: alterna Quant (multiplicadores y k) ↔ Analista (umbrales del VIX)
+            hasta que ningún cambio mejora la equity. Ejecuta esto en las tres ventanas (1m / 3m / 6m) en paralelo.
           </div>
           <div class="mix-controls">
-            <button class="mix-run-btn" id="mixRunBtn">â–¶ Ejecutar optimizaciÃ³n iterativa</button>
+            <button class="mix-run-btn" id="mixRunBtn">▶ Ejecutar optimización iterativa</button>
             <span class="mix-status" id="mixStatus">Listo para ejecutar.</span>
           </div>
           <div class="progress-bar" id="mixProgressBar" style="display:none">
@@ -2298,20 +2298,20 @@
     <div id="agentModal" class="modal-overlay" style="display:none">
       <div class="modal-card">
         <div class="modal-header">
-          <h2>Quant Agent Â· Propuestas de optimizaciÃ³n</h2>
-          <button id="agentModalClose" type="button" aria-label="Cerrar">Ã—</button>
+          <h2>Quant Agent · Propuestas de optimización</h2>
+          <button id="agentModalClose" type="button" aria-label="Cerrar">×</button>
         </div>
         <div class="modal-body">
           <div class="modal-intro">
-            El agente propone tres optimizaciones, cada una entrenada sobre una ventana distinta. SÃ³lo modifica
-            <b>k / upper mult / lower mult</b> de los regÃ­menes operables. La franja dorada en cada grÃ¡fico marca el
-            <b>perÃ­odo de entrenamiento</b> â€” fuera de esa franja es validaciÃ³n out-of-sample.
+            El agente propone tres optimizaciones, cada una entrenada sobre una ventana distinta. Sólo modifica
+            <b>k / upper mult / lower mult</b> de los regímenes operables. La franja dorada en cada gráfico marca el
+            <b>período de entrenamiento</b> — fuera de esa franja es validación out-of-sample.
           </div>
           <div class="proposals-grid">
-            <div class="proposal" id="proposal-1m">Calculandoâ€¦</div>
-            <div class="proposal" id="proposal-3m">Calculandoâ€¦</div>
-            <div class="proposal" id="proposal-6m">Calculandoâ€¦</div>
-            <div class="proposal legend" id="agentLegend">Calculandoâ€¦</div>
+            <div class="proposal" id="proposal-1m">Calculando…</div>
+            <div class="proposal" id="proposal-3m">Calculando…</div>
+            <div class="proposal" id="proposal-6m">Calculando…</div>
+            <div class="proposal legend" id="agentLegend">Calculando…</div>
           </div>
         </div>
       </div>
@@ -2324,8 +2324,8 @@
 
     <div class="card" id="gapPanel">
       <h2 style="display:flex;justify-content:space-between;align-items:center;gap:14px">
-        <span>ðŸ“Š AnÃ¡lisis de gaps de apertura</span>
-        <button id="gapPanelToggle" type="button" class="gap-toggle-btn">â–¼ Minimizar</button>
+        <span>📊 Análisis de gaps de apertura</span>
+        <button id="gapPanelToggle" type="button" class="gap-toggle-btn">▼ Minimizar</button>
       </h2>
       <div id="gapPanelBody"></div>
     </div>
@@ -2334,7 +2334,7 @@
       <h2>Chart</h2>
       <div id="chart"></div>
       <div id="info"></div>
-      <button id="toggleDesglose" type="button" class="desglose-toggle">ðŸ“‹ Mostrar desglose de operaciones</button>
+      <button id="toggleDesglose" type="button" class="desglose-toggle">📋 Mostrar desglose de operaciones</button>
       <div id="desglosePanel" style="display:none">
         <div id="desgloseSummary" style="font-size:12px;color:var(--ink-soft);margin:6px 0 8px"></div>
         <div id="desgloseWrapper" style="max-height:480px;overflow:auto;border:1px solid var(--blue-200);border-radius:6px">
@@ -2347,9 +2347,9 @@
       <h2>VIX context</h2>
       <div id="vixChart" style="width:100%;height:320px;background:#fff;border-radius:8px"></div>
       <div style="font-size:12px;color:var(--ink-soft);margin-top:8px">
-        LÃ­neas doradas punteadas = umbrales de rÃ©gimen.
+        Líneas doradas punteadas = umbrales de régimen.
         Bandas sombreadas en dorado = zonas de VIX en las que <b>no se opera</b>.
-        Cruces = dÃ­as con pÃ©rdida real (close fuera de banda) marcados al nivel del VIX que tenÃ­an.
+        Cruces = días con pérdida real (close fuera de banda) marcados al nivel del VIX que tenían.
       </div>
     </div>
 
@@ -2372,5 +2372,4 @@
   <script src="script.js"></script>
 </body>
 </html>
-
 
