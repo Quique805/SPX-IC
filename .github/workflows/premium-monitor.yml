@@ -1,0 +1,48 @@
+name: SPX Premium Monitor
+
+on:
+  schedule:
+    # Broad UTC window; the Python script restricts execution to 16:00-22:59 Madrid.
+    - cron: '*/15 14-21 * * 1-5'
+  repository_dispatch:
+    types: [premium_monitor]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: spx-premium-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Capture selected premiums
+        run: python monitor_premiums.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "No premium changes to commit."
+            exit 0
+          fi
+          git commit -m "Premium snapshot $(date -u +%Y-%m-%d_%H%M)"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            echo "Push attempt $i failed, retrying..."
+            sleep 5
+          done
+          exit 1

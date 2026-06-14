@@ -5293,6 +5293,131 @@ async function renderGammaSummaryPanel() {
   if (first && last) generateGammaSummary();
 }
 
+async function fetchPremiumHistoryIndex() {
+  const candidates = [
+    `data/premium-history-index.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/premium-history-index.json?t=${Date.now()}`
+  ];
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return await response.json();
+    } catch (_) {}
+  }
+  return { dates: [] };
+}
+
+async function fetchPremiumHistory(date) {
+  const candidates = [
+    `data/premium-history/${date}.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/premium-history/${date}.json?t=${Date.now()}`
+  ];
+  let lastError = null;
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('histórico no disponible');
+}
+
+function premiumLegLabel(name, leg) {
+  const action = leg.side === 'sell' ? 'Venta' : 'Compra';
+  const type = leg.type === 'call' ? 'Call' : 'Put';
+  return `${action} ${type} ${fmtGammaNum(leg.strike, 0)}`;
+}
+
+async function drawPremiumHistory(date) {
+  const output = document.getElementById('premiumHistoryOutput');
+  if (!output) return;
+  output.innerHTML = '<div style="padding:14px;text-align:center">Cargando evolución de primas…</div>';
+  try {
+    const history = await fetchPremiumHistory(date);
+    if (history.status !== 'active') {
+      output.innerHTML = `<div style="padding:14px;background:#ececec;border-radius:6px;color:#666">
+        <b>${date} · No operable</b><br>${history.reason || 'Sesión excluida por los filtros de riesgo.'}
+      </div>`;
+      return;
+    }
+    const snapshots = history.snapshots || [];
+    if (!snapshots.length) {
+      output.innerHTML = '<div style="padding:14px;text-align:center;color:var(--ink-soft)">Todavía no hay capturas para esta sesión.</div>';
+      return;
+    }
+    const last = snapshots.at(-1);
+    const pnlColor = Number(last.pnl) >= 0 ? 'var(--good)' : 'var(--bad)';
+    output.innerHTML = `
+      <div class="premium-history-stats">
+        <div class="premium-history-stat"><div>Crédito inicial</div><b>${fmtGammaNum(history.entryCredit, 2)} puntos</b></div>
+        <div class="premium-history-stat"><div>Coste de cierre actual</div><b>${fmtGammaNum(last.closeCost, 2)} puntos</b></div>
+        <div class="premium-history-stat"><div>P&L estimado · 1 contrato</div><b style="color:${pnlColor}">${formatSummaryMoney(last.pnl)}</b></div>
+        <div class="premium-history-stat"><div>Múltiplo sobre crédito</div><b>${Number.isFinite(Number(last.multiple)) ? Number(last.multiple).toFixed(2) + '×' : '—'}</b></div>
+        <div class="premium-history-stat"><div>Capturas</div><b>${snapshots.length}</b></div>
+      </div>
+      <div id="premiumHistoryChart" style="width:100%;height:460px"></div>
+      <div style="font-size:10px;color:var(--ink-soft);margin-top:8px">
+        Cada línea representa el midpoint bid/ask de una pata. Las horas efectivas descuentan aproximadamente 15 minutos por el retraso de Cboe.
+      </div>`;
+    const colors = {
+      sell_call: '#2f6fb0',
+      buy_call: '#65a9e8',
+      sell_put: '#b73232',
+      buy_put: '#e58b8b'
+    };
+    const traces = Object.entries(history.legs || {}).map(([name, leg]) => ({
+      x: snapshots.map(snapshot => snapshot.effectiveAt),
+      y: snapshots.map(snapshot => Number(snapshot.quotes?.[name]?.mid)),
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: premiumLegLabel(name, leg),
+      line: { color: colors[name], width: leg.side === 'sell' ? 3 : 2, dash: leg.side === 'sell' ? 'solid' : 'dot' },
+      marker: { size: 5 },
+      hovertemplate: '%{x|%H:%M}<br>%{y:.2f} puntos<extra>%{fullData.name}</extra>'
+    }));
+    safePlotly('premiumHistoryChart', traces, {
+      margin: { t: 25, r: 25, b: 55, l: 65 },
+      paper_bgcolor: '#ffffff',
+      plot_bgcolor: '#f3f8fc',
+      font: { family: 'Segoe UI, sans-serif', color: '#0c1f33' },
+      xaxis: { title: 'Hora efectiva aproximada', type: 'date', gridcolor: '#dce7f1' },
+      yaxis: { title: 'Prima · midpoint bid/ask', gridcolor: '#dce7f1', rangemode: 'tozero' },
+      legend: { orientation: 'h', y: 1.12 },
+      hovermode: 'x unified'
+    }, { responsive: true, displayModeBar: false });
+  } catch (error) {
+    output.innerHTML = `<div style="padding:14px;color:var(--bad)">No se pudo cargar ${date}: ${error.message}</div>`;
+  }
+}
+
+async function renderPremiumHistoryPanel() {
+  const panel = document.getElementById('premiumHistoryPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div style="padding:14px;text-align:center">Buscando sesiones monitorizadas…</div>';
+  const index = await fetchPremiumHistoryIndex();
+  const dates = (index.dates || []).slice().sort().reverse();
+  if (!dates.length) {
+    panel.innerHTML = `<div style="padding:14px;background:var(--blue-50);border:1px solid var(--blue-200);border-radius:6px;color:var(--ink-soft)">
+      Todavía no hay sesiones monitorizadas. El histórico empezará a generarse automáticamente en la próxima sesión de mercado.
+    </div>`;
+    return;
+  }
+  panel.innerHTML = `
+    <div class="premium-history-controls">
+      <label>Sesión
+        <select id="premiumHistoryDate">${dates.map(date => `<option value="${date}">${date}</option>`).join('')}</select>
+      </label>
+      <button type="button" id="loadPremiumHistoryBtn">Ver gráfico</button>
+    </div>
+    <div id="premiumHistoryOutput"></div>`;
+  const select = document.getElementById('premiumHistoryDate');
+  document.getElementById('loadPremiumHistoryBtn').addEventListener('click', () => drawPremiumHistory(select.value));
+  drawPremiumHistory(select.value);
+}
+
 function getGammaSessionRow(chainDate) {
   const target = gammaNextSessionDate(chainDate);
   if (!target || !currentRows) return { target, row: null };
@@ -5820,12 +5945,14 @@ function initChainTabs() {
       const charts = document.getElementById('gammaChartsPanel');
       const dataInput = document.getElementById('gammaDataInputPanel');
       const summary = document.getElementById('gammaSummaryPanel');
+      const premiumHistory = document.getElementById('premiumHistoryPanel');
       if (entry) entry.style.display = tab === 'entry' ? '' : 'none';
       if (close) close.style.display = tab === 'close' ? '' : 'none';
       if (gamma) gamma.style.display = tab === 'gamma' ? '' : 'none';
       if (charts) charts.style.display = tab === 'charts' ? '' : 'none';
       if (dataInput) dataInput.style.display = tab === 'data-input' ? '' : 'none';
       if (summary) summary.style.display = tab === 'summary' ? '' : 'none';
+      if (premiumHistory) premiumHistory.style.display = tab === 'premium-history' ? '' : 'none';
       const preview = document.getElementById('chainPreview');
       if (preview) preview.style.display = 'none';
       if (tab === 'gamma' && gamma) {
@@ -5839,6 +5966,9 @@ function initChainTabs() {
       }
       if (tab === 'summary' && summary) {
         renderGammaSummaryPanel();
+      }
+      if (tab === 'premium-history' && premiumHistory) {
+        renderPremiumHistoryPanel();
       }
     });
   });
