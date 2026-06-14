@@ -202,7 +202,8 @@ def close_card(signal, include_weekly):
     sections = []
     title = "RESUMEN DEL DÍA · Operación finalizada"
     message = "Resumen de las primas seleccionadas y del resultado estimado."
-    color = GREEN if signal["result"]["pnl"] >= 0 else RED
+    result = signal.get("result")
+    color = GREEN if result and result["pnl"] >= 0 else RED
     if signal.get("status") == "active":
         sections.append(daily_result_section(signal))
     if include_weekly:
