@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: spx-daily-fetch-and-email
+  cancel-in-progress: false
+
 jobs:
   fetch:
     runs-on: ubuntu-latest
@@ -27,6 +31,13 @@ jobs:
 
       - name: Run fetch script
         run: python fetch_daily.py
+
+      - name: Generate signal and send scheduled card
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+        run: python automate_signals.py
 
       - name: Commit and push if changed
         run: |
