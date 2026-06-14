@@ -1780,6 +1780,40 @@
       background: var(--navy-700);
       color: #fff;
     }
+    .summary-range-controls {
+      display: flex; gap: 12px; align-items: end; flex-wrap: wrap;
+      background: var(--blue-50); border: 1px solid var(--blue-200);
+      border-radius: 6px; padding: 12px; margin-bottom: 12px;
+    }
+    .summary-range-controls label {
+      display: flex; flex-direction: column; gap: 4px;
+      font-size: 11px; color: var(--ink-soft); font-weight: 700;
+    }
+    .summary-range-controls input { min-width: 145px; }
+    .summary-period-table {
+      width: 100%; border-collapse: separate; border-spacing: 0 5px;
+      font-size: 12px; font-variant-numeric: tabular-nums;
+    }
+    .summary-period-table th {
+      padding: 6px 10px; text-align: left; color: var(--ink-soft);
+      font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+    }
+    .summary-period-table th:last-child,
+    .summary-period-table td:last-child { text-align: right; }
+    .summary-period-table td { padding: 10px; }
+    .summary-period-table tr.summary-good td { background: #d8f5dc; color: #185c31; }
+    .summary-period-table tr.summary-bad td { background: #fad6d6; color: #852525; }
+    .summary-period-table tr.summary-no-trade td { background: #ececec; color: #666; }
+    .summary-period-table tr td:first-child { border-radius: 6px 0 0 6px; font-weight: 700; }
+    .summary-period-table tr td:last-child { border-radius: 0 6px 6px 0; font-weight: 800; }
+    .summary-period-total {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      border: 2px solid var(--gold-500); border-radius: 6px; padding: 12px 14px;
+      background: var(--blue-50); font-weight: 800;
+    }
+    [data-theme="dark"] .summary-period-table tr.summary-good td { background: #1d3823; color: #c8efc8; }
+    [data-theme="dark"] .summary-period-table tr.summary-bad td { background: #3a1818; color: #f5b8b8; }
+    [data-theme="dark"] .summary-period-table tr.summary-no-trade td { background: #252825; color: #aaa; }
   </style>
 </head>
 <body>
@@ -1868,12 +1902,14 @@
         <button type="button" class="chain-auto-tab" data-chain-tab="gamma">Niveles Gamma</button>
         <button type="button" class="chain-auto-tab" data-chain-tab="charts">Gráficos</button>
         <button type="button" class="chain-auto-tab" data-chain-tab="data-input">Introducción datos</button>
+        <button type="button" class="chain-auto-tab" data-chain-tab="summary">Resumen</button>
       </div>
       <div id="autoChainsList" class="chain-auto-panel" style="margin-bottom:14px"></div>
       <div id="autoCloseChainsList" class="chain-auto-panel" style="display:none;margin-bottom:14px"></div>
       <div id="gammaLevelsPanel" class="chain-auto-panel" style="display:none;margin-bottom:14px"></div>
       <div id="gammaChartsPanel" class="chain-auto-panel" style="display:none;margin-bottom:14px"></div>
       <div id="gammaDataInputPanel" class="chain-auto-panel" style="display:none;margin-bottom:14px"></div>
+      <div id="gammaSummaryPanel" class="chain-auto-panel" style="display:none;margin-bottom:14px"></div>
 
       <div id="chainPreview" style="display:none;margin-top:14px"></div>
 
@@ -2369,7 +2405,6 @@
     </div>
   </main>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=20260614-summary3"></script>
 </body>
 </html>
-

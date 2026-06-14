@@ -5075,6 +5075,19 @@ async function computeEntryPremiumsForLevels(levels) {
   }
 }
 
+function optionQuote(row, key) {
+  const value = Number(row && row[key]);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function computeEntryNetCredit(levels) {
+  const p = levels.entryPremiums;
+  if (!p || !p.ok) return null;
+  const opex = getQuarterlyOpexStatus(p.entryDate);
+  return optionQuote(p.call, 'bid') - optionQuote(p.callProtection, 'ask')
+    + (opex.isOpexDay ? 0 : optionQuote(p.put, 'bid') - optionQuote(p.putProtection, 'ask'));
+}
+
 async function fetchGammaIndexDates() {
   const candidates = [
     `data/chains-close-index.json?t=${Date.now()}`,
@@ -5175,6 +5188,109 @@ function renderGammaDataInputPanel() {
             </div>`).join('')}
         </div>`).join('')}
     </div>`;
+}
+
+function formatSummaryMoney(value) {
+  return Number(value).toLocaleString('es-ES', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+async function buildGammaSummaryRows(startDate, endDate) {
+  const chainDates = await fetchGammaIndexDates();
+  const completedSessionDates = new Set(chainDates);
+  const results = [];
+  for (const chainDate of chainDates.slice().sort()) {
+    const sessionDate = gammaNextSessionDate(chainDate);
+    if (!sessionDate || sessionDate < startDate || sessionDate > endDate) continue;
+    if (!completedSessionDates.has(sessionDate)) continue;
+    try {
+      const chain = await fetchGammaChain(chainDate);
+      const levels = computeGammaLevels(chain);
+      if (!levels) throw new Error('estructura insuficiente');
+      const risk = getGammaRiskFlags(levels);
+      if (risk.noTradeDay) {
+        results.push({ date: sessionDate, status: 'No operable', cls: 'summary-no-trade', pnl: 0 });
+        continue;
+      }
+      levels.entryPremiums = await computeEntryPremiumsForLevels(levels);
+      const entryCredit = computeEntryNetCredit(levels);
+      if (!Number.isFinite(entryCredit)) continue;
+      const { row } = getGammaSessionRow(levels.date);
+      const callWall = Number(levels.callWall && levels.callWall.strike);
+      const putWall = Number(levels.putWall && levels.putWall.strike);
+      const high = Number(row && row.high);
+      const low = Number(row && row.low);
+      const opex = getQuarterlyOpexStatus(sessionDate);
+      const bad = [callWall, high].every(Number.isFinite) && high >= callWall
+        || (!opex.isOpexDay && [putWall, low].every(Number.isFinite) && low <= putWall);
+      const losingDay = bad || entryCredit < 0;
+      results.push({
+        date: sessionDate,
+        status: losingDay ? 'Malo' : 'Bueno',
+        cls: losingDay ? 'summary-bad' : 'summary-good',
+        pnl: (bad ? -(20 - entryCredit) : entryCredit) * 100
+      });
+    } catch (e) {
+      console.warn('[Resumen] No se pudo calcular', sessionDate, e.message);
+    }
+  }
+  return results;
+}
+
+async function generateGammaSummary() {
+  const panel = document.getElementById('gammaSummaryPanel');
+  const start = document.getElementById('summaryStartDate');
+  const end = document.getElementById('summaryEndDate');
+  const output = document.getElementById('summaryPeriodOutput');
+  if (!panel || !start || !end || !output) return;
+  if (!start.value || !end.value || start.value > end.value) {
+    output.innerHTML = '<div style="color:var(--bad);padding:10px">Selecciona un periodo válido.</div>';
+    return;
+  }
+  output.innerHTML = '<div style="padding:14px;text-align:center">Generando resumen…</div>';
+  const rows = await buildGammaSummaryRows(start.value, end.value);
+  const total = rows.reduce((sum, row) => sum + (Number.isFinite(row.pnl) ? row.pnl : 0), 0);
+  const body = rows.map(row => `<tr class="${row.cls}">
+    <td>${row.date}</td>
+    <td>${row.status}</td>
+    <td>${formatSummaryMoney(row.pnl)}</td>
+  </tr>`).join('');
+  output.innerHTML = rows.length ? `
+    <table class="summary-period-table">
+      <thead><tr><th>Fecha</th><th>Resultado</th><th>Primas ganadas / perdidas</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+    <div class="summary-period-total">
+      <span>Total del periodo · 1 contrato</span>
+      <span style="color:${total >= 0 ? 'var(--good)' : 'var(--bad)'}">${formatSummaryMoney(total)}</span>
+    </div>` : '<div style="padding:14px;text-align:center;color:var(--ink-soft)">No hay sesiones disponibles en el periodo seleccionado.</div>';
+}
+
+async function renderGammaSummaryPanel() {
+  const panel = document.getElementById('gammaSummaryPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div style="padding:14px;text-align:center">Preparando resumen…</div>';
+  const chainDates = await fetchGammaIndexDates();
+  const completedSessionDates = new Set(chainDates);
+  const dates = chainDates.map(gammaNextSessionDate).filter(date => date && completedSessionDates.has(date)).sort();
+  const first = dates[0] || '';
+  const last = dates.at(-1) || '';
+  panel.innerHTML = `
+    <div class="summary-range-controls">
+      <label>Desde<input type="date" id="summaryStartDate" value="${first}" min="${first}" max="${last}"></label>
+      <label>Hasta<input type="date" id="summaryEndDate" value="${last}" min="${first}" max="${last}"></label>
+      <button type="button" id="generateSummaryBtn">Generar resumen</button>
+    </div>
+    <div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">
+      Resultado por un contrato: los días buenos conservan el crédito neto; los días malos aplican la pérdida máxima del spread de 20 puntos menos el crédito. Los días no operables computan 0 USD.
+    </div>
+    <div id="summaryPeriodOutput"></div>`;
+  document.getElementById('generateSummaryBtn').addEventListener('click', generateGammaSummary);
+  if (first && last) generateGammaSummary();
 }
 
 function getGammaSessionRow(chainDate) {
@@ -5703,11 +5819,13 @@ function initChainTabs() {
       const gamma = document.getElementById('gammaLevelsPanel');
       const charts = document.getElementById('gammaChartsPanel');
       const dataInput = document.getElementById('gammaDataInputPanel');
+      const summary = document.getElementById('gammaSummaryPanel');
       if (entry) entry.style.display = tab === 'entry' ? '' : 'none';
       if (close) close.style.display = tab === 'close' ? '' : 'none';
       if (gamma) gamma.style.display = tab === 'gamma' ? '' : 'none';
       if (charts) charts.style.display = tab === 'charts' ? '' : 'none';
       if (dataInput) dataInput.style.display = tab === 'data-input' ? '' : 'none';
+      if (summary) summary.style.display = tab === 'summary' ? '' : 'none';
       const preview = document.getElementById('chainPreview');
       if (preview) preview.style.display = 'none';
       if (tab === 'gamma' && gamma) {
@@ -5718,6 +5836,9 @@ function initChainTabs() {
       }
       if (tab === 'data-input' && dataInput) {
         renderGammaDataInputPanel();
+      }
+      if (tab === 'summary' && summary) {
+        renderGammaSummaryPanel();
       }
     });
   });
