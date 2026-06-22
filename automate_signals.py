@@ -17,8 +17,8 @@ from monitor_premiums import (
     HISTORY_DIR,
     SPREAD_WIDTH,
     compute_levels,
+    get_open_wall_setup,
     is_opex_day,
-    no_trade_reason,
     previous_close_chain,
     select_legs,
 )
@@ -105,10 +105,36 @@ def legs_table(signal):
       </table>"""
 
 
+def open_wall_summary(signal):
+    setup = signal.get("openWall") or {}
+    pct = setup.get("open_pct")
+    open_value = setup.get("open")
+    adjustment = setup.get("adjustment") or setup.get("reason") or "Sin ajuste"
+    call_wall = setup.get("call_wall")
+    put_wall = setup.get("put_wall")
+    sell_call = setup.get("sell_call")
+    sell_put = setup.get("sell_put")
+    pct_text = f"{float(pct):.2f}%" if pct is not None else "n/d"
+    open_text = f"{float(open_value):,.2f}" if open_value is not None else "n/d"
+    wall_text = (
+        f"PW {float(put_wall):,.0f} → CW {float(call_wall):,.0f}"
+        if put_wall is not None and call_wall is not None else "walls n/d"
+    )
+    strikes_text = (
+        f" · Venta C {float(sell_call):,.0f} / P {float(sell_put):,.0f}"
+        if sell_call is not None and sell_put is not None else ""
+    )
+    return f"""
+      <div style="margin:10px 0 12px;background:{BLUE_SOFT};border:1px solid {BLUE_LINE};border-radius:5px;padding:9px 11px;font-size:11px;color:#29465d">
+        <b>Filtro Open en rango:</b> {html.escape(pct_text)} · Open {html.escape(open_text)} · {html.escape(wall_text)}<br>
+        Ajuste: <b>{html.escape(str(adjustment))}</b>{html.escape(strikes_text)}
+      </div>"""
+
+
 def entry_card(signal):
     date = signal["date"]
     if signal["status"] == "no_trade":
-        content = f"""
+        content = open_wall_summary(signal) + f"""
           <div style="text-align:center;padding:18px 8px 12px">
             <div style="font-size:42px;line-height:1">🚫</div>
             <div style="margin-top:12px;font-weight:800;color:{RED}">Sin operación de venta de volatilidad para hoy</div>
@@ -132,7 +158,7 @@ def entry_card(signal):
         message += " Operar únicamente con el 50% del capital destinado."
     if opex:
         message += " Sesión OPEX: ejecutar solamente el call spread."
-    content = legs_table(signal) + f"""
+    content = open_wall_summary(signal) + legs_table(signal) + f"""
       <div style="margin-top:12px;padding-top:10px;border-top:2px solid {GOLD};display:flex;justify-content:space-between;font-weight:800">
         <span>Crédito neto estimado</span><span>{points(signal['entryCredit'])}</span>
       </div>"""
@@ -255,7 +281,8 @@ def create_entry_signal(date):
     levels = compute_levels(close_chain or {})
     if not levels:
         raise RuntimeError("no se pudieron calcular los niveles del cierre anterior")
-    reason = no_trade_reason(date, levels)
+    setup = get_open_wall_setup(date, levels)
+    reason = None if setup["ok"] else setup["reason"]
     signal = {
         "date": date,
         "createdAt": datetime.now(timezone.utc).isoformat(),
@@ -263,15 +290,16 @@ def create_entry_signal(date):
         "emails": {},
     }
     if reason:
-        signal.update({"status": "no_trade", "reason": reason})
+        signal.update({"status": "no_trade", "reason": reason, "openWall": setup})
         return signal
-    _, legs, entry_credit = select_legs(date, levels)
+    _, legs, entry_credit, setup = select_legs(date, levels)
     signal.update({
         "status": "active",
         "opex": is_opex_day(date),
         "capitalPercent": 50 if previous_failed(date) else 100,
         "spreadWidth": SPREAD_WIDTH,
         "entryCredit": entry_credit,
+        "openWall": setup,
         "legs": legs,
     })
     return signal

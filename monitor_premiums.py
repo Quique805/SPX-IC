@@ -75,26 +75,7 @@ def compute_levels(chain):
         return None
     call_wall = max(rows, key=lambda row: row["call_gex"])["strike"]
     put_wall = max(rows, key=lambda row: abs(row["put_gex"]))["strike"]
-    grid = []
-    for test_spot in [row["strike"] for row in rows if abs(row["strike"] / spot - 1) <= 0.08]:
-        net = 0
-        for raw in expiration.get("strikes", []):
-            strike = float(raw.get("strike") or 0)
-            call_iv = float(raw.get("call_iv") or raw.get("put_iv") or 0.18)
-            put_iv = float(raw.get("put_iv") or raw.get("call_iv") or 0.18)
-            net += exposure(test_spot, strike, call_iv, t, float(raw.get("call_oi") or 0), 1)
-            net += exposure(test_spot, strike, put_iv, t, float(raw.get("put_oi") or 0), -1)
-        grid.append((test_spot, net))
-    trigger = None
-    for previous, current in zip(grid, grid[1:]):
-        if (previous[1] <= 0 <= current[1]) or (previous[1] >= 0 >= current[1]):
-            denom = abs(previous[1]) + abs(current[1])
-            weight = abs(previous[1]) / denom if denom else 0.5
-            trigger = previous[0] + (current[0] - previous[0]) * weight
-            break
-    if trigger is None and grid:
-        trigger = min(grid, key=lambda item: abs(item[1]))[0]
-    return {"call_wall": call_wall, "put_wall": put_wall, "vol_trigger": trigger}
+    return {"call_wall": call_wall, "put_wall": put_wall}
 
 
 def previous_close_chain(today):
@@ -126,22 +107,65 @@ def is_opex_day(date_string):
     return 15 <= dt.day <= 21
 
 
-def no_trade_reason(today, levels):
-    trigger = levels.get("vol_trigger")
-    wall_range = levels["call_wall"] - levels["put_wall"]
-    if trigger is not None and wall_range > 0:
-        trigger_pct = (trigger - levels["put_wall"]) / wall_range * 100
-        if trigger_pct < 15 or trigger_pct > 70:
-            return f"Vol Trigger fuera de rango ({trigger_pct:.1f}%)"
+def get_open_wall_setup(today, levels):
+    call_wall = float(levels["call_wall"])
+    put_wall = float(levels["put_wall"])
+    wall_range = call_wall - put_wall
+    if wall_range <= 0:
+        return {
+            "ok": False,
+            "reason": "Rango de walls no válido",
+            "call_wall": call_wall,
+            "put_wall": put_wall,
+        }
     ohlc = (load_json_safe(OHLC_FILE) or {}).get("byDate", {})
-    dates = sorted(date for date in ohlc if date < today and ohlc[date].get("spx_close") is not None)
     today_open = ohlc.get(today, {}).get("spx_open")
-    if dates and today_open is not None:
-        previous_close = ohlc[dates[-1]]["spx_close"]
-        gap = (float(today_open) - float(previous_close)) / float(previous_close) * 100
-        if abs(gap) >= 0.50:
-            return f"Gap de apertura fuera de rango ({gap:+.2f}%)"
-    return None
+    if today_open is None:
+        return {
+            "ok": False,
+            "reason": "Open no disponible",
+            "call_wall": call_wall,
+            "put_wall": put_wall,
+        }
+    open_value = float(today_open)
+    open_pct = (open_value - put_wall) / wall_range * 100
+    sell_call = call_wall
+    sell_put = put_wall
+    adjustment = "Sin ajuste"
+    if open_pct < 10 or open_pct > 90:
+        return {
+            "ok": False,
+            "reason": f"Open fuera del rango operable ({open_pct:.2f}%)",
+            "open": open_value,
+            "open_pct": open_pct,
+            "call_wall": call_wall,
+            "put_wall": put_wall,
+        }
+    if 10 <= open_pct <= 20:
+        sell_put = put_wall - 35
+        adjustment = "Put Wall -35"
+    elif 20 < open_pct <= 30:
+        sell_put = put_wall - 20
+        adjustment = "Put Wall -20"
+    elif 80 < open_pct <= 90:
+        sell_call = call_wall + 15
+        adjustment = "Call Wall +15"
+    return {
+        "ok": True,
+        "reason": None,
+        "open": open_value,
+        "open_pct": open_pct,
+        "call_wall": call_wall,
+        "put_wall": put_wall,
+        "sell_call": sell_call,
+        "sell_put": sell_put,
+        "adjustment": adjustment,
+    }
+
+
+def no_trade_reason(today, levels):
+    setup = get_open_wall_setup(today, levels)
+    return None if setup["ok"] else setup["reason"]
 
 
 def select_legs(today, levels):
@@ -150,11 +174,14 @@ def select_legs(today, levels):
         raise RuntimeError("la cadena de entrada todavía no existe")
     _, expiration = nearest_expiration(entry)
     strikes = expiration.get("strikes", []) if expiration else []
+    setup = get_open_wall_setup(today, levels)
+    if not setup["ok"]:
+        raise RuntimeError(setup["reason"])
     targets = {
-        "sell_call": levels["call_wall"],
-        "buy_call": levels["call_wall"] + SPREAD_WIDTH,
-        "sell_put": levels["put_wall"],
-        "buy_put": levels["put_wall"] - SPREAD_WIDTH,
+        "sell_call": setup["sell_call"],
+        "buy_call": setup["sell_call"] + SPREAD_WIDTH,
+        "sell_put": setup["sell_put"],
+        "buy_put": setup["sell_put"] - SPREAD_WIDTH,
     }
     selected = {name: nearest_strike(strikes, target) for name, target in targets.items()}
     if any(row is None for row in selected.values()):
@@ -176,7 +203,7 @@ def select_legs(today, levels):
         leg["entryBid"] if leg["side"] == "sell" else -leg["entryAsk"]
         for leg in legs.values()
     )
-    return entry, legs, entry_credit
+    return entry, legs, entry_credit, setup
 
 
 def fetch_current_chain(today):
@@ -231,13 +258,19 @@ def main():
             raise RuntimeError("no se pudieron calcular niveles desde la cadena de cierre anterior")
         reason = no_trade_reason(today, levels)
         if reason:
-            history = {"date": today, "status": "no_trade", "reason": reason, "snapshots": []}
+            history = {
+                "date": today,
+                "status": "no_trade",
+                "reason": reason,
+                "openWall": get_open_wall_setup(today, levels),
+                "snapshots": [],
+            }
             save_json(history_file, history)
             print(f"  SKIP: {reason}")
             update_index(today, now_iso)
             return
         try:
-            entry, legs, entry_credit = select_legs(today, levels)
+            entry, legs, entry_credit, setup = select_legs(today, levels)
         except RuntimeError as exc:
             if "cadena de entrada" in str(exc):
                 print(f"  SKIP: {exc}. Se reintentará en la siguiente captura.")
@@ -251,6 +284,7 @@ def main():
             "entrySpot": entry.get("spot"),
             "entryCredit": entry_credit,
             "spreadWidth": SPREAD_WIDTH,
+            "openWall": setup,
             "legs": legs,
             "snapshots": [],
         }
