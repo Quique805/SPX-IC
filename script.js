@@ -4650,6 +4650,7 @@ const GAMMA_RISK_FREE_RATE = 0.045;
 const GAMMA_CONTRACT_MULT = 100;
 const GAMMA_MIN_T = 1 / 252;
 const SPOTGAMMA_STORAGE_KEY = 'spx-ic-spotgamma-levels-v1';
+const SPOTGAMMA_ENDPOINT_KEY = 'spx-ic-spotgamma-endpoint-v1';
 const QUARTERLY_OPEX_DATES = [
   { date: '2026-06-18', note: 'jueves, ajustado por festivo' },
   { date: '2026-09-18' }, { date: '2026-12-18' },
@@ -4693,6 +4694,35 @@ function getLocalSpotGammaData() {
 
 function saveLocalSpotGammaData(data) {
   localStorage.setItem(SPOTGAMMA_STORAGE_KEY, JSON.stringify(normalizeSpotGammaData(data), null, 2));
+}
+
+function getSpotGammaEndpoint() {
+  try {
+    return localStorage.getItem(SPOTGAMMA_ENDPOINT_KEY) || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function saveSpotGammaEndpoint(url) {
+  try {
+    localStorage.setItem(SPOTGAMMA_ENDPOINT_KEY, String(url || '').trim());
+  } catch (_) {}
+}
+
+async function postSpotGammaLevel(endpoint, pin, payload) {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin, ...payload })
+  });
+  const text = await response.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch (_) {}
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.error || text || `HTTP ${response.status}`);
+  }
+  return data;
 }
 
 async function fetchSpotGammaData() {
@@ -5129,6 +5159,7 @@ async function renderSpotGammaPanel() {
   const dates = spotGammaSortedDates(data, true);
   const latest = dates[0] || new Date().toISOString().slice(0, 10);
   const current = data.byDate[latest] || {};
+  const endpoint = getSpotGammaEndpoint();
   const rows = dates.map(date => {
     const row = data.byDate[date];
     return `<tr>
@@ -5146,8 +5177,16 @@ async function renderSpotGammaPanel() {
     <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
       <b>SpotGamma manual</b><br>
       Introduce aqui las walls que se aplicaran a la siguiente sesion. El dashboard usa estos niveles para Niveles Gamma, Resumen y reglas de entrada.
-      <br><span style="color:var(--bad)">Nota:</span> para que el email automatico de GitHub Actions tambien los use, actualiza y sube <code>data/spotgamma-levels.json</code>.
+      <br><span style="color:var(--bad)">Nota:</span> si configuras el puente externo, el boton Guardar nivel hara commit en <code>data/spotgamma-levels.json</code> y GitHub Actions lo vera con el PC apagado.
     </div>
+    <details style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:12px;color:var(--ink-soft);font-weight:700">Configuracion de guardado remoto</summary>
+      <div class="summary-range-controls" style="margin-top:10px;align-items:end">
+        <label>Endpoint Worker<input type="url" id="spotGammaEndpoint" placeholder="https://..." value="${endpoint}"></label>
+        <label>PIN<input type="password" id="spotGammaPin" placeholder="PIN privado"></label>
+        <span style="font-size:11px;color:var(--ink-soft)">La URL se guarda en este navegador. El PIN no se guarda.</span>
+      </div>
+    </details>
     <div class="summary-range-controls" style="align-items:end">
       <label>Fecha aplicada<input type="date" id="spotGammaDate" value="${latest}"></label>
       <label>Call Wall<input type="number" id="spotGammaCallWall" step="5" value="${current.callWall ?? ''}"></label>
@@ -5184,22 +5223,43 @@ async function renderSpotGammaPanel() {
     const putWall = Number(document.getElementById('spotGammaPutWall').value);
     const vtRaw = document.getElementById('spotGammaVT').value;
     const flipRaw = document.getElementById('spotGammaFlip').value;
+    const endpoint = document.getElementById('spotGammaEndpoint').value.trim();
+    const pin = document.getElementById('spotGammaPin').value;
     if (!date || !Number.isFinite(callWall) || !Number.isFinite(putWall)) {
       if (feedback) feedback.textContent = 'Fecha, Call Wall y Put Wall son obligatorios.';
       return;
     }
-    const local = getLocalSpotGammaData();
-    local.byDate[date] = {
+    if (endpoint) saveSpotGammaEndpoint(endpoint);
+    const payload = {
+      date,
       callWall,
       putWall,
       volTrigger: vtRaw === '' ? null : Number(vtRaw),
       gammaFlip: flipRaw === '' ? null : Number(flipRaw),
-      source: 'SpotGamma manual',
+      source: 'SpotGamma manual'
+    };
+    if (endpoint) {
+      if (!pin) {
+        if (feedback) feedback.textContent = 'Introduce el PIN para guardar en GitHub.';
+        return;
+      }
+      if (feedback) feedback.textContent = 'Guardando en GitHub...';
+      try {
+        await postSpotGammaLevel(endpoint, pin, payload);
+        if (feedback) feedback.textContent = `Guardado ${date} en GitHub.`;
+      } catch (error) {
+        if (feedback) feedback.textContent = `Error guardando en GitHub: ${error.message}`;
+        return;
+      }
+    }
+    const local = getLocalSpotGammaData();
+    local.byDate[date] = {
+      ...payload,
       updatedAt: new Date().toISOString()
     };
     local.lastUpdated = new Date().toISOString();
     saveLocalSpotGammaData(local);
-    if (feedback) feedback.textContent = `Guardado ${date} en este navegador.`;
+    if (feedback && !endpoint) feedback.textContent = `Guardado ${date} en este navegador.`;
     renderSpotGammaPanel();
   });
   document.getElementById('copySpotGammaJsonBtn').addEventListener('click', async () => {
