@@ -1,0 +1,57 @@
+{
+  "date": "2026-06-17",
+  "createdAt": "2026-06-17T14:07:26.824475+00:00",
+  "sourceCloseDate": "2026-06-16",
+  "emails": {
+    "entry": {
+      "id": "61df2727-4a9e-4477-b16e-632ed4491af6",
+      "sentAt": "2026-06-17T14:07:27.233166+00:00"
+    },
+    "result": {
+      "id": "51c148b6-421d-4e59-b390-2cbcc8091e43",
+      "sentAt": "2026-06-17T20:32:21.149331+00:00"
+    }
+  },
+  "status": "active",
+  "opex": false,
+  "capitalPercent": 100,
+  "spreadWidth": 20,
+  "entryCredit": 2.4499999999999993,
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7600.0,
+      "entryBid": 1.65,
+      "entryAsk": 1.7
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7620.0,
+      "entryBid": 0.65,
+      "entryAsk": 0.75
+    },
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7450.0,
+      "entryBid": 4.3,
+      "entryAsk": 4.4
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7430.0,
+      "entryBid": 2.7,
+      "entryAsk": 2.75
+    }
+  },
+  "result": {
+    "source": "premium_monitor",
+    "capturedAt": "2026-06-17T19:16:32.142331+00:00",
+    "pnl": -85.00000000000006,
+    "closeCost": 3.3,
+    "multiple": 1.3469387755102045
+  }
+}

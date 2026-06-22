@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-12T20:32:14.200734+00:00",
+  "lastUpdated": "2026-06-22T14:07:15.529475+00:00",
   "byDate": {
     "2026-04-27": {
       "spx_open": 7153,
@@ -276,6 +276,47 @@
       "spx_close": 7431,
       "vix_open": 19.5,
       "vix_close": 17.7
-    }
+    },
+    "2026-06-15": {
+      "spx_open": 7517,
+      "spx_high": 7578,
+      "spx_low": 7517,
+      "spx_close": 7554,
+      "vix_open": 16.8,
+      "vix_close": 16.2
+    },
+    "2026-06-16": {
+      "spx_open": 7549,
+      "spx_high": 7565,
+      "spx_low": 7509,
+      "spx_close": 7511,
+      "vix_open": 16.2,
+      "vix_close": 16.4
+    },
+    "2026-06-17": {
+      "spx_open": 7524,
+      "spx_high": 7532,
+      "spx_low": 7403,
+      "spx_close": 7420,
+      "vix_open": 16.1,
+      "vix_close": 18.4
+    },
+    "2026-06-18": {
+      "spx_open": 7487,
+      "spx_high": 7511,
+      "spx_low": 7468,
+      "spx_close": 7501,
+      "vix_open": 17.2,
+      "vix_close": 16.4
+    },
+    "2026-06-22": {
+      "spx_open": 7500,
+      "spx_high": 7530,
+      "spx_low": 7499,
+      "spx_close": 7524,
+      "vix_open": 17.5,
+      "vix_close": 16.6
+    },
+    "2026-06-19": {}
   }
 }

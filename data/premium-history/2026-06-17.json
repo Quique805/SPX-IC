@@ -1,0 +1,102 @@
+{
+  "date": "2026-06-17",
+  "status": "active",
+  "sourceCloseDate": "2026-06-16",
+  "selectedAt": "2026-06-17T14:07:25.432755+00:00",
+  "entrySpot": 7523.9502,
+  "entryCredit": 2.4499999999999993,
+  "spreadWidth": 20,
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7600.0,
+      "entryBid": 1.65,
+      "entryAsk": 1.7
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7620.0,
+      "entryBid": 0.65,
+      "entryAsk": 0.75
+    },
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7450.0,
+      "entryBid": 4.3,
+      "entryAsk": 4.4
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7430.0,
+      "entryBid": 2.7,
+      "entryAsk": 2.75
+    }
+  },
+  "snapshots": [
+    {
+      "capturedAt": "2026-06-17T16:50:24.025500+00:00",
+      "effectiveAt": "2026-06-17T16:35:24.025500+00:00",
+      "spot": 7514.25,
+      "quotes": {
+        "sell_call": {
+          "bid": 1.05,
+          "ask": 1.1,
+          "mid": 1.0750000000000002
+        },
+        "buy_call": {
+          "bid": 0.4,
+          "ask": 0.45,
+          "mid": 0.42500000000000004
+        },
+        "sell_put": {
+          "bid": 4.9,
+          "ask": 5.1,
+          "mid": 5.0
+        },
+        "buy_put": {
+          "bid": 3.0,
+          "ask": 3.1,
+          "mid": 3.05
+        }
+      },
+      "closeCost": 2.8,
+      "pnl": -35.00000000000006,
+      "multiple": 1.142857142857143
+    },
+    {
+      "capturedAt": "2026-06-17T19:16:32.142331+00:00",
+      "effectiveAt": "2026-06-17T19:01:32.142331+00:00",
+      "spot": 7475.3599,
+      "quotes": {
+        "sell_call": {
+          "bid": 0.05,
+          "ask": 0.1,
+          "mid": 0.07500000000000001
+        },
+        "buy_call": {
+          "bid": 0.0,
+          "ask": 0.05,
+          "mid": 0.025
+        },
+        "sell_put": {
+          "bid": 4.8,
+          "ask": 5.0,
+          "mid": 4.9
+        },
+        "buy_put": {
+          "bid": 1.8,
+          "ask": 1.9,
+          "mid": 1.85
+        }
+      },
+      "closeCost": 3.3,
+      "pnl": -85.00000000000006,
+      "multiple": 1.3469387755102045
+    }
+  ],
+  "lastUpdated": "2026-06-17T19:16:32.142331+00:00"
+}

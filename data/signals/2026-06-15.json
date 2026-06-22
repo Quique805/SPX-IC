@@ -1,0 +1,13 @@
+{
+  "date": "2026-06-15",
+  "createdAt": "2026-06-15T14:07:17.480108+00:00",
+  "sourceCloseDate": "2026-06-12",
+  "emails": {
+    "entry": {
+      "id": "4945b9fb-a371-402f-8c6d-8e7614f4dcff",
+      "sentAt": "2026-06-15T14:07:17.807859+00:00"
+    }
+  },
+  "status": "no_trade",
+  "reason": "Vol Trigger fuera de rango (-15.7%)"
+}
