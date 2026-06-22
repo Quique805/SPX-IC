@@ -1,0 +1,96 @@
+{
+  "lastUpdated": "2026-06-22T00:00:00+02:00",
+  "byDate": {
+    "2026-06-02": {
+      "callWall": 7600,
+      "putWall": 7300,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-03": {
+      "callWall": 7650,
+      "putWall": 7500,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-04": {
+      "callWall": 7700,
+      "putWall": 7600,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-05": {
+      "callWall": 7600,
+      "putWall": 7300,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-08": {
+      "callWall": 7600,
+      "putWall": 7300,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-10": {
+      "callWall": 7600,
+      "putWall": 7300,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-11": {
+      "callWall": 7500,
+      "putWall": 7300,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-12": {
+      "callWall": 7500,
+      "putWall": 7200,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-15": {
+      "callWall": 7500,
+      "putWall": 7200,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-16": {
+      "callWall": 7500,
+      "putWall": 7350,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-17": {
+      "callWall": 7600,
+      "putWall": 7350,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-18": {
+      "callWall": 7600,
+      "putWall": 7300,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    },
+    "2026-06-22": {
+      "callWall": 7600,
+      "putWall": 7400,
+      "volTrigger": null,
+      "gammaFlip": null,
+      "source": "SpotGamma manual"
+    }
+  }
+}

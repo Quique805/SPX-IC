@@ -4649,6 +4649,7 @@ const GAMMA_LEGACY_CLOSE_DATES = ['2026-05-11', '2026-05-13', '2026-05-14', '202
 const GAMMA_RISK_FREE_RATE = 0.045;
 const GAMMA_CONTRACT_MULT = 100;
 const GAMMA_MIN_T = 1 / 252;
+const SPOTGAMMA_STORAGE_KEY = 'spx-ic-spotgamma-levels-v1';
 const QUARTERLY_OPEX_DATES = [
   { date: '2026-06-18', note: 'jueves, ajustado por festivo' },
   { date: '2026-09-18' }, { date: '2026-12-18' },
@@ -4662,6 +4663,88 @@ const QUARTERLY_OPEX_DATES = [
   { date: '2034-03-17' }, { date: '2034-06-16' }, { date: '2034-09-15' }, { date: '2034-12-15' },
   { date: '2035-03-16' }, { date: '2035-06-15' }, { date: '2035-09-21' }, { date: '2035-12-21' }
 ];
+
+function normalizeSpotGammaData(data) {
+  const byDate = {};
+  const raw = data && data.byDate ? data.byDate : {};
+  for (const [date, row] of Object.entries(raw)) {
+    const callWall = Number(row && (row.callWall ?? row.call_wall));
+    const putWall = Number(row && (row.putWall ?? row.put_wall));
+    if (!date || !Number.isFinite(callWall) || !Number.isFinite(putWall)) continue;
+    byDate[date] = {
+      callWall,
+      putWall,
+      volTrigger: row.volTrigger ?? row.vol_trigger ?? null,
+      gammaFlip: row.gammaFlip ?? row.gamma_flip ?? null,
+      source: row.source || 'SpotGamma manual',
+      updatedAt: row.updatedAt || null
+    };
+  }
+  return { lastUpdated: data && data.lastUpdated || null, byDate };
+}
+
+function getLocalSpotGammaData() {
+  try {
+    return normalizeSpotGammaData(JSON.parse(localStorage.getItem(SPOTGAMMA_STORAGE_KEY) || '{}'));
+  } catch (_) {
+    return { lastUpdated: null, byDate: {} };
+  }
+}
+
+function saveLocalSpotGammaData(data) {
+  localStorage.setItem(SPOTGAMMA_STORAGE_KEY, JSON.stringify(normalizeSpotGammaData(data), null, 2));
+}
+
+async function fetchSpotGammaData() {
+  const merged = { lastUpdated: null, byDate: {} };
+  const candidates = [
+    `data/spotgamma-levels.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/spotgamma-levels.json?t=${Date.now()}`
+  ];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const remote = normalizeSpotGammaData(await r.json());
+      Object.assign(merged.byDate, remote.byDate);
+      merged.lastUpdated = remote.lastUpdated || merged.lastUpdated;
+      break;
+    } catch (e) {
+      console.warn('[SpotGamma] No se pudo cargar', url, e.message);
+    }
+  }
+  const local = getLocalSpotGammaData();
+  Object.assign(merged.byDate, local.byDate);
+  merged.lastUpdated = local.lastUpdated || merged.lastUpdated;
+  return normalizeSpotGammaData(merged);
+}
+
+function spotGammaEntryToLevels(date, row) {
+  const sourceDate = gammaPreviousSessionDate(date) || date;
+  const callWall = { strike: Number(row.callWall) };
+  const putWall = { strike: Number(row.putWall) };
+  return {
+    date: sourceDate,
+    sessionDate: date,
+    capturedAt: row.updatedAt || null,
+    sourceLabel: row.source || 'SpotGamma manual',
+    spot: NaN,
+    expiration: 'SpotGamma',
+    dte: null,
+    effectiveDte: null,
+    callWall,
+    putWall,
+    volTrigger: row.volTrigger,
+    gammaFlip: row.gammaFlip,
+    netAtSpot: NaN,
+    topRows: []
+  };
+}
+
+function spotGammaSortedDates(data, desc = true) {
+  const dates = Object.keys((data && data.byDate) || {}).sort();
+  return desc ? dates.reverse() : dates;
+}
 
 function normalPdf(x) {
   return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
@@ -4801,7 +4884,7 @@ function findOptionStrike(chain, targetStrike) {
 }
 
 function getGammaOpenWallSetup(levels) {
-  const { target, row } = getGammaSessionRow(levels.date);
+  const { target, row } = getGammaSessionRow(levels);
   const callWall = Number(levels.callWall && levels.callWall.strike);
   const putWall = Number(levels.putWall && levels.putWall.strike);
   const wallRange = callWall - putWall;
@@ -4852,7 +4935,7 @@ function getGammaOpenWallSetup(levels) {
 }
 
 async function computeEntryPremiumsForLevels(levels) {
-  const entryDate = gammaNextSessionDate(levels.date);
+  const entryDate = gammaTargetSessionDate(levels);
   if (!entryDate) return { entryDate, ok: false, error: 'fecha objetivo no válida' };
   const setup = getGammaOpenWallSetup(levels);
   if (!setup.ok) return { entryDate, ok: false, error: setup.reason, openWall: setup };
@@ -4955,6 +5038,24 @@ function gammaNextSessionDate(dateStr) {
   return dt.toISOString().slice(0, 10);
 }
 
+function gammaPreviousSessionDate(dateStr) {
+  if (!dateStr) return null;
+  const [y, m, d] = String(dateStr).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  do {
+    dt.setUTCDate(dt.getUTCDate() - 1);
+  } while (!isMarketTradingDate(dt.toISOString().slice(0, 10)));
+  return dt.toISOString().slice(0, 10);
+}
+
+function gammaTargetSessionDate(levelOrDate) {
+  if (levelOrDate && typeof levelOrDate === 'object') {
+    return levelOrDate.sessionDate || gammaNextSessionDate(levelOrDate.date);
+  }
+  return gammaNextSessionDate(levelOrDate);
+}
+
 function gammaNextSessionLabel(dateStr) {
   if (!dateStr) return 'PARA EL DÍA —';
   const nextDate = gammaNextSessionDate(dateStr);
@@ -5020,6 +5121,99 @@ function renderGammaDataInputPanel() {
     </div>`;
 }
 
+async function renderSpotGammaPanel() {
+  const panel = document.getElementById('spotGammaPanel');
+  if (!panel) return;
+  panel.innerHTML = '<div style="padding:14px;text-align:center">Cargando niveles SpotGamma...</div>';
+  const data = await fetchSpotGammaData();
+  const dates = spotGammaSortedDates(data, true);
+  const latest = dates[0] || new Date().toISOString().slice(0, 10);
+  const current = data.byDate[latest] || {};
+  const rows = dates.map(date => {
+    const row = data.byDate[date];
+    return `<tr>
+      <td><b>${date}</b></td>
+      <td>${fmtGammaNum(row.callWall, 0)}</td>
+      <td>${fmtGammaNum(row.putWall, 0)}</td>
+      <td>${row.volTrigger === null || row.volTrigger === undefined ? '—' : fmtGammaNum(row.volTrigger, 0)}</td>
+      <td>${row.gammaFlip === null || row.gammaFlip === undefined ? '—' : fmtGammaNum(row.gammaFlip, 0)}</td>
+      <td>${row.source || 'SpotGamma manual'}</td>
+      <td><button type="button" class="spotgamma-edit-btn" data-date="${date}">Editar</button></td>
+    </tr>`;
+  }).join('');
+  const exportJson = JSON.stringify(data, null, 2);
+  panel.innerHTML = `
+    <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+      <b>SpotGamma manual</b><br>
+      Introduce aqui las walls que se aplicaran a la siguiente sesion. El dashboard usa estos niveles para Niveles Gamma, Resumen y reglas de entrada.
+      <br><span style="color:var(--bad)">Nota:</span> para que el email automatico de GitHub Actions tambien los use, actualiza y sube <code>data/spotgamma-levels.json</code>.
+    </div>
+    <div class="summary-range-controls" style="align-items:end">
+      <label>Fecha aplicada<input type="date" id="spotGammaDate" value="${latest}"></label>
+      <label>Call Wall<input type="number" id="spotGammaCallWall" step="5" value="${current.callWall ?? ''}"></label>
+      <label>Put Wall<input type="number" id="spotGammaPutWall" step="5" value="${current.putWall ?? ''}"></label>
+      <label>VT<input type="number" id="spotGammaVT" step="5" value="${current.volTrigger ?? ''}"></label>
+      <label>Gamma Flip<input type="number" id="spotGammaFlip" step="5" value="${current.gammaFlip ?? ''}"></label>
+      <button type="button" id="saveSpotGammaBtn">Guardar nivel</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin:8px 0 12px">
+      <button type="button" id="copySpotGammaJsonBtn">Copiar JSON para data/spotgamma-levels.json</button>
+      <span id="spotGammaFeedback" style="font-size:12px;color:var(--ink-soft)"></span>
+    </div>
+    <textarea id="spotGammaJsonExport" readonly style="width:100%;min-height:120px;font-family:monospace;font-size:11px;margin-bottom:12px">${exportJson}</textarea>
+    <table class="summary-period-table">
+      <thead><tr><th>Fecha</th><th>Call Wall</th><th>Put Wall</th><th>VT</th><th>Gamma Flip</th><th>Fuente</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="7">No hay niveles cargados.</td></tr>'}</tbody>
+    </table>`;
+
+  const feedback = document.getElementById('spotGammaFeedback');
+  const fillForm = date => {
+    const row = data.byDate[date] || {};
+    document.getElementById('spotGammaDate').value = date;
+    document.getElementById('spotGammaCallWall').value = row.callWall ?? '';
+    document.getElementById('spotGammaPutWall').value = row.putWall ?? '';
+    document.getElementById('spotGammaVT').value = row.volTrigger ?? '';
+    document.getElementById('spotGammaFlip').value = row.gammaFlip ?? '';
+  };
+  panel.querySelectorAll('.spotgamma-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => fillForm(btn.dataset.date));
+  });
+  document.getElementById('saveSpotGammaBtn').addEventListener('click', async () => {
+    const date = document.getElementById('spotGammaDate').value;
+    const callWall = Number(document.getElementById('spotGammaCallWall').value);
+    const putWall = Number(document.getElementById('spotGammaPutWall').value);
+    const vtRaw = document.getElementById('spotGammaVT').value;
+    const flipRaw = document.getElementById('spotGammaFlip').value;
+    if (!date || !Number.isFinite(callWall) || !Number.isFinite(putWall)) {
+      if (feedback) feedback.textContent = 'Fecha, Call Wall y Put Wall son obligatorios.';
+      return;
+    }
+    const local = getLocalSpotGammaData();
+    local.byDate[date] = {
+      callWall,
+      putWall,
+      volTrigger: vtRaw === '' ? null : Number(vtRaw),
+      gammaFlip: flipRaw === '' ? null : Number(flipRaw),
+      source: 'SpotGamma manual',
+      updatedAt: new Date().toISOString()
+    };
+    local.lastUpdated = new Date().toISOString();
+    saveLocalSpotGammaData(local);
+    if (feedback) feedback.textContent = `Guardado ${date} en este navegador.`;
+    renderSpotGammaPanel();
+  });
+  document.getElementById('copySpotGammaJsonBtn').addEventListener('click', async () => {
+    const text = document.getElementById('spotGammaJsonExport').value;
+    try {
+      await navigator.clipboard.writeText(text);
+      if (feedback) feedback.textContent = 'JSON copiado.';
+    } catch (_) {
+      document.getElementById('spotGammaJsonExport').select();
+      if (feedback) feedback.textContent = 'Selecciona y copia el JSON manualmente.';
+    }
+  });
+}
+
 function formatSummaryMoney(value) {
   return Number(value).toLocaleString('es-ES', {
     style: 'currency',
@@ -5030,17 +5224,12 @@ function formatSummaryMoney(value) {
 }
 
 async function buildGammaSummaryRows(startDate, endDate) {
-  const chainDates = await fetchGammaIndexDates();
-  const completedSessionDates = new Set(chainDates);
+  const spotGamma = await fetchSpotGammaData();
   const results = [];
-  for (const chainDate of chainDates.slice().sort()) {
-    const sessionDate = gammaNextSessionDate(chainDate);
+  for (const sessionDate of spotGammaSortedDates(spotGamma, false)) {
     if (!sessionDate || sessionDate < startDate || sessionDate > endDate) continue;
-    if (!completedSessionDates.has(sessionDate)) continue;
     try {
-      const chain = await fetchGammaChain(chainDate);
-      const levels = computeGammaLevels(chain);
-      if (!levels) throw new Error('estructura insuficiente');
+      const levels = spotGammaEntryToLevels(sessionDate, spotGamma.byDate[sessionDate]);
       const risk = getGammaRiskFlags(levels);
       if (risk.noTradeDay) {
         results.push({ date: sessionDate, status: 'No operable', cls: 'summary-no-trade', pnl: 0 });
@@ -5049,7 +5238,7 @@ async function buildGammaSummaryRows(startDate, endDate) {
       levels.entryPremiums = await computeEntryPremiumsForLevels(levels);
       const entryCredit = computeEntryNetCredit(levels);
       if (!Number.isFinite(entryCredit)) continue;
-      const { row } = getGammaSessionRow(levels.date);
+      const { row } = getGammaSessionRow(levels);
       const sellCall = Number(risk.openWall && risk.openWall.sellCall);
       const sellPut = Number(risk.openWall && risk.openWall.sellPut);
       const high = Number(row && row.high);
@@ -5104,9 +5293,8 @@ async function renderGammaSummaryPanel() {
   const panel = document.getElementById('gammaSummaryPanel');
   if (!panel) return;
   panel.innerHTML = '<div style="padding:14px;text-align:center">Preparando resumen…</div>';
-  const chainDates = await fetchGammaIndexDates();
-  const completedSessionDates = new Set(chainDates);
-  const dates = chainDates.map(gammaNextSessionDate).filter(date => date && completedSessionDates.has(date)).sort();
+  const spotGamma = await fetchSpotGammaData();
+  const dates = spotGammaSortedDates(spotGamma, false);
   const first = dates[0] || '';
   const last = dates.at(-1) || '';
   panel.innerHTML = `
@@ -5249,7 +5437,7 @@ async function renderPremiumHistoryPanel() {
 }
 
 function getGammaSessionRow(chainDate) {
-  const target = gammaNextSessionDate(chainDate);
+  const target = gammaTargetSessionDate(chainDate);
   if (!target || !currentRows) return { target, row: null };
   return { target, row: currentRows.find(r => r.date === target) || null };
 }
@@ -5279,7 +5467,7 @@ function getGammaOpeningGap(chainDate) {
 }
 
 function renderGammaSessionChart(levels) {
-  const { target, row } = getGammaSessionRow(levels.date);
+  const { target, row } = getGammaSessionRow(levels);
   const callWall = levels.callWall ? Number(levels.callWall.strike) : NaN;
   const putWall = levels.putWall ? Number(levels.putWall.strike) : NaN;
   if (!target) return '';
@@ -5433,7 +5621,7 @@ function computeGammaHitStats(results, startChainDate = '2026-06-01') {
   for (const r of results) {
     if (!r.ok || !r.levels) continue;
     if (!r.levels.date || r.levels.date < startChainDate) continue;
-    const { row } = getGammaSessionRow(r.levels.date);
+    const { row } = getGammaSessionRow(r.levels);
     const callWall = r.levels.callWall ? Number(r.levels.callWall.strike) : NaN;
     const putWall = r.levels.putWall ? Number(r.levels.putWall.strike) : NaN;
     const high = row ? Number(row.high) : NaN;
@@ -5450,7 +5638,7 @@ function computeGammaHitStats(results, startChainDate = '2026-06-01') {
     const sellCall = Number(risk.openWall && risk.openWall.sellCall);
     const sellPut = Number(risk.openWall && risk.openWall.sellPut);
     const upperTouch = Number.isFinite(sellCall) && high >= sellCall;
-    const opex = getQuarterlyOpexStatus(gammaNextSessionDate(r.levels.date));
+    const opex = getQuarterlyOpexStatus(gammaTargetSessionDate(r.levels));
     const lowerTouch = !opex.isOpexDay && Number.isFinite(sellPut) && low <= sellPut;
     if (upperTouch) stats.upperTouches++;
     if (lowerTouch) stats.lowerTouches++;
@@ -5476,7 +5664,7 @@ function applyPostLossCapitalWarnings(results, startChainDate = '2026-06-01') {
     // NO OPERAR sessions between two trades do not consume the warning.
     levels.reduceCapitalAfterLoss = previousOperableFailed;
 
-    const { row } = getGammaSessionRow(levels.date);
+    const { row } = getGammaSessionRow(levels);
     const sellCall = Number(risk.openWall && risk.openWall.sellCall);
     const sellPut = Number(risk.openWall && risk.openWall.sellPut);
     const high = row ? Number(row.high) : NaN;
@@ -5485,7 +5673,7 @@ function applyPostLossCapitalWarnings(results, startChainDate = '2026-06-01') {
       // The next operable session has been identified, but its result is pending.
       break;
     }
-    const opex = getQuarterlyOpexStatus(gammaNextSessionDate(levels.date));
+    const opex = getQuarterlyOpexStatus(gammaTargetSessionDate(levels));
     const upperTouch = high >= sellCall;
     const lowerTouch = !opex.isOpexDay && low <= sellPut;
     previousOperableFailed = upperTouch || lowerTouch;
@@ -5542,7 +5730,7 @@ function renderGammaCard(levels) {
     : 0;
   const openWallLabel = Number.isFinite(openWallPct) ? `${openWallPct.toFixed(2)}%` : '—';
   const noTradeDay = risk.noTradeDay;
-  const sessionDate = gammaNextSessionDate(levels.date);
+  const sessionDate = gammaTargetSessionDate(levels);
   const opex = getQuarterlyOpexStatus(sessionDate);
   const opexMessage = opex.isOpexDay
     ? `<div style="background:rgba(201,162,39,0.16);border:1px solid var(--gold-500);border-left:5px solid var(--gold-500);border-radius:5px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:var(--gold-700)"><b>HORA BRUJA TRIMESTRAL:</b> hoy solo se vende la CW con su protección. No se abre la PW.</div>`
@@ -5556,7 +5744,7 @@ function renderGammaCard(levels) {
   const dayShadow = noTradeDay ? '0 0 0 2px rgba(207,76,76,0.08)' : 'none';
   const sessionChart = renderGammaSessionChart(levels);
   const premiumCard = renderGammaPremiumCard(levels);
-  const topRows = levels.topRows.map(r => `<tr>
+  const topRows = (levels.topRows || []).map(r => `<tr>
     <td>${fmtGammaNum(r.strike, 0)}</td>
     <td class="call-cell">${fmtGammaNum(r.callOi, 0)}</td>
     <td class="call-cell">${fmtGammaNum(r.callGex, 0)}</td>
@@ -5567,7 +5755,7 @@ function renderGammaCard(levels) {
   return `
     <details class="auto-chain-item" open style="display:block;padding:0;margin-bottom:12px;border:${dayBorder};box-shadow:${dayShadow}">
       <summary style="cursor:pointer;padding:10px 12px;font-weight:700;color:var(--navy-700)">
-        ${noTradeDay ? 'NO OPERAR · ' : ''}${sessionLabel} · Cadena ${levels.date} · Spot ${fmtGammaNum(levels.spot, 2)} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
+        ${noTradeDay ? 'NO OPERAR · ' : ''}${sessionLabel} · Niveles ${levels.sourceLabel} · Call Wall ${fmtGammaNum(cw && cw.strike, 0)} · Put Wall ${fmtGammaNum(pw && pw.strike, 0)}
       </summary>
       <div style="padding:0 12px 12px">
         ${opexMessage}
@@ -5589,7 +5777,7 @@ function renderGammaCard(levels) {
               </div>
               <div style="background:${noTradeDay ? 'rgba(207,76,76,0.12)' : 'var(--blue-50)'};border:1px solid ${noTradeDay ? 'var(--bad)' : 'var(--gold-500)'};border-radius:5px;padding:8px">
                 <div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase">% Open en rango</div>
-                <b style="color:${noTradeDay ? 'var(--bad)' : 'inherit'}">${noTradeDay ? '? ' : ''}${openWallLabel}</b>
+                <b style="color:${noTradeDay ? 'var(--bad)' : 'inherit'}">${noTradeDay ? '⚠ ' : ''}${openWallLabel}</b>
                 <div style="height:7px;background:rgba(12,45,78,0.14);border-radius:99px;margin-top:6px;overflow:hidden">
                   <div style="height:100%;width:${openWallPctClamped}%;background:${noTradeDay ? 'var(--bad)' : 'linear-gradient(90deg,var(--blue-500),var(--gold-500))'};border-radius:99px"></div>
                 </div>
@@ -5604,14 +5792,14 @@ function renderGammaCard(levels) {
               </div>
             </div>
             <div style="font-size:11px;color:var(--ink-soft);margin-bottom:8px">
-              Fuente: ${levels.sourceLabel} · Vencimiento usado: ${levels.expiration} · DTE original: ${levels.dte} · T efectivo: ${levels.effectiveDte} sesión · Captura: ${formatMadridTime(levels.capturedAt)}
+              Fuente: ${levels.sourceLabel}${levels.sessionDate ? ` · Sesión aplicada: ${levels.sessionDate}` : ''}${levels.volTrigger ? ` · VT ${fmtGammaNum(levels.volTrigger, 0)}` : ''}${levels.gammaFlip ? ` · Gamma Flip ${fmtGammaNum(levels.gammaFlip, 0)}` : ''}
             </div>
-            <table class="chain-table">
+            ${topRows ? `<table class="chain-table">
               <thead><tr>
                 <th>Strike</th><th>Call OI</th><th>Call GEX</th><th>Put OI</th><th>Put GEX</th><th>Net GEX</th>
               </tr></thead>
               <tbody>${topRows}</tbody>
-            </table>
+            </table>` : ''}
           </div>
           <div>${sessionChart}${premiumCard}</div>
         </div>
@@ -5622,18 +5810,17 @@ function renderGammaCard(levels) {
 async function renderGammaLevelsPanel() {
   const panel = document.getElementById('gammaLevelsPanel');
   if (!panel) return;
-  panel.innerHTML = '<div style="padding:14px;text-align:center">Calculando niveles gamma…</div>';
-  const gammaDates = await fetchGammaIndexDates();
+  panel.innerHTML = '<div style="padding:14px;text-align:center">Cargando niveles SpotGamma...</div>';
+  const spotGamma = await fetchSpotGammaData();
+  const gammaDates = spotGammaSortedDates(spotGamma, true);
   if (!gammaDates.length) {
-    panel.innerHTML = '<div style="padding:14px;text-align:center;color:var(--bad)">No hay cadenas de cierre disponibles para calcular niveles gamma.</div>';
+    panel.innerHTML = '<div style="padding:14px;text-align:center;color:var(--bad)">No hay niveles SpotGamma cargados.</div>';
     return;
   }
   const results = [];
   for (const date of gammaDates) {
     try {
-      const chain = await fetchGammaChain(date);
-      const levels = computeGammaLevels(chain);
-      if (!levels) throw new Error('estructura insuficiente');
+      const levels = spotGammaEntryToLevels(date, spotGamma.byDate[date]);
       levels.entryPremiums = await computeEntryPremiumsForLevels(levels);
       results.push({ ok: true, date, levels });
     } catch (e) {
@@ -5654,10 +5841,10 @@ async function renderGammaLevelsPanel() {
   const gammaStats = computeGammaHitStats(results, '2026-06-01');
   panel.innerHTML = `
     <div style="background:var(--blue-50);border:1px solid var(--blue-200);border-radius:5px;padding:10px 14px;margin-bottom:12px;font-size:12px">
-      <b>Niveles Gamma estimados</b> · Black-Scholes con IV por strike, Open Interest y T mínimo de 1 sesión para cadenas 0DTE.
+      <b>Niveles SpotGamma manuales</b> · Estas walls ya no se calculan desde CBOE; se cargan desde la pestaña SpotGamma.
       Filtro operativo: el Open debe quedar entre el 10% y el 90% del rango Put Wall → Call Wall.
       <div style="margin-top:8px">
-        <b>Cadenas calculadas:</b> ${datePills}
+        <b>Sesiones cargadas:</b> ${datePills}
       </div>
       ${renderGammaHitStats(gammaStats)}
     </div>
@@ -5742,6 +5929,7 @@ function initChainTabs() {
       document.querySelectorAll('.chain-auto-tab').forEach(b => b.classList.toggle('active', b === btn));
       const entry = document.getElementById('autoChainsList');
       const close = document.getElementById('autoCloseChainsList');
+      const spotGamma = document.getElementById('spotGammaPanel');
       const gamma = document.getElementById('gammaLevelsPanel');
       const charts = document.getElementById('gammaChartsPanel');
       const dataInput = document.getElementById('gammaDataInputPanel');
@@ -5749,6 +5937,7 @@ function initChainTabs() {
       const premiumHistory = document.getElementById('premiumHistoryPanel');
       if (entry) entry.style.display = tab === 'entry' ? '' : 'none';
       if (close) close.style.display = tab === 'close' ? '' : 'none';
+      if (spotGamma) spotGamma.style.display = tab === 'spotgamma' ? '' : 'none';
       if (gamma) gamma.style.display = tab === 'gamma' ? '' : 'none';
       if (charts) charts.style.display = tab === 'charts' ? '' : 'none';
       if (dataInput) dataInput.style.display = tab === 'data-input' ? '' : 'none';
@@ -5758,6 +5947,9 @@ function initChainTabs() {
       if (preview) preview.style.display = 'none';
       if (tab === 'gamma' && gamma) {
         renderGammaLevelsPanel();
+      }
+      if (tab === 'spotgamma' && spotGamma) {
+        renderSpotGammaPanel();
       }
       if (tab === 'charts' && charts) {
         renderGammaChartsPanel();

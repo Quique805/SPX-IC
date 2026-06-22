@@ -16,10 +16,9 @@ from monitor_premiums import (
     CONTRACT_MULTIPLIER,
     HISTORY_DIR,
     SPREAD_WIDTH,
-    compute_levels,
     get_open_wall_setup,
     is_opex_day,
-    previous_close_chain,
+    load_spotgamma_levels,
     select_legs,
 )
 
@@ -277,16 +276,16 @@ def previous_failed(date):
 
 
 def create_entry_signal(date):
-    source_date, close_chain = previous_close_chain(date)
-    levels = compute_levels(close_chain or {})
+    levels = load_spotgamma_levels(date)
     if not levels:
-        raise RuntimeError("no se pudieron calcular los niveles del cierre anterior")
+        raise RuntimeError(f"no hay niveles SpotGamma cargados para {date}")
     setup = get_open_wall_setup(date, levels)
     reason = None if setup["ok"] else setup["reason"]
     signal = {
         "date": date,
         "createdAt": datetime.now(timezone.utc).isoformat(),
-        "sourceCloseDate": source_date,
+        "sourceCloseDate": date,
+        "levelsSource": levels.get("source"),
         "emails": {},
     }
     if reason:
@@ -307,7 +306,7 @@ def create_entry_signal(date):
 
 def result_for(signal):
     history = load_json_safe(os.path.join(HISTORY_DIR, f"{signal['date']}.json"))
-    if history and history.get("snapshots"):
+    if history and history.get("snapshots") and legs_match(signal.get("legs", {}), history.get("legs", {})):
         last = history["snapshots"][-1]
         return {
             "source": "premium_monitor",
@@ -328,6 +327,18 @@ def result_for(signal):
     credit = float(signal["entryCredit"])
     pnl = (-(SPREAD_WIDTH - credit) if touched else credit) * CONTRACT_MULTIPLIER
     return {"source": "expiry_estimate", "pnl": pnl, "touched": bool(touched)}
+
+
+def legs_match(signal_legs, history_legs):
+    names = ("sell_call", "buy_call", "sell_put", "buy_put")
+    for name in names:
+        a = signal_legs.get(name)
+        b = history_legs.get(name)
+        if bool(a) != bool(b):
+            return False
+        if a and b and float(a.get("strike")) != float(b.get("strike")):
+            return False
+    return True
 
 
 def send_email(subject, card_html, idempotency_key, dry_run):

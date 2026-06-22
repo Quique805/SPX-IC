@@ -216,8 +216,10 @@ def main():
         for e in sorted(set(o["expiration"] for o in options)):
             ed = datetime.strptime(e, "%Y-%m-%d").date()
             dte = (ed - today_d).days
-            if dte == 0:
+            if dte == 0 or chain_kind == "close":
                 relevant.append((e, dte))
+        if chain_kind == "close":
+            relevant = relevant[:5]
 
         chain_out = {"date": today, "kind": chain_kind, "capturedAt": now_iso, "spot": spot, "expirations": {}}
         for e, dte in relevant:

@@ -24,6 +24,7 @@ HISTORY_INDEX = os.path.join(DATA_DIR, "premium-history-index.json")
 OHLC_FILE = os.path.join(DATA_DIR, "daily-ohlc.json")
 CLOSE_DIR = os.path.join(DATA_DIR, "chains-close")
 ENTRY_DIR = os.path.join(DATA_DIR, "chains")
+SPOTGAMMA_FILE = os.path.join(DATA_DIR, "spotgamma-levels.json")
 CONTRACT_MULTIPLIER = 100
 SPREAD_WIDTH = 20
 MIN_T = 1 / 252
@@ -76,6 +77,25 @@ def compute_levels(chain):
     call_wall = max(rows, key=lambda row: row["call_gex"])["strike"]
     put_wall = max(rows, key=lambda row: abs(row["put_gex"]))["strike"]
     return {"call_wall": call_wall, "put_wall": put_wall}
+
+
+def load_spotgamma_levels(day):
+    data = load_json_safe(SPOTGAMMA_FILE) or {}
+    row = (data.get("byDate") or {}).get(day)
+    if not row:
+        return None
+    call_wall = row.get("callWall")
+    put_wall = row.get("putWall")
+    if call_wall is None or put_wall is None:
+        return None
+    return {
+        "call_wall": float(call_wall),
+        "put_wall": float(put_wall),
+        "vol_trigger": row.get("volTrigger"),
+        "gamma_flip": row.get("gammaFlip"),
+        "source": row.get("source") or "SpotGamma manual",
+        "date": day,
+    }
 
 
 def previous_close_chain(today):
@@ -252,10 +272,9 @@ def main():
     history_file = os.path.join(HISTORY_DIR, f"{today}.json")
     history = load_json_safe(history_file)
     if not history:
-        source_date, close_chain = previous_close_chain(today)
-        levels = compute_levels(close_chain or {})
+        levels = load_spotgamma_levels(today)
         if not levels:
-            raise RuntimeError("no se pudieron calcular niveles desde la cadena de cierre anterior")
+            raise RuntimeError(f"no hay niveles SpotGamma cargados para {today}")
         reason = no_trade_reason(today, levels)
         if reason:
             history = {
@@ -279,7 +298,8 @@ def main():
         history = {
             "date": today,
             "status": "active",
-            "sourceCloseDate": source_date,
+            "sourceCloseDate": today,
+            "levelsSource": levels.get("source"),
             "selectedAt": entry.get("capturedAt"),
             "entrySpot": entry.get("spot"),
             "entryCredit": entry_credit,
