@@ -3469,6 +3469,25 @@ function upsertRow(row) {
   recalc();
 }
 
+const NYSE_FULL_CLOSE_HOLIDAYS = new Set([
+  '2026-01-01', '2026-01-19', '2026-02-16', '2026-04-03', '2026-05-25',
+  '2026-06-19', '2026-07-03', '2026-09-07', '2026-11-26', '2026-12-25',
+  '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26', '2027-05-31',
+  '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'
+]);
+
+function isMarketHoliday(dateStr) {
+  return NYSE_FULL_CLOSE_HOLIDAYS.has(String(dateStr || ''));
+}
+
+function isMarketTradingDate(dateStr) {
+  const [y, m, d] = String(dateStr || '').split('-').map(Number);
+  if (!y || !m || !d) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay();
+  return dow !== 0 && dow !== 6 && !isMarketHoliday(dateStr);
+}
+
 // ---- Missing-day detection -----------------------------------------------
 // Weekdays between (last data date + 1) and yesterday that aren't in the data.
 // Holidays will get falsely flagged — user can dismiss them with "Skip".
@@ -3483,9 +3502,8 @@ function detectMissing(rows) {
   while (true) {
     d.setDate(d.getDate() + 1);
     if (d >= today) break;
-    const dow = d.getDay();
-    if (dow === 0 || dow === 6) continue;
     const iso = d.toISOString().slice(0, 10);
+    if (!isMarketTradingDate(iso)) continue;
     if (!dataDates.has(iso) && !skipped.has(iso)) missing.push(iso);
   }
   return missing;
@@ -5118,10 +5136,9 @@ function gammaNextSessionDate(dateStr) {
   const [y, m, d] = String(dateStr).split('-').map(Number);
   if (!y || !m || !d) return null;
   const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + 1);
-  while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) {
+  do {
     dt.setUTCDate(dt.getUTCDate() + 1);
-  }
+  } while (!isMarketTradingDate(dt.toISOString().slice(0, 10)));
   return dt.toISOString().slice(0, 10);
 }
 
