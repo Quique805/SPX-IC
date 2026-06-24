@@ -1,0 +1,14 @@
+{
+  "date": "2026-06-24",
+  "status": "no_trade",
+  "reason": "Open fuera del rango operable (-14.50%)",
+  "openWall": {
+    "ok": false,
+    "reason": "Open fuera del rango operable (-14.50%)",
+    "open": 7371.0,
+    "open_pct": -14.499999999999998,
+    "call_wall": 7600.0,
+    "put_wall": 7400.0
+  },
+  "snapshots": []
+}
