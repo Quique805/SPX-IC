@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-24T07:09:46.645Z",
+  "lastUpdated": "2026-06-25T07:21:54.527Z",
   "byDate": {
     "2026-06-02": {
       "callWall": 7600,
@@ -108,6 +108,14 @@
       "gammaFlip": 6500,
       "source": "SpotGamma manual",
       "updatedAt": "2026-06-24T07:09:46.645Z"
+    },
+    "2026-06-25": {
+      "callWall": 7600,
+      "putWall": 7200,
+      "volTrigger": 7500,
+      "gammaFlip": 7460,
+      "source": "SpotGamma manual",
+      "updatedAt": "2026-06-25T07:21:54.527Z"
     }
   }
 }
