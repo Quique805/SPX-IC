@@ -1,0 +1,84 @@
+{
+  "date": "2026-07-02",
+  "status": "active",
+  "sourceCloseDate": "2026-07-02",
+  "levelsSource": "SpotGamma manual",
+  "selectedAt": "2026-07-02T14:07:12.094528+00:00",
+  "entrySpot": 7537.2598,
+  "entryCredit": 5.0,
+  "spreadWidth": 20,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7495.0,
+    "open_pct": 78.0,
+    "call_wall": 7550.0,
+    "put_wall": 7300.0,
+    "sell_call": 7550.0,
+    "sell_put": 7300.0,
+    "adjustment": "Sin ajuste"
+  },
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7550.0,
+      "entryBid": 7.0,
+      "entryAsk": 7.1
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7570.0,
+      "entryBid": 1.95,
+      "entryAsk": 2.0
+    },
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7300.0,
+      "entryBid": 0.15,
+      "entryAsk": 0.2
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7280.0,
+      "entryBid": 0.1,
+      "entryAsk": 0.15
+    }
+  },
+  "snapshots": [
+    {
+      "capturedAt": "2026-07-02T15:59:17.719210+00:00",
+      "effectiveAt": "2026-07-02T15:44:17.719210+00:00",
+      "spot": 7486.2202,
+      "quotes": {
+        "sell_call": {
+          "bid": 0.35,
+          "ask": 0.4,
+          "mid": 0.375
+        },
+        "buy_call": {
+          "bid": 0.15,
+          "ask": 0.2,
+          "mid": 0.175
+        },
+        "sell_put": {
+          "bid": 0.1,
+          "ask": 0.15,
+          "mid": 0.125
+        },
+        "buy_put": {
+          "bid": 0.1,
+          "ask": 0.15,
+          "mid": 0.125
+        }
+      },
+      "closeCost": 0.30000000000000004,
+      "pnl": 470.0,
+      "multiple": 0.06000000000000001
+    }
+  ],
+  "lastUpdated": "2026-07-02T15:59:17.719210+00:00"
+}
