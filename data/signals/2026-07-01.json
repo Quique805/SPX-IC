@@ -1,0 +1,69 @@
+{
+  "date": "2026-07-01",
+  "createdAt": "2026-07-01T14:07:13.055544+00:00",
+  "sourceCloseDate": "2026-07-01",
+  "levelsSource": "SpotGamma manual",
+  "emails": {
+    "entry": {
+      "id": "8af43115-ec5b-4d6b-9605-36558cab7552",
+      "sentAt": "2026-07-01T14:07:13.279017+00:00"
+    },
+    "result": {
+      "id": "78e144d6-82c3-4c7d-b4a8-9b143eedf2e3",
+      "sentAt": "2026-07-01T20:32:12.452615+00:00"
+    }
+  },
+  "status": "active",
+  "opex": false,
+  "capitalPercent": 100,
+  "spreadWidth": 20,
+  "entryCredit": 1.3,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7479.0,
+    "open_pct": 89.5,
+    "call_wall": 7500.0,
+    "put_wall": 7300.0,
+    "sell_call": 7515.0,
+    "sell_put": 7300.0,
+    "adjustment": "Call Wall +15"
+  },
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7515.0,
+      "entryBid": 2.0,
+      "entryAsk": 2.05
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7535.0,
+      "entryBid": 0.65,
+      "entryAsk": 0.7
+    },
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7300.0,
+      "entryBid": 0.2,
+      "entryAsk": 0.25
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7280.0,
+      "entryBid": 0.15,
+      "entryAsk": 0.2
+    }
+  },
+  "result": {
+    "source": "premium_monitor",
+    "capturedAt": "2026-07-01T20:20:34.468095+00:00",
+    "pnl": 120.0,
+    "closeCost": 0.1,
+    "multiple": 0.07692307692307693
+  }
+}

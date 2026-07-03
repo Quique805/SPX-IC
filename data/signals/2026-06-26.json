@@ -1,0 +1,26 @@
+{
+  "date": "2026-06-26",
+  "createdAt": "2026-06-26T14:07:13.671010+00:00",
+  "sourceCloseDate": "2026-06-26",
+  "levelsSource": "SpotGamma manual",
+  "emails": {
+    "entry": {
+      "id": "7f3f410c-21fb-4f6c-ad20-8b81dc822f2d",
+      "sentAt": "2026-06-26T14:07:13.922283+00:00"
+    },
+    "weekly": {
+      "id": "aae60c78-148c-46d5-bad2-d72396bdc114",
+      "sentAt": "2026-06-26T20:32:11.943430+00:00"
+    }
+  },
+  "status": "no_trade",
+  "reason": "Open fuera del rango operable (4.33%)",
+  "openWall": {
+    "ok": false,
+    "reason": "Open fuera del rango operable (4.33%)",
+    "open": 7313.0,
+    "open_pct": 4.333333333333334,
+    "call_wall": 7600.0,
+    "put_wall": 7300.0
+  }
+}
