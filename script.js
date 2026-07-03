@@ -5298,6 +5298,18 @@ async function buildGammaSummaryRows(startDate, endDate) {
       levels.entryPremiums = await computeEntryPremiumsForLevels(levels);
       const entryCredit = computeEntryNetCredit(levels);
       if (!Number.isFinite(entryCredit)) continue;
+      const premiumResult = await getPremiumHistoryResult(sessionDate);
+      if (premiumResult) {
+        const losingDay = premiumResult.pnl < 0;
+        results.push({
+          date: sessionDate,
+          status: losingDay ? 'Malo' : 'Bueno',
+          cls: losingDay ? 'summary-bad' : 'summary-good',
+          pnl: premiumResult.pnl,
+          source: 'Primas monitorizadas'
+        });
+        continue;
+      }
       const { row } = getGammaSessionRow(levels);
       const sellCall = Number(risk.openWall && risk.openWall.sellCall);
       const sellPut = Number(risk.openWall && risk.openWall.sellPut);
@@ -5311,7 +5323,8 @@ async function buildGammaSummaryRows(startDate, endDate) {
         date: sessionDate,
         status: losingDay ? 'Malo' : 'Bueno',
         cls: losingDay ? 'summary-bad' : 'summary-good',
-        pnl: (bad ? -(20 - entryCredit) : entryCredit) * 100
+        pnl: (bad ? -(20 - entryCredit) : entryCredit) * 100,
+        source: bad ? 'Fallback OHLC: toque de strike' : 'Fallback OHLC: sin toque'
       });
     } catch (e) {
       console.warn('[Resumen] No se pudo calcular', sessionDate, e.message);
@@ -5336,11 +5349,12 @@ async function generateGammaSummary() {
   const body = rows.map(row => `<tr class="${row.cls}">
     <td>${row.date}</td>
     <td>${row.status}</td>
+    <td>${row.source || '—'}</td>
     <td>${formatSummaryMoney(row.pnl)}</td>
   </tr>`).join('');
   output.innerHTML = rows.length ? `
     <table class="summary-period-table">
-      <thead><tr><th>Fecha</th><th>Resultado</th><th>Primas ganadas / perdidas</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Resultado</th><th>Fuente</th><th>Primas ganadas / perdidas</th></tr></thead>
       <tbody>${body}</tbody>
     </table>
     <div class="summary-period-total">
@@ -5364,7 +5378,7 @@ async function renderGammaSummaryPanel() {
       <button type="button" id="generateSummaryBtn">Generar resumen</button>
     </div>
     <div style="font-size:11px;color:var(--ink-soft);margin-bottom:10px">
-      Resultado por un contrato: los días buenos conservan el crédito neto; los días malos aplican la pérdida máxima del spread de 20 puntos menos el crédito. Los días no operables computan 0 USD.
+      Resultado por un contrato: si existe histórico de primas monitorizadas se usa el último P&L capturado. Si no existe, se usa el fallback OHLC por toque de strike vendido.
     </div>
     <div id="summaryPeriodOutput"></div>`;
   document.getElementById('generateSummaryBtn').addEventListener('click', generateGammaSummary);
@@ -5401,6 +5415,27 @@ async function fetchPremiumHistory(date) {
     }
   }
   throw lastError || new Error('histórico no disponible');
+}
+
+async function getPremiumHistoryResult(date) {
+  try {
+    const history = await fetchPremiumHistory(date);
+    const snapshots = Array.isArray(history.snapshots) ? history.snapshots : [];
+    if (history.status !== 'active' || !snapshots.length) return null;
+    const last = snapshots.at(-1);
+    const pnl = Number(last && last.pnl);
+    if (!Number.isFinite(pnl)) return null;
+    return {
+      pnl,
+      closeCost: Number(last.closeCost),
+      multiple: last.multiple,
+      capturedAt: last.capturedAt,
+      snapshots: snapshots.length,
+      source: 'premium-history'
+    };
+  } catch (_) {
+    return null;
+  }
 }
 
 function premiumLegLabel(name, leg) {
@@ -5456,6 +5491,16 @@ async function drawPremiumHistory(date) {
       marker: { size: 5 },
       hovertemplate: '%{x|%H:%M}<br>%{y:.2f} puntos<extra>%{fullData.name}</extra>'
     }));
+    traces.push({
+      x: snapshots.map(snapshot => snapshot.effectiveAt),
+      y: snapshots.map(snapshot => Number(snapshot.closeCost)),
+      type: 'scatter',
+      mode: 'lines+markers',
+      name: 'Coste cierre IC',
+      line: { color: '#0a2540', width: 4 },
+      marker: { size: 6 },
+      hovertemplate: '%{x|%H:%M}<br>%{y:.2f} puntos<extra>%{fullData.name}</extra>'
+    });
     safePlotly('premiumHistoryChart', traces, {
       margin: { t: 25, r: 25, b: 55, l: 65 },
       paper_bgcolor: '#ffffff',
