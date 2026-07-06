@@ -4687,7 +4687,7 @@ function buildVolSurfaceGrid(chain) {
   };
 }
 
-function renderVolSurfaceChart(grid) {
+function renderVolSurfaceChart(grid, totalCompleteDates = null) {
   const status = document.getElementById('volSurfaceStatus');
   const chart = document.getElementById('volSurfaceChart');
   if (!grid || !grid.strikes.length || !grid.dtes.length) {
@@ -4696,7 +4696,8 @@ function renderVolSurfaceChart(grid) {
   }
   if (status) {
     const spot = Number.isFinite(grid.spot) ? grid.spot.toFixed(2) : '-';
-    status.textContent = `${grid.dtes.length} vencimientos | ${grid.strikes.length} strikes | spot ${spot}`;
+    const sessions = Number.isFinite(Number(totalCompleteDates)) ? ` | ${totalCompleteDates} sesiones completas` : '';
+    status.textContent = `${grid.dtes.length} vencimientos | ${grid.strikes.length} strikes | spot ${spot}${sessions}`;
   }
 
   const trace = {
@@ -4761,9 +4762,9 @@ async function renderVolSurfaceLab() {
       const date = dates[idx];
       label.textContent = date;
       const status = document.getElementById('volSurfaceStatus');
-      if (status) status.textContent = `Cargando ${date}...`;
+      if (status) status.textContent = `Cargando ${date}... (${dates.length} sesiones completas con 5 vencimientos)`;
       const chain = await loadVolSurfaceChain(date);
-      renderVolSurfaceChart(buildVolSurfaceGrid(chain));
+      renderVolSurfaceChart(buildVolSurfaceGrid(chain), dates.length);
     }
 
     slider.addEventListener('input', drawSelected);
