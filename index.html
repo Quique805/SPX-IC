@@ -2400,13 +2400,13 @@
       transform: translate(-50%, -50%);
     }
 
-    .chain-orbit-item:nth-of-type(2) { transform: rotate(-90deg) translate(336px) rotate(90deg) translate(-50%, -50%); }
-    .chain-orbit-item:nth-of-type(3) { transform: rotate(-38.6deg) translate(336px) rotate(38.6deg) translate(-50%, -50%); }
-    .chain-orbit-item:nth-of-type(4) { transform: rotate(12.8deg) translate(336px) rotate(-12.8deg) translate(-50%, -50%); }
-    .chain-orbit-item:nth-of-type(5) { transform: rotate(64.2deg) translate(336px) rotate(-64.2deg) translate(-50%, -50%); }
-    .chain-orbit-item:nth-of-type(6) { transform: rotate(115.6deg) translate(336px) rotate(-115.6deg) translate(-50%, -50%); }
-    .chain-orbit-item:nth-of-type(7) { transform: rotate(167deg) translate(336px) rotate(-167deg) translate(-50%, -50%); }
-    .chain-orbit-item:nth-of-type(8) { transform: rotate(218.4deg) translate(336px) rotate(-218.4deg) translate(-50%, -50%); }
+    .orbit-history { transform: rotate(-90deg) translate(336px) rotate(90deg) translate(-50%, -50%); }
+    .orbit-spotgamma { transform: rotate(-38.6deg) translate(336px) rotate(38.6deg) translate(-50%, -50%); }
+    .orbit-gamma { transform: rotate(12.8deg) translate(336px) rotate(-12.8deg) translate(-50%, -50%); }
+    .orbit-regime { transform: rotate(64.2deg) translate(336px) rotate(-64.2deg) translate(-50%, -50%); }
+    .orbit-input { transform: rotate(115.6deg) translate(336px) rotate(-115.6deg) translate(-50%, -50%); }
+    .orbit-summary { transform: rotate(167deg) translate(336px) rotate(-167deg) translate(-50%, -50%); }
+    .orbit-premium { transform: rotate(218.4deg) translate(336px) rotate(-218.4deg) translate(-50%, -50%); }
 
     .chain-auto-tab {
       width: 178px;
@@ -2592,26 +2592,26 @@
 
     .research-card {
       min-height: 230px;
+      appearance: none;
       border: 1px solid rgba(0,0,0,0.09);
       border-radius: 30px;
       padding: 22px;
+      color: inherit;
       background: rgba(255,255,255,0.72);
       box-shadow: 0 20px 58px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
       backdrop-filter: blur(12px);
+      cursor: pointer;
+      font-family: inherit;
+      text-align: left;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
     }
 
-    .research-card span {
-      display: inline-flex;
-      margin-bottom: 18px;
-      border: 1px solid rgba(0,0,0,0.08);
-      border-radius: 999px;
-      padding: 7px 10px;
-      color: #666;
-      background: rgba(0,0,0,0.04);
-      font-size: 0.68rem;
-      font-weight: 900;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
+    .research-card:hover,
+    .research-card:focus-visible {
+      border-color: rgba(0,0,0,0.28);
+      box-shadow: 0 28px 72px rgba(0,0,0,0.13), inset 0 1px 0 rgba(255,255,255,0.95);
+      outline: none;
+      transform: translateY(-4px) scale(1.015);
     }
 
     .research-card h3 {
@@ -2623,6 +2623,90 @@
 
     .research-card p {
       margin: 0;
+      color: #666;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+
+    .research-detail {
+      position: absolute;
+      inset: 22px;
+      z-index: 3;
+      display: none;
+      overflow: auto;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 34px;
+      padding: 26px;
+      background:
+        radial-gradient(circle at 60% 10%, rgba(255,255,255,0.94), transparent 28rem),
+        linear-gradient(145deg, rgba(250,250,247,0.98), rgba(228,228,224,0.96));
+      box-shadow: 0 32px 110px rgba(0,0,0,0.2);
+      animation: researchZoom 220ms ease-out;
+    }
+
+    .research-detail.open {
+      display: block;
+    }
+
+    .research-back {
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 999px;
+      padding: 10px 14px;
+      color: #111;
+      background: rgba(255,255,255,0.82);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .research-detail h3 {
+      margin: 18px 0 10px;
+      color: #050505;
+      font-size: clamp(2rem, 5vw, 4.6rem);
+      letter-spacing: -0.08em;
+      line-height: 0.9;
+    }
+
+    .vol-surface-toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      margin: 18px 0;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 24px;
+      padding: 14px;
+      background: rgba(255,255,255,0.66);
+    }
+
+    .vol-surface-toolbar input[type="range"] {
+      width: 100%;
+      accent-color: #050505;
+    }
+
+    .vol-surface-date {
+      min-width: 124px;
+      border-radius: 999px;
+      padding: 9px 12px;
+      color: #fff;
+      background: #050505;
+      font-size: 0.78rem;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    #volSurfaceChart {
+      min-height: 500px;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 28px;
+      background: rgba(255,255,255,0.76);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.9);
+    }
+
+    .vol-surface-note {
       color: #666;
       font-size: 0.9rem;
       line-height: 1.55;
@@ -2700,6 +2784,17 @@
       }
       .research-card {
         min-height: 170px;
+      }
+      .research-detail {
+        inset: 10px;
+        padding: 18px;
+        border-radius: 28px;
+      }
+      .vol-surface-toolbar {
+        grid-template-columns: 1fr;
+      }
+      #volSurfaceChart {
+        min-height: 420px;
       }
     }
   </style>
@@ -2816,19 +2911,19 @@
           <span>Panel</span>
           <strong>SPX Gamma</strong>
         </button>
-        <div class="chain-orbit-item chain-history-node">
+        <div class="chain-orbit-item chain-history-node orbit-history">
           <button type="button" class="chain-auto-tab active" data-chain-tab="history">Historico de cadenas</button>
           <div class="chain-history-subtabs" aria-label="Subpestanas de historico de cadenas">
             <button type="button" class="chain-history-tab active" data-chain-tab="entry">Entrada 16:07</button>
             <button type="button" class="chain-history-tab" data-chain-tab="close">Cierre 22:32</button>
           </div>
         </div>
-        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="spotgamma">SpotGamma</button></div>
-        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="gamma">Niveles Gamma</button></div>
-        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="charts">Regimen Gamma +/-</button></div>
-        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="data-input">Introduccion datos</button></div>
-        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="summary">Resumen</button></div>
-        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="premium-history">Evolucion primas</button></div>
+        <div class="chain-orbit-item orbit-spotgamma"><button type="button" class="chain-auto-tab" data-chain-tab="spotgamma">SpotGamma</button></div>
+        <div class="chain-orbit-item orbit-gamma"><button type="button" class="chain-auto-tab" data-chain-tab="gamma">Niveles Gamma</button></div>
+        <div class="chain-orbit-item orbit-regime"><button type="button" class="chain-auto-tab" data-chain-tab="charts">Regimen Gamma +/-</button></div>
+        <div class="chain-orbit-item orbit-input"><button type="button" class="chain-auto-tab" data-chain-tab="data-input">Introduccion datos</button></div>
+        <div class="chain-orbit-item orbit-summary"><button type="button" class="chain-auto-tab" data-chain-tab="summary">Resumen</button></div>
+        <div class="chain-orbit-item orbit-premium"><button type="button" class="chain-auto-tab" data-chain-tab="premium-history">Evolucion primas</button></div>
       </div>
       <div id="autoChainsList" class="chain-auto-panel" style="margin-bottom:14px"></div>
       <div id="autoCloseChainsList" class="chain-auto-panel" style="display:none;margin-bottom:14px"></div>
@@ -2869,21 +2964,22 @@
           De momento dejamos preparados los tres módulos base; en la siguiente fase iremos llenando cada uno con cálculos y gráficos.
         </p>
         <div class="research-grid">
-          <article class="research-card">
-            <span>Módulo 01</span>
+          <button type="button" class="research-card" data-research-section="gex">
             <h3>Cálculos GEX</h3>
             <p>Preparado para estudiar exposición gamma por strike, vencimiento, zona de spot y concentración de walls.</p>
-          </article>
-          <article class="research-card">
-            <span>Módulo 02</span>
+          </button>
+          <button type="button" class="research-card" data-research-section="dex">
             <h3>Cálculos DEX</h3>
             <p>Espacio reservado para analizar delta exposure, presión direccional y cambios por desplazamientos del subyacente.</p>
-          </article>
-          <article class="research-card">
-            <span>Módulo 03</span>
+          </button>
+          <button type="button" class="research-card" data-research-section="volsurface">
             <h3>Volatility surface</h3>
             <p>Base para modelar la superficie de volatilidad y observar estructura por strikes y vencimientos.</p>
-          </article>
+          </button>
+        </div>
+        <div id="researchDetail" class="research-detail" aria-hidden="true">
+          <button id="researchBackBtn" class="research-back" type="button">Volver</button>
+          <div id="researchDetailContent"></div>
         </div>
       </section>
     </div>
@@ -3356,6 +3452,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260706-research-core"></script>
+  <script src="script.js?v=20260706-vol-surface"></script>
 </body>
 </html>

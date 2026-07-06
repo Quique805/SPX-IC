@@ -4594,6 +4594,182 @@ async function viewAutoChain(date, kind = 'entry') {
     preview.innerHTML = `<div style="color:var(--bad);padding:14px">Error cargando cadena: ${e.message}</div>`;
   }
 }
+
+async function fetchFirstJson(candidates) {
+  let lastError = null;
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.json();
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError || new Error('No se pudo cargar el JSON');
+}
+
+async function loadVolSurfaceDates() {
+  const index = await fetchFirstJson([
+    `data/chains-close-index.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/chains-close-index.json?t=${Date.now()}`
+  ]);
+  return (index.dates || []).filter(Boolean).sort();
+}
+
+async function loadVolSurfaceChain(date) {
+  return fetchFirstJson([
+    `data/chains-close/${date}.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/chains-close/${date}.json?t=${Date.now()}`,
+    `data/chains/${date}.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/chains/${date}.json?t=${Date.now()}`
+  ]);
+}
+
+function surfaceIvValue(row) {
+  const values = [Number(row.call_iv), Number(row.put_iv)]
+    .filter(v => Number.isFinite(v) && v > 0);
+  if (!values.length) return null;
+  return (values.reduce((sum, v) => sum + v, 0) / values.length) * 100;
+}
+
+function buildVolSurfaceGrid(chain) {
+  const expirations = Object.entries(chain.expirations || {})
+    .map(([exp, data]) => ({ exp, dte: Number(data.dte), strikes: Array.isArray(data.strikes) ? data.strikes : [] }))
+    .filter(item => Number.isFinite(item.dte) && item.strikes.length)
+    .sort((a, b) => a.dte - b.dte);
+  if (!expirations.length) return null;
+
+  const spot = Number(chain.spot);
+  let strikes = [...new Set(expirations.flatMap(item => item.strikes.map(row => Number(row.strike)).filter(Number.isFinite)))]
+    .sort((a, b) => a - b);
+  if (Number.isFinite(spot) && spot > 0) {
+    strikes = strikes.filter(strike => strike >= spot * 0.95 && strike <= spot * 1.05);
+  }
+  const maxStrikes = 115;
+  if (strikes.length > maxStrikes) {
+    const step = Math.ceil(strikes.length / maxStrikes);
+    strikes = strikes.filter((_, idx) => idx % step === 0);
+  }
+
+  const z = expirations.map(item => {
+    const byStrike = new Map();
+    item.strikes.forEach(row => {
+      const strike = Number(row.strike);
+      const iv = surfaceIvValue(row);
+      if (Number.isFinite(strike) && iv !== null) byStrike.set(strike, iv);
+    });
+    return strikes.map(strike => byStrike.get(strike) ?? null);
+  });
+
+  return {
+    date: chain.date,
+    capturedAt: chain.capturedAt,
+    spot,
+    strikes,
+    dtes: expirations.map(item => item.dte),
+    expirations: expirations.map(item => item.exp),
+    z
+  };
+}
+
+function renderVolSurfaceChart(grid) {
+  const status = document.getElementById('volSurfaceStatus');
+  const chart = document.getElementById('volSurfaceChart');
+  if (!grid || !grid.strikes.length || !grid.dtes.length) {
+    if (chart) chart.innerHTML = '<div style="padding:24px;color:#8a3a3a">No hay suficientes datos de IV para dibujar la superficie.</div>';
+    return;
+  }
+  if (status) {
+    const spot = Number.isFinite(grid.spot) ? grid.spot.toFixed(2) : '-';
+    status.textContent = `${grid.dtes.length} vencimientos | ${grid.strikes.length} strikes | spot ${spot}`;
+  }
+
+  const trace = {
+    type: 'surface',
+    x: grid.strikes,
+    y: grid.dtes,
+    z: grid.z,
+    colorscale: [
+      [0, '#f7f7f3'],
+      [0.35, '#cfcfc8'],
+      [0.62, '#10b981'],
+      [1, '#050505']
+    ],
+    colorbar: { title: 'IV %', thickness: 12 },
+    contours: {
+      z: { show: true, usecolormap: true, highlightcolor: '#050505', project: { z: true } }
+    },
+    hovertemplate: 'Strike %{x}<br>DTE %{y}<br>IV %{z:.2f}%<extra></extra>'
+  };
+  const layout = {
+    margin: { l: 0, r: 0, t: 22, b: 0 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    scene: {
+      xaxis: { title: 'Strike', backgroundcolor: 'rgba(255,255,255,0.68)', gridcolor: '#d6d6d1' },
+      yaxis: { title: 'Dias a expirar', backgroundcolor: 'rgba(255,255,255,0.68)', gridcolor: '#d6d6d1' },
+      zaxis: { title: 'Volatilidad implicita (%)', backgroundcolor: 'rgba(255,255,255,0.68)', gridcolor: '#d6d6d1' },
+      camera: { eye: { x: 1.7, y: 1.45, z: 0.9 } }
+    }
+  };
+  safePlotly('volSurfaceChart', [trace], layout, { responsive: true, displayModeBar: true });
+}
+
+async function renderVolSurfaceLab() {
+  const content = document.getElementById('researchDetailContent');
+  if (!content) return;
+  content.innerHTML = `
+    <h3>Volatility surface</h3>
+    <p class="vol-surface-note">
+      Reconstruccion 3D desde las cadenas guardadas: eje X = strike, eje Y = dias a expirar, eje Z = IV media entre call y put cuando ambas existen.
+      El slider inferior mueve la fecha de captura.
+    </p>
+    <div class="vol-surface-toolbar">
+      <input id="volSurfaceDateRange" type="range" min="0" max="0" value="0" step="1" aria-label="Fecha de cadena">
+      <div id="volSurfaceDateLabel" class="vol-surface-date">Cargando</div>
+    </div>
+    <div id="volSurfaceStatus" class="vol-surface-note">Cargando cadenas...</div>
+    <div id="volSurfaceChart"></div>
+  `;
+
+  try {
+    const dates = await loadVolSurfaceDates();
+    if (!dates.length) throw new Error('No hay indice de cadenas de cierre');
+    const slider = document.getElementById('volSurfaceDateRange');
+    const label = document.getElementById('volSurfaceDateLabel');
+    if (!slider || !label) return;
+    slider.max = String(dates.length - 1);
+    slider.value = String(dates.length - 1);
+
+    async function drawSelected() {
+      const idx = Math.max(0, Math.min(dates.length - 1, Number(slider.value)));
+      const date = dates[idx];
+      label.textContent = date;
+      const status = document.getElementById('volSurfaceStatus');
+      if (status) status.textContent = `Cargando ${date}...`;
+      const chain = await loadVolSurfaceChain(date);
+      renderVolSurfaceChart(buildVolSurfaceGrid(chain));
+    }
+
+    slider.addEventListener('input', drawSelected);
+    await drawSelected();
+  } catch (e) {
+    content.innerHTML += `<div style="margin-top:18px;padding:18px;border-radius:18px;background:#fff2f2;color:#8a3a3a;border:1px solid #e5b8b8">Error cargando superficie: ${e.message}</div>`;
+  }
+}
+
+function renderResearchPlaceholder(section) {
+  const content = document.getElementById('researchDetailContent');
+  if (!content) return;
+  const title = section === 'gex' ? 'Cálculos GEX' : 'Cálculos DEX';
+  content.innerHTML = `
+    <h3>${title}</h3>
+    <p class="vol-surface-note">
+      Entrada preparada. En la siguiente fase conectaremos aqui las metricas especificas y sus graficos.
+    </p>
+  `;
+}
 // ---- Madrid timezone helpers --------------------------------------------
 function formatMadridTime(isoUtc) {
   if (!isoUtc) return '—';
@@ -6140,6 +6316,8 @@ function initResearchCore() {
   const button = document.getElementById('researchCoreBtn');
   const overlay = document.getElementById('researchOverlay');
   const close = document.getElementById('researchCloseBtn');
+  const detail = document.getElementById('researchDetail');
+  const back = document.getElementById('researchBackBtn');
   if (!button || !overlay || !close) return;
 
   function openResearch() {
@@ -6148,14 +6326,37 @@ function initResearchCore() {
     close.focus();
   }
 
+  function closeDetail() {
+    if (!detail) return;
+    detail.classList.remove('open');
+    detail.setAttribute('aria-hidden', 'true');
+  }
+
   function closeResearch() {
+    closeDetail();
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
     button.focus();
   }
 
+  function openDetail(section) {
+    if (!detail) return;
+    detail.classList.add('open');
+    detail.setAttribute('aria-hidden', 'false');
+    if (section === 'volsurface') {
+      renderVolSurfaceLab();
+    } else {
+      renderResearchPlaceholder(section);
+    }
+    if (back) back.focus();
+  }
+
   button.addEventListener('click', openResearch);
   close.addEventListener('click', closeResearch);
+  if (back) back.addEventListener('click', closeDetail);
+  document.querySelectorAll('.research-card[data-research-section]').forEach(card => {
+    card.addEventListener('click', () => openDetail(card.dataset.researchSection));
+  });
   overlay.addEventListener('click', event => {
     if (event.target === overlay) closeResearch();
   });
