@@ -4650,7 +4650,7 @@ function surfaceIvValue(row) {
 function buildVolSurfaceGrid(chain) {
   const expirations = Object.entries(chain.expirations || {})
     .map(([exp, data]) => ({ exp, dte: Number(data.dte), strikes: Array.isArray(data.strikes) ? data.strikes : [] }))
-    .filter(item => Number.isFinite(item.dte) && item.strikes.length)
+    .filter(item => Number.isFinite(item.dte) && item.dte > 0 && item.strikes.length)
     .sort((a, b) => a.dte - b.dte);
   if (!expirations.length) return null;
 
@@ -4680,6 +4680,7 @@ function buildVolSurfaceGrid(chain) {
     date: chain.date,
     capturedAt: chain.capturedAt,
     spot,
+    excludedZeroDte: countVolSurfaceExpirations(chain) > expirations.length,
     strikes,
     dtes: expirations.map(item => item.dte),
     expirations: expirations.map(item => item.exp),
@@ -4697,7 +4698,8 @@ function renderVolSurfaceChart(grid, totalCompleteDates = null) {
   if (status) {
     const spot = Number.isFinite(grid.spot) ? grid.spot.toFixed(2) : '-';
     const sessions = Number.isFinite(Number(totalCompleteDates)) ? ` | ${totalCompleteDates} sesiones completas` : '';
-    status.textContent = `${grid.dtes.length} vencimientos | ${grid.strikes.length} strikes | spot ${spot}${sessions}`;
+    const zeroDteNote = grid.excludedZeroDte ? ' | 0DTE excluido' : '';
+    status.textContent = `${grid.dtes.length} vencimientos usados | ${grid.strikes.length} strikes | spot ${spot}${sessions}${zeroDteNote}`;
   }
 
   const trace = {
@@ -4738,7 +4740,7 @@ async function renderVolSurfaceLab() {
     <h3>Volatility surface</h3>
     <p class="vol-surface-note">
       Reconstruccion 3D desde las cadenas guardadas: eje X = strike, eje Y = dias a expirar, eje Z = IV media entre call y put cuando ambas existen.
-      El slider inferior mueve la fecha de captura y excluye las sesiones con una sola cadena descargada.
+      El slider inferior mueve la fecha de captura, excluye sesiones con una sola cadena descargada y no dibuja el 0DTE para evitar IV anualizada distorsionada.
     </p>
     <div class="vol-surface-toolbar">
       <input id="volSurfaceDateRange" type="range" min="0" max="0" value="0" step="1" aria-label="Fecha de cadena">
