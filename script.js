@@ -4640,14 +4640,13 @@ function countVolSurfaceExpirations(chain) {
     .length;
 }
 
-function surfaceIvValue(row) {
-  const values = [Number(row.call_iv), Number(row.put_iv)]
-    .filter(v => Number.isFinite(v) && v > 0);
-  if (!values.length) return null;
-  return (values.reduce((sum, v) => sum + v, 0) / values.length) * 100;
+function surfaceIvValue(row, side) {
+  const key = side === 'put' ? 'put_iv' : 'call_iv';
+  const value = Number(row[key]);
+  return Number.isFinite(value) && value > 0 ? value * 100 : null;
 }
 
-function buildVolSurfaceGrid(chain) {
+function buildVolSurfaceGrid(chain, side = 'call') {
   const expirations = Object.entries(chain.expirations || {})
     .map(([exp, data]) => ({ exp, dte: Number(data.dte), strikes: Array.isArray(data.strikes) ? data.strikes : [] }))
     .filter(item => Number.isFinite(item.dte) && item.dte > 0 && item.strikes.length)
@@ -4670,7 +4669,7 @@ function buildVolSurfaceGrid(chain) {
     const byStrike = new Map();
     item.strikes.forEach(row => {
       const strike = Number(row.strike);
-      const iv = surfaceIvValue(row);
+      const iv = surfaceIvValue(row, side);
       if (Number.isFinite(strike) && iv !== null) byStrike.set(strike, iv);
     });
     return strikes.map(strike => byStrike.get(strike) ?? null);
@@ -4680,6 +4679,7 @@ function buildVolSurfaceGrid(chain) {
     date: chain.date,
     capturedAt: chain.capturedAt,
     spot,
+    side,
     excludedZeroDte: countVolSurfaceExpirations(chain) > expirations.length,
     strikes,
     dtes: expirations.map(item => item.dte),
@@ -4688,9 +4688,9 @@ function buildVolSurfaceGrid(chain) {
   };
 }
 
-function renderVolSurfaceChart(grid, totalCompleteDates = null) {
+function renderVolSurfaceChart(elementId, grid, totalCompleteDates = null) {
   const status = document.getElementById('volSurfaceStatus');
-  const chart = document.getElementById('volSurfaceChart');
+  const chart = document.getElementById(elementId);
   if (!grid || !grid.strikes.length || !grid.dtes.length) {
     if (chart) chart.innerHTML = '<div style="padding:24px;color:#8a3a3a">No hay suficientes datos de IV para dibujar la superficie.</div>';
     return;
@@ -4713,11 +4713,11 @@ function renderVolSurfaceChart(grid, totalCompleteDates = null) {
       [0.62, '#10b981'],
       [1, '#050505']
     ],
-    colorbar: { title: 'IV %', thickness: 12 },
+    colorbar: { title: `${grid.side === 'put' ? 'Put' : 'Call'} IV %`, thickness: 12 },
     contours: {
       z: { show: true, usecolormap: true, highlightcolor: '#050505', project: { z: true } }
     },
-    hovertemplate: 'Strike %{x}<br>DTE %{y}<br>IV %{z:.2f}%<extra></extra>'
+    hovertemplate: `${grid.side === 'put' ? 'Put' : 'Call'}<br>Strike %{x}<br>DTE %{y}<br>IV %{z:.2f}%<extra></extra>`
   };
   const layout = {
     margin: { l: 0, r: 0, t: 22, b: 0 },
@@ -4730,7 +4730,7 @@ function renderVolSurfaceChart(grid, totalCompleteDates = null) {
       camera: { eye: { x: 1.7, y: 1.45, z: 0.9 } }
     }
   };
-  safePlotly('volSurfaceChart', [trace], layout, { responsive: true, displayModeBar: true });
+  safePlotly(elementId, [trace], layout, { responsive: true, displayModeBar: true });
 }
 
 async function renderVolSurfaceLab() {
@@ -4739,7 +4739,7 @@ async function renderVolSurfaceLab() {
   content.innerHTML = `
     <h3>Volatility surface</h3>
     <p class="vol-surface-note">
-      Reconstruccion 3D desde las cadenas guardadas: eje X = strike, eje Y = dias a expirar, eje Z = IV media entre call y put cuando ambas existen.
+      Reconstruccion 3D desde las cadenas guardadas: eje X = strike, eje Y = dias a expirar, eje Z = IV.
       El slider inferior mueve la fecha de captura, excluye sesiones con una sola cadena descargada y no dibuja el 0DTE para evitar IV anualizada distorsionada.
     </p>
     <div class="vol-surface-toolbar">
@@ -4747,7 +4747,16 @@ async function renderVolSurfaceLab() {
       <div id="volSurfaceDateLabel" class="vol-surface-date">Cargando</div>
     </div>
     <div id="volSurfaceStatus" class="vol-surface-note">Cargando sesiones completas...</div>
-    <div id="volSurfaceChart"></div>
+    <div class="vol-surface-grid">
+      <section class="vol-surface-panel">
+        <p class="vol-surface-panel-title">Calls</p>
+        <div id="volSurfaceCallChart" class="vol-surface-chart"></div>
+      </section>
+      <section class="vol-surface-panel">
+        <p class="vol-surface-panel-title">Puts</p>
+        <div id="volSurfacePutChart" class="vol-surface-chart"></div>
+      </section>
+    </div>
   `;
 
   try {
@@ -4766,7 +4775,8 @@ async function renderVolSurfaceLab() {
       const status = document.getElementById('volSurfaceStatus');
       if (status) status.textContent = `Cargando ${date}... (${dates.length} sesiones con 5+ vencimientos)`;
       const chain = await loadVolSurfaceChain(date);
-      renderVolSurfaceChart(buildVolSurfaceGrid(chain), dates.length);
+      renderVolSurfaceChart('volSurfaceCallChart', buildVolSurfaceGrid(chain, 'call'), dates.length);
+      renderVolSurfaceChart('volSurfacePutChart', buildVolSurfaceGrid(chain, 'put'), dates.length);
     }
 
     slider.addEventListener('input', drawSelected);

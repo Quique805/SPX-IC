@@ -2699,7 +2699,27 @@
       text-align: center;
     }
 
-    #volSurfaceChart {
+    .vol-surface-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .vol-surface-panel {
+      min-width: 0;
+    }
+
+    .vol-surface-panel-title {
+      margin: 0 0 8px;
+      color: #050505;
+      font-size: 0.82rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .vol-surface-chart {
       min-height: clamp(620px, 68dvh, 820px);
       border: 1px solid rgba(0,0,0,0.08);
       border-radius: 28px;
@@ -2796,7 +2816,10 @@
       .vol-surface-toolbar {
         grid-template-columns: 1fr;
       }
-      #volSurfaceChart {
+      .vol-surface-grid {
+        grid-template-columns: 1fr;
+      }
+      .vol-surface-chart {
         min-height: 72dvh;
       }
     }
@@ -3455,6 +3478,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260706-vol-surface-8exp"></script>
+  <script src="script.js?v=20260706-vol-surface-split"></script>
 </body>
 </html>
