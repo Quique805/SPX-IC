@@ -6136,9 +6136,38 @@ function initChainTabs() {
   });
 }
 
+function initResearchCore() {
+  const button = document.getElementById('researchCoreBtn');
+  const overlay = document.getElementById('researchOverlay');
+  const close = document.getElementById('researchCloseBtn');
+  if (!button || !overlay || !close) return;
+
+  function openResearch() {
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    close.focus();
+  }
+
+  function closeResearch() {
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    button.focus();
+  }
+
+  button.addEventListener('click', openResearch);
+  close.addEventListener('click', closeResearch);
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) closeResearch();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && overlay.classList.contains('open')) closeResearch();
+  });
+}
+
 setTimeout(() => {
   loadAutoFetchedChains('entry');
   loadAutoFetchedChains('close');
   initChainTabs();
+  initResearchCore();
   updateScheduleBar();
 }, 1500);
