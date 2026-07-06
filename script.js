@@ -4737,13 +4737,13 @@ async function renderVolSurfaceLab() {
     <h3>Volatility surface</h3>
     <p class="vol-surface-note">
       Reconstruccion 3D desde las cadenas guardadas: eje X = strike, eje Y = dias a expirar, eje Z = IV media entre call y put cuando ambas existen.
-      El slider inferior mueve la fecha de captura.
+      El slider inferior mueve la fecha de captura y excluye las sesiones con una sola cadena descargada.
     </p>
     <div class="vol-surface-toolbar">
       <input id="volSurfaceDateRange" type="range" min="0" max="0" value="0" step="1" aria-label="Fecha de cadena">
       <div id="volSurfaceDateLabel" class="vol-surface-date">Cargando</div>
     </div>
-    <div id="volSurfaceStatus" class="vol-surface-note">Cargando cadenas...</div>
+    <div id="volSurfaceStatus" class="vol-surface-note">Cargando sesiones completas...</div>
     <div id="volSurfaceChart"></div>
   `;
 
