@@ -4378,7 +4378,7 @@ function safePlotly(elementId, traces, layout, config) {
 // ---- Theme toggle (light/dark) ------------------------------------------
 const THEME_KEY = 'spx-vix-theme-v1';
 function applyTheme(theme) {
-  const t = (theme === 'dark') ? 'dark' : 'light';
+  const t = 'light';
   document.documentElement.dataset.theme = t;
   document.querySelectorAll('.theme-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.theme === t);
