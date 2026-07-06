@@ -6028,10 +6028,19 @@ async function renderGammaChartsPanel() {
 }
 
 function initChainTabs() {
-  document.querySelectorAll('.chain-auto-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = btn.dataset.chainTab;
-      document.querySelectorAll('.chain-auto-tab').forEach(b => b.classList.toggle('active', b === btn));
+  let activeHistoryTab = 'entry';
+
+  function activateChainTab(tab, trigger) {
+      const mainTab = tab === 'entry' || tab === 'close' ? 'history' : tab;
+      document.querySelectorAll('.chain-auto-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.chainTab === mainTab);
+      });
+      document.querySelectorAll('.chain-history-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.chainTab === tab);
+      });
+      document.querySelectorAll('.chain-history-node').forEach(node => {
+        node.classList.toggle('open', mainTab === 'history');
+      });
       const entry = document.getElementById('autoChainsList');
       const close = document.getElementById('autoCloseChainsList');
       const spotGamma = document.getElementById('spotGammaPanel');
@@ -6068,6 +6077,20 @@ function initChainTabs() {
       if (tab === 'premium-history' && premiumHistory) {
         renderPremiumHistoryPanel();
       }
+  }
+
+  document.querySelectorAll('.chain-auto-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.chainTab;
+      activateChainTab(tab === 'history' ? activeHistoryTab : tab, btn);
+    });
+  });
+
+  document.querySelectorAll('.chain-history-tab').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      activeHistoryTab = btn.dataset.chainTab;
+      activateChainTab(activeHistoryTab, btn);
     });
   });
 }

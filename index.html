@@ -2167,6 +2167,267 @@
         white-space: nowrap;
       }
     }
+
+    /* ---- SPX compact grayscale layout -------------------------------- */
+    body {
+      color: #111;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,0.9), transparent 34rem),
+        linear-gradient(135deg, #f7f7f5 0%, #eeeeeb 48%, #deded9 100%) !important;
+    }
+
+    header {
+      width: min(1180px, calc(100% - 40px));
+      padding: 34px 0 18px;
+      gap: 0;
+    }
+
+    .entry-card {
+      display: none !important;
+    }
+
+    .product-title {
+      font-family: Inter, system-ui, sans-serif;
+      font-size: clamp(4.2rem, 10vw, 9.8rem);
+      font-weight: 900;
+      letter-spacing: -0.1em;
+      line-height: 0.78;
+      color: #050505;
+      background:
+        linear-gradient(105deg, #050505 0%, #050505 40%, #777 48%, #fff 52%, #1f1f1f 60%, #050505 100%);
+      background-size: 240% 100%;
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .product-title::after {
+      content: "SPX Gamma Levels";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 64%;
+      z-index: -1;
+      color: rgba(0,0,0,0.06);
+      transform: scaleY(-0.22);
+      filter: blur(8px);
+    }
+
+    .product-sub {
+      display: none;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 40px));
+    }
+
+    #chainsCard {
+      min-height: 680px;
+      padding: 32px;
+      border-color: rgba(0,0,0,0.08);
+      border-radius: 42px;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(255,255,255,0.96), rgba(245,245,242,0.72) 34%, rgba(226,226,222,0.72) 100%);
+      box-shadow: 0 32px 90px rgba(0,0,0,0.1);
+    }
+
+    #chainsCard > h2 {
+      text-align: center;
+      font-size: 1.05rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #555;
+    }
+
+    #chainsCard > h2::before {
+      content: "OPERATIVA";
+      color: #999;
+    }
+
+    .chains-status {
+      max-width: 920px;
+      margin: 0 auto 22px;
+      border-radius: 999px;
+      color: #333;
+      background: rgba(255,255,255,0.7);
+    }
+
+    .chain-auto-tabs {
+      position: relative;
+      width: min(680px, 100%);
+      aspect-ratio: 1;
+      margin: 22px auto 28px;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9) 0 18%, transparent 19%),
+        radial-gradient(circle at 50% 50%, transparent 0 38%, rgba(0,0,0,0.045) 39%, transparent 40%),
+        radial-gradient(circle at 50% 50%, transparent 0 62%, rgba(0,0,0,0.055) 63%, transparent 64%),
+        rgba(255,255,255,0.34);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.9),
+        0 24px 70px rgba(0,0,0,0.08);
+      overflow: visible;
+    }
+
+    .chain-orbit-center {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      display: grid;
+      place-items: center;
+      width: 190px;
+      height: 190px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      background: #050505;
+      box-shadow:
+        0 28px 70px rgba(0,0,0,0.28),
+        0 0 0 16px rgba(0,0,0,0.04);
+      text-align: center;
+    }
+
+    .chain-orbit-center span {
+      color: rgba(255,255,255,0.56);
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .chain-orbit-center strong {
+      font-size: 1.55rem;
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .chain-orbit-item {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 158px;
+      transform: translate(-50%, -50%);
+    }
+
+    .chain-orbit-item:nth-of-type(2) { transform: rotate(-90deg) translate(245px) rotate(90deg) translate(-50%, -50%); }
+    .chain-orbit-item:nth-of-type(3) { transform: rotate(-38.6deg) translate(245px) rotate(38.6deg) translate(-50%, -50%); }
+    .chain-orbit-item:nth-of-type(4) { transform: rotate(12.8deg) translate(245px) rotate(-12.8deg) translate(-50%, -50%); }
+    .chain-orbit-item:nth-of-type(5) { transform: rotate(64.2deg) translate(245px) rotate(-64.2deg) translate(-50%, -50%); }
+    .chain-orbit-item:nth-of-type(6) { transform: rotate(115.6deg) translate(245px) rotate(-115.6deg) translate(-50%, -50%); }
+    .chain-orbit-item:nth-of-type(7) { transform: rotate(167deg) translate(245px) rotate(-167deg) translate(-50%, -50%); }
+    .chain-orbit-item:nth-of-type(8) { transform: rotate(218.4deg) translate(245px) rotate(-218.4deg) translate(-50%, -50%); }
+
+    .chain-auto-tab {
+      width: 158px;
+      min-height: 74px;
+      border: 1px solid rgba(0,0,0,0.1);
+      border-radius: 28px;
+      padding: 12px 14px;
+      color: #1b1b1b;
+      background: rgba(255,255,255,0.76);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      line-height: 1.15;
+      text-transform: uppercase;
+      white-space: normal;
+    }
+
+    .chain-auto-tab.active,
+    .chain-auto-tab:hover {
+      border-color: #050505;
+      background: #050505;
+      color: #fff;
+      transform: translateY(-2px);
+    }
+
+    .chain-history-node {
+      z-index: 5;
+    }
+
+    .chain-history-subtabs {
+      display: none;
+      position: absolute;
+      left: 50%;
+      top: calc(100% + 10px);
+      width: 190px;
+      transform: translateX(-50%);
+      gap: 7px;
+      padding: 8px;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 24px;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.1);
+      backdrop-filter: blur(12px);
+    }
+
+    .chain-history-node:hover .chain-history-subtabs,
+    .chain-history-node:focus-within .chain-history-subtabs,
+    .chain-history-node.open .chain-history-subtabs {
+      display: grid;
+    }
+
+    .chain-history-tab {
+      border: 0;
+      border-radius: 999px;
+      padding: 9px 10px;
+      color: #555;
+      background: rgba(0,0,0,0.05);
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    .chain-history-tab.active,
+    .chain-history-tab:hover {
+      color: #fff;
+      background: #050505;
+    }
+
+    .chain-auto-panel,
+    #chainPreview {
+      max-width: 1060px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    @media (max-width: 820px) {
+      #chainsCard {
+        min-height: auto;
+      }
+      .chain-auto-tabs {
+        display: grid;
+        width: 100%;
+        aspect-ratio: auto;
+        gap: 10px;
+        border-radius: 28px;
+        padding: 14px;
+      }
+      .chain-orbit-center,
+      .chain-orbit-item {
+        position: static;
+        width: 100%;
+        height: auto;
+        transform: none !important;
+      }
+      .chain-orbit-center {
+        min-height: 120px;
+        border-radius: 28px;
+      }
+      .chain-auto-tab {
+        width: 100%;
+      }
+      .chain-history-subtabs {
+        position: static;
+        width: 100%;
+        transform: none;
+        margin-top: 8px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -2251,15 +2512,24 @@
         </div>
       </div>
 
-      <div class="chain-auto-tabs">
-        <button type="button" class="chain-auto-tab active" data-chain-tab="entry">Entrada · 16:07</button>
-        <button type="button" class="chain-auto-tab" data-chain-tab="close">Cierre · 22:32</button>
-        <button type="button" class="chain-auto-tab" data-chain-tab="spotgamma">SpotGamma</button>
-        <button type="button" class="chain-auto-tab" data-chain-tab="gamma">Niveles Gamma</button>
-        <button type="button" class="chain-auto-tab" data-chain-tab="charts">Gráficos</button>
-        <button type="button" class="chain-auto-tab" data-chain-tab="data-input">Introducción datos</button>
-        <button type="button" class="chain-auto-tab" data-chain-tab="summary">Resumen</button>
-        <button type="button" class="chain-auto-tab" data-chain-tab="premium-history">Evolución primas</button>
+      <div class="chain-auto-tabs" aria-label="Navegacion principal del dashboard">
+        <div class="chain-orbit-center">
+          <span>Panel</span>
+          <strong>SPX Gamma</strong>
+        </div>
+        <div class="chain-orbit-item chain-history-node">
+          <button type="button" class="chain-auto-tab active" data-chain-tab="history">Historico de cadenas</button>
+          <div class="chain-history-subtabs" aria-label="Subpestanas de historico de cadenas">
+            <button type="button" class="chain-history-tab active" data-chain-tab="entry">Entrada 16:07</button>
+            <button type="button" class="chain-history-tab" data-chain-tab="close">Cierre 22:32</button>
+          </div>
+        </div>
+        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="spotgamma">SpotGamma</button></div>
+        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="gamma">Niveles Gamma</button></div>
+        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="charts">Regimen Gamma +/-</button></div>
+        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="data-input">Introduccion datos</button></div>
+        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="summary">Resumen</button></div>
+        <div class="chain-orbit-item"><button type="button" class="chain-auto-tab" data-chain-tab="premium-history">Evolucion primas</button></div>
       </div>
       <div id="autoChainsList" class="chain-auto-panel" style="margin-bottom:14px"></div>
       <div id="autoCloseChainsList" class="chain-auto-panel" style="display:none;margin-bottom:14px"></div>
@@ -2758,6 +3028,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260706-gamma-layout"></script>
+  <script src="script.js?v=20260706-compact-tabs"></script>
 </body>
 </html>
