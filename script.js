@@ -4764,7 +4764,7 @@ async function renderVolSurfaceLab() {
       const date = dates[idx];
       label.textContent = date;
       const status = document.getElementById('volSurfaceStatus');
-      if (status) status.textContent = `Cargando ${date}... (${dates.length} sesiones completas con 5 vencimientos)`;
+      if (status) status.textContent = `Cargando ${date}... (${dates.length} sesiones con 5+ vencimientos)`;
       const chain = await loadVolSurfaceChain(date);
       renderVolSurfaceChart(buildVolSurfaceGrid(chain), dates.length);
     }

@@ -218,7 +218,7 @@ def main():
             dte = (ed - today_d).days
             if dte >= 0:
                 relevant.append((e, dte))
-        relevant = relevant[:5]
+        relevant = relevant[:8]
 
         chain_out = {"date": today, "kind": chain_kind, "capturedAt": now_iso, "spot": spot, "expirations": {}}
         for e, dte in relevant:
