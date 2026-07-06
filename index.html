@@ -2508,8 +2508,9 @@
 
     .research-modal {
       position: relative;
-      width: min(980px, 100%);
-      min-height: min(680px, calc(100vh - 56px));
+      width: min(1120px, calc(100vw - 24px));
+      height: min(1040px, calc(100dvh - 24px));
+      min-height: min(820px, calc(100dvh - 24px));
       overflow: hidden;
       border: 1px solid rgba(0,0,0,0.1);
       border-radius: 44px;
@@ -2630,7 +2631,7 @@
 
     .research-detail {
       position: absolute;
-      inset: 22px;
+      inset: 14px;
       z-index: 3;
       display: none;
       overflow: auto;
@@ -2699,7 +2700,7 @@
     }
 
     #volSurfaceChart {
-      min-height: 500px;
+      min-height: clamp(620px, 68dvh, 820px);
       border: 1px solid rgba(0,0,0,0.08);
       border-radius: 28px;
       background: rgba(255,255,255,0.76);
@@ -2774,7 +2775,9 @@
         padding: 12px;
       }
       .research-modal {
-        min-height: calc(100vh - 24px);
+        width: calc(100vw - 12px);
+        height: calc(100dvh - 12px);
+        min-height: calc(100dvh - 12px);
         border-radius: 32px;
         padding: 28px 18px;
         overflow-y: auto;
@@ -2786,7 +2789,7 @@
         min-height: 170px;
       }
       .research-detail {
-        inset: 10px;
+        inset: 6px;
         padding: 18px;
         border-radius: 28px;
       }
@@ -2794,7 +2797,7 @@
         grid-template-columns: 1fr;
       }
       #volSurfaceChart {
-        min-height: 420px;
+        min-height: 72dvh;
       }
     }
   </style>

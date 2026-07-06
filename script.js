@@ -4614,7 +4614,15 @@ async function loadVolSurfaceDates() {
     `data/chains-close-index.json?t=${Date.now()}`,
     `${GITHUB_RAW_BASE}/data/chains-close-index.json?t=${Date.now()}`
   ]);
-  return (index.dates || []).filter(Boolean).sort();
+  const dates = (index.dates || []).filter(Boolean).sort();
+  const completeDates = [];
+  for (const date of dates) {
+    try {
+      const chain = await loadVolSurfaceChain(date);
+      if (countVolSurfaceExpirations(chain) >= 5) completeDates.push(date);
+    } catch (_) {}
+  }
+  return completeDates.length ? completeDates : dates;
 }
 
 async function loadVolSurfaceChain(date) {
@@ -4624,6 +4632,12 @@ async function loadVolSurfaceChain(date) {
     `data/chains/${date}.json?t=${Date.now()}`,
     `${GITHUB_RAW_BASE}/data/chains/${date}.json?t=${Date.now()}`
   ]);
+}
+
+function countVolSurfaceExpirations(chain) {
+  return Object.values(chain && chain.expirations || {})
+    .filter(data => Array.isArray(data.strikes) && data.strikes.length > 0)
+    .length;
 }
 
 function surfaceIvValue(row) {
