@@ -5024,12 +5024,36 @@ function optionQuote(row, key) {
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
+const MIN_WING_CREDIT_POINTS = 0.05;
+
+function gammaWingCredits(p) {
+  return {
+    call: optionQuote(p.call, 'bid') - optionQuote(p.callProtection, 'ask'),
+    put: optionQuote(p.put, 'bid') - optionQuote(p.putProtection, 'ask')
+  };
+}
+
+function gammaSkippedWings(p) {
+  const credits = gammaWingCredits(p);
+  const opex = getQuarterlyOpexStatus(p.entryDate);
+  const skipped = [];
+  if (credits.call <= MIN_WING_CREDIT_POINTS) {
+    skipped.push({ wing: 'call', label: 'Call Spread', credit: credits.call });
+  }
+  if (!opex.isOpexDay && credits.put <= MIN_WING_CREDIT_POINTS) {
+    skipped.push({ wing: 'put', label: 'Put Spread', credit: credits.put });
+  }
+  return skipped;
+}
+
 function computeEntryNetCredit(levels) {
   const p = levels.entryPremiums;
   if (!p || !p.ok) return null;
   const opex = getQuarterlyOpexStatus(p.entryDate);
-  return optionQuote(p.call, 'bid') - optionQuote(p.callProtection, 'ask')
-    + (opex.isOpexDay ? 0 : optionQuote(p.put, 'bid') - optionQuote(p.putProtection, 'ask'));
+  const credits = gammaWingCredits(p);
+  const callCredit = credits.call > MIN_WING_CREDIT_POINTS ? credits.call : 0;
+  const putCredit = !opex.isOpexDay && credits.put > MIN_WING_CREDIT_POINTS ? credits.put : 0;
+  return callCredit + putCredit;
 }
 
 async function fetchGammaIndexDates() {
@@ -5298,6 +5322,13 @@ async function buildGammaSummaryRows(startDate, endDate) {
       levels.entryPremiums = await computeEntryPremiumsForLevels(levels);
       const entryCredit = computeEntryNetCredit(levels);
       if (!Number.isFinite(entryCredit)) continue;
+      const skippedWings = levels.entryPremiums && levels.entryPremiums.ok ? gammaSkippedWings(levels.entryPremiums) : [];
+      const callActive = !skippedWings.some(item => item.wing === 'call');
+      const putActive = !skippedWings.some(item => item.wing === 'put');
+      if (!callActive && !putActive) {
+        results.push({ date: sessionDate, status: 'No operable', cls: 'summary-no-trade', pnl: 0, source: 'NO COMPENSA' });
+        continue;
+      }
       const premiumResult = await getPremiumHistoryResult(sessionDate);
       if (premiumResult) {
         const losingDay = premiumResult.pnl < 0;
@@ -5316,8 +5347,8 @@ async function buildGammaSummaryRows(startDate, endDate) {
       const high = Number(row && row.high);
       const low = Number(row && row.low);
       const opex = getQuarterlyOpexStatus(sessionDate);
-      const bad = [sellCall, high].every(Number.isFinite) && high >= sellCall
-        || (!opex.isOpexDay && [sellPut, low].every(Number.isFinite) && low <= sellPut);
+      const bad = callActive && [sellCall, high].every(Number.isFinite) && high >= sellCall
+        || (putActive && !opex.isOpexDay && [sellPut, low].every(Number.isFinite) && low <= sellPut);
       const losingDay = bad || entryCredit < 0;
       results.push({
         date: sessionDate,
@@ -5650,9 +5681,18 @@ function renderGammaPremiumCard(levels) {
   const callProtWarn = p.callProtection.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.callProtection.targetStrike, 0)})</span>` : '';
   const putProtWarn = p.putProtection.dist > 0 ? ` <span style="color:var(--bad);font-size:10px">(aprox. ${fmtGammaNum(p.putProtection.targetStrike, 0)})</span>` : '';
   const opex = getQuarterlyOpexStatus(p.entryDate);
-  const grossCredit = (Number(p.call.bid) || 0) + (opex.isOpexDay ? 0 : (Number(p.put.bid) || 0));
-  const protectionCost = (Number(p.callProtection.ask) || 0) + (opex.isOpexDay ? 0 : (Number(p.putProtection.ask) || 0));
+  const skippedWings = gammaSkippedWings(p);
+  const callSkipped = skippedWings.some(item => item.wing === 'call');
+  const putSkipped = skippedWings.some(item => item.wing === 'put');
+  const callCredit = optionQuote(p.call, 'bid') - optionQuote(p.callProtection, 'ask');
+  const putCredit = optionQuote(p.put, 'bid') - optionQuote(p.putProtection, 'ask');
+  const grossCredit = (callSkipped ? 0 : (Number(p.call.bid) || 0)) + (opex.isOpexDay || putSkipped ? 0 : (Number(p.put.bid) || 0));
+  const protectionCost = (callSkipped ? 0 : (Number(p.callProtection.ask) || 0)) + (opex.isOpexDay || putSkipped ? 0 : (Number(p.putProtection.ask) || 0));
   const netCredit = grossCredit - protectionCost;
+  const noCompensaRows = skippedWings.map(item => `
+    <div style="background:rgba(183,50,50,0.10);border:1px solid rgba(183,50,50,0.35);border-radius:4px;padding:6px 8px;color:var(--bad);font-weight:800">
+      ${item.label}: NO COMPENSA (${fmtGammaNum(item.credit * 100, 2)} USD)
+    </div>`).join('');
   return `<div style="background:var(--blue-50);border:1px solid var(--gold-500);border-radius:5px;padding:10px;font-size:12px;margin-top:8px">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
       <div>
@@ -5666,23 +5706,24 @@ function renderGammaPremiumCard(levels) {
     <div style="display:grid;gap:6px">
       <div style="display:flex;justify-content:space-between;gap:8px">
         <span>Venta de call ${fmtGammaNum(p.call.strike, 0)}${callWarn}</span>
-        <b class="call-cell">${fmtGammaNum(p.call.bid, 2)}</b>
+        <b class="call-cell">${callSkipped ? 'NO COMPENSA' : fmtGammaNum(p.call.bid, 2)}</b>
       </div>
       <div style="display:flex;justify-content:space-between;gap:8px">
         <span>Compra call ${fmtGammaNum(p.callProtection.strike, 0)}${callProtWarn}</span>
-        <b class="call-cell">-${fmtGammaNum(p.callProtection.ask, 2)}</b>
+        <b class="call-cell">${callSkipped ? `Crédito ${fmtGammaNum(callCredit * 100, 2)} USD` : '-' + fmtGammaNum(p.callProtection.ask, 2)}</b>
       </div>
+      ${noCompensaRows}
       ${opex.isOpexDay ? `
         <div style="background:rgba(201,162,39,0.12);border:1px solid var(--gold-500);border-radius:4px;padding:6px 8px;color:var(--gold-700);font-weight:700">
           Hora Bruja Trimestral: no se abre el lado put.
         </div>` : `
         <div style="display:flex;justify-content:space-between;gap:8px">
           <span>Venta de put ${fmtGammaNum(p.put.strike, 0)}${putWarn}</span>
-          <b class="put-cell">${fmtGammaNum(p.put.bid, 2)}</b>
+          <b class="put-cell">${putSkipped ? 'NO COMPENSA' : fmtGammaNum(p.put.bid, 2)}</b>
         </div>
         <div style="display:flex;justify-content:space-between;gap:8px">
           <span>Compra put ${fmtGammaNum(p.putProtection.strike, 0)}${putProtWarn}</span>
-          <b class="put-cell">-${fmtGammaNum(p.putProtection.ask, 2)}</b>
+          <b class="put-cell">${putSkipped ? `Crédito ${fmtGammaNum(putCredit * 100, 2)} USD` : '-' + fmtGammaNum(p.putProtection.ask, 2)}</b>
         </div>`}
       <div style="border-top:1px solid var(--blue-200);margin-top:2px;padding-top:6px;display:grid;gap:4px">
         <div style="display:flex;justify-content:space-between;gap:8px;color:var(--ink-soft)">

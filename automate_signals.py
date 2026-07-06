@@ -19,6 +19,7 @@ from monitor_premiums import (
     get_open_wall_setup,
     is_opex_day,
     load_spotgamma_levels,
+    no_compensa_reason,
     select_legs,
 )
 
@@ -104,6 +105,40 @@ def legs_table(signal):
       </table>"""
 
 
+def skipped_wings_table(signal):
+    skipped = (signal.get("openWall") or {}).get("skipped_wings") or []
+    if not skipped:
+        return ""
+    rows = []
+    for item in skipped:
+        wing = "Call Spread" if item.get("wing") == "call" else "Put Spread"
+        sell = item.get("sellStrike")
+        buy = item.get("buyStrike")
+        strikes = (
+            f"{float(sell):,.0f} / {float(buy):,.0f}"
+            if sell is not None and buy is not None else "n/d"
+        )
+        credit = item.get("creditUsd")
+        credit_text = f"${float(credit):,.2f}" if credit is not None else "n/d"
+        rows.append(f"""
+          <tr>
+            <td style="padding:8px 5px;border-bottom:1px solid #f0d4d4">{html.escape(wing)}</td>
+            <td style="padding:8px 5px;border-bottom:1px solid #f0d4d4;text-align:right">{html.escape(strikes)}</td>
+            <td style="padding:8px 5px;border-bottom:1px solid #f0d4d4;text-align:right;font-weight:800;color:{RED}">NO COMPENSA</td>
+            <td style="padding:8px 5px;border-bottom:1px solid #f0d4d4;text-align:right">{html.escape(credit_text)}</td>
+          </tr>""")
+    return f"""
+      <div style="margin-top:12px;background:#fff3f3;border:1px solid #f0bcbc;border-radius:5px;padding:9px 11px">
+        <div style="font-size:10px;text-transform:uppercase;color:{RED};font-weight:800;margin-bottom:6px">Alas descartadas</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <tr style="color:{MUTED};font-size:10px;text-transform:uppercase">
+            <th style="padding:5px;text-align:left">Ala</th><th style="padding:5px;text-align:right">Strikes</th><th style="padding:5px;text-align:right">Estado</th><th style="padding:5px;text-align:right">Crédito</th>
+          </tr>
+          {''.join(rows)}
+        </table>
+      </div>"""
+
+
 def open_wall_summary(signal):
     setup = signal.get("openWall") or {}
     pct = setup.get("open_pct")
@@ -133,7 +168,7 @@ def open_wall_summary(signal):
 def entry_card(signal):
     date = signal["date"]
     if signal["status"] == "no_trade":
-        content = open_wall_summary(signal) + f"""
+        content = open_wall_summary(signal) + skipped_wings_table(signal) + f"""
           <div style="text-align:center;padding:18px 8px 12px">
             <div style="font-size:42px;line-height:1">🚫</div>
             <div style="margin-top:12px;font-weight:800;color:{RED}">Sin operación de venta de volatilidad para hoy</div>
@@ -157,7 +192,18 @@ def entry_card(signal):
         message += " Operar únicamente con el 50% del capital destinado."
     if opex:
         message += " Sesión OPEX: ejecutar solamente el call spread."
-    content = open_wall_summary(signal) + legs_table(signal) + f"""
+    if (signal.get("openWall") or {}).get("skipped_wings"):
+        message += " Alguna ala queda descartada porque NO COMPENSA por prima."
+    legs = signal.get("legs", {})
+    if "sell_call" in legs and "sell_put" in legs:
+        trade_title = "OPERAR ? Iron Condor 0DTE"
+    elif "sell_call" in legs:
+        trade_title = "OPERAR ? Call Spread 0DTE"
+    elif "sell_put" in legs:
+        trade_title = "OPERAR ? Put Spread 0DTE"
+    else:
+        trade_title = "OPERAR ? Spread 0DTE"
+    content = open_wall_summary(signal) + legs_table(signal) + skipped_wings_table(signal) + f"""
       <div style="margin-top:12px;padding-top:10px;border-top:2px solid {GOLD};display:flex;justify-content:space-between;font-weight:800">
         <span>Crédito neto estimado</span><span>{points(signal['entryCredit'])}</span>
       </div>"""
@@ -292,6 +338,10 @@ def create_entry_signal(date):
         signal.update({"status": "no_trade", "reason": reason, "openWall": setup})
         return signal
     _, legs, entry_credit, setup = select_legs(date, levels)
+    if not legs:
+        reason = no_compensa_reason(setup) or "NO COMPENSA"
+        signal.update({"status": "no_trade", "reason": reason, "openWall": setup, "legs": {}})
+        return signal
     signal.update({
         "status": "active",
         "opex": is_opex_day(date),

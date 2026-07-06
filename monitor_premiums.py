@@ -27,6 +27,8 @@ ENTRY_DIR = os.path.join(DATA_DIR, "chains")
 SPOTGAMMA_FILE = os.path.join(DATA_DIR, "spotgamma-levels.json")
 CONTRACT_MULTIPLIER = 100
 SPREAD_WIDTH = 20
+MIN_WING_CREDIT_USD = 5
+MIN_WING_CREDIT_POINTS = MIN_WING_CREDIT_USD / CONTRACT_MULTIPLIER
 MIN_T = 1 / 252
 RISK_FREE_RATE = 0.04
 
@@ -188,6 +190,44 @@ def no_trade_reason(today, levels):
     return None if setup["ok"] else setup["reason"]
 
 
+def wing_credit(legs, sell_name, buy_name):
+    sell = legs.get(sell_name)
+    buy = legs.get(buy_name)
+    if not sell or not buy:
+        return None
+    return float(sell["entryBid"]) - float(buy["entryAsk"])
+
+
+def remove_wing_if_unprofitable(legs, setup, wing, sell_name, buy_name):
+    credit = wing_credit(legs, sell_name, buy_name)
+    if credit is None or credit > MIN_WING_CREDIT_POINTS:
+        return
+    sell = legs.pop(sell_name, None)
+    buy = legs.pop(buy_name, None)
+    setup.setdefault("skipped_wings", []).append({
+        "wing": wing,
+        "reason": "NO COMPENSA",
+        "credit": credit,
+        "creditUsd": credit * CONTRACT_MULTIPLIER,
+        "thresholdUsd": MIN_WING_CREDIT_USD,
+        "sellStrike": sell.get("strike") if sell else None,
+        "buyStrike": buy.get("strike") if buy else None,
+    })
+
+
+def no_compensa_reason(setup):
+    skipped = setup.get("skipped_wings") or []
+    if not skipped:
+        return None
+    labels = []
+    for item in skipped:
+        wing = "CALL" if item.get("wing") == "call" else "PUT"
+        credit = item.get("creditUsd")
+        credit_text = f"{credit:.2f} USD" if isinstance(credit, (int, float)) else "n/d"
+        labels.append(f"{wing}: NO COMPENSA ({credit_text})")
+    return "; ".join(labels)
+
+
 def select_legs(today, levels):
     entry = load_json_safe(os.path.join(ENTRY_DIR, f"{today}.json"))
     if not entry:
@@ -219,6 +259,8 @@ def select_legs(today, levels):
     if is_opex_day(today):
         legs.pop("sell_put", None)
         legs.pop("buy_put", None)
+    remove_wing_if_unprofitable(legs, setup, "call", "sell_call", "buy_call")
+    remove_wing_if_unprofitable(legs, setup, "put", "sell_put", "buy_put")
     entry_credit = sum(
         leg["entryBid"] if leg["side"] == "sell" else -leg["entryAsk"]
         for leg in legs.values()
@@ -295,6 +337,19 @@ def main():
                 print(f"  SKIP: {exc}. Se reintentará en la siguiente captura.")
                 return
             raise
+        if not legs:
+            reason = no_compensa_reason(setup) or "NO COMPENSA"
+            history = {
+                "date": today,
+                "status": "no_trade",
+                "reason": reason,
+                "openWall": setup,
+                "snapshots": [],
+            }
+            save_json(history_file, history)
+            print(f"  SKIP: {reason}")
+            update_index(today, now_iso)
+            return
         history = {
             "date": today,
             "status": "active",
