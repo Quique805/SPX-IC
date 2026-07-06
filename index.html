@@ -2283,19 +2283,9 @@
     .chain-auto-tabs::before {
       z-index: 0;
       background:
-        radial-gradient(ellipse at 42% 42%, transparent 0 18%, rgba(0,0,0,0.075) 18.2% 18.6%, transparent 18.8%),
-        radial-gradient(ellipse at 42% 42%, transparent 0 27%, rgba(0,0,0,0.06) 27.2% 27.6%, transparent 27.8%),
-        radial-gradient(ellipse at 42% 42%, transparent 0 36%, rgba(0,0,0,0.052) 36.2% 36.6%, transparent 36.8%),
-        radial-gradient(ellipse at 42% 42%, transparent 0 46%, rgba(0,0,0,0.045) 46.2% 46.55%, transparent 46.8%),
-        radial-gradient(ellipse at 42% 42%, transparent 0 57%, rgba(0,0,0,0.04) 57.2% 57.55%, transparent 57.8%),
-        radial-gradient(ellipse at 42% 42%, transparent 0 69%, rgba(0,0,0,0.036) 69.2% 69.5%, transparent 69.8%),
-        radial-gradient(ellipse at 62% 58%, transparent 0 16%, rgba(0,0,0,0.055) 16.2% 16.6%, transparent 16.9%),
-        radial-gradient(ellipse at 62% 58%, transparent 0 25%, rgba(0,0,0,0.047) 25.2% 25.55%, transparent 25.9%),
-        radial-gradient(ellipse at 62% 58%, transparent 0 35%, rgba(0,0,0,0.04) 35.2% 35.55%, transparent 35.9%),
-        radial-gradient(ellipse at 31% 68%, transparent 0 14%, rgba(0,0,0,0.045) 14.2% 14.55%, transparent 14.9%),
-        radial-gradient(ellipse at 31% 68%, transparent 0 24%, rgba(0,0,0,0.038) 24.2% 24.55%, transparent 24.9%);
-      filter: blur(0.15px);
-      opacity: 0.9;
+        linear-gradient(120deg, rgba(255,255,255,0.3), transparent 34%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.56), transparent 64%);
+      opacity: 0.72;
     }
 
     .chain-auto-tabs::after {
@@ -2313,6 +2303,32 @@
       filter: drop-shadow(0 0 10px rgba(16,185,129,0.38));
       animation: radarSweep 5.8s linear infinite;
     }
+
+    .topo-map {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0.72;
+      mix-blend-mode: multiply;
+    }
+
+    .topo-map path {
+      fill: none;
+      stroke: rgba(0,0,0,0.38);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .topo-map .minor { stroke-width: 0.55; opacity: 0.44; }
+    .topo-map .major { stroke-width: 1.25; opacity: 0.62; }
+    .topo-map .dash  { stroke-width: 0.6; opacity: 0.28; stroke-dasharray: 5 6; }
+    .topo-map .mark  { stroke-width: 0.9; opacity: 0.24; }
 
     .chain-orbit-center {
       position: absolute;
@@ -2565,6 +2581,35 @@
       </div>
 
       <div class="chain-auto-tabs" aria-label="Navegacion principal del dashboard">
+        <svg class="topo-map" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+          <path class="major" d="M-40 108 C82 40 142 106 248 82 C376 54 430 -26 552 28 C676 84 704 186 832 168 C930 154 994 82 1050 118" />
+          <path class="minor" d="M-32 154 C88 92 160 150 266 126 C378 100 444 34 548 74 C650 114 704 214 824 206 C916 200 982 136 1042 164" />
+          <path class="minor" d="M-20 202 C102 146 170 198 286 168 C390 142 466 86 558 126 C642 162 694 256 812 248 C906 242 970 188 1038 212" />
+          <path class="dash" d="M-16 272 C118 218 188 272 302 226 C416 182 504 166 596 214 C684 260 728 318 842 308 C936 300 994 262 1044 292" />
+
+          <path class="major" d="M120 1020 C92 884 168 826 138 704 C110 588 12 542 42 416 C76 272 220 246 270 142 C316 48 250 -12 300 -54" />
+          <path class="minor" d="M178 1032 C150 898 214 836 194 720 C172 594 86 548 118 430 C152 306 274 274 320 174 C364 78 316 20 360 -40" />
+          <path class="minor" d="M238 1038 C208 916 264 848 246 728 C230 622 154 564 182 450 C210 340 334 300 374 202 C414 104 374 42 414 -28" />
+
+          <path class="major" d="M324 642 C250 606 220 520 266 454 C312 388 414 420 472 356 C520 302 486 226 558 196 C650 158 738 236 742 326 C746 412 664 462 654 532 C642 614 748 660 726 734 C696 836 512 816 464 724 C434 668 380 670 324 642Z" />
+          <path class="minor" d="M342 604 C290 578 270 524 300 478 C338 420 418 454 470 400 C516 354 498 288 566 260 C632 234 698 286 706 348 C716 418 634 462 620 528 C606 590 684 630 666 684 C642 752 526 746 486 682 C454 632 398 632 342 604Z" />
+          <path class="minor" d="M368 566 C330 542 326 508 344 482 C374 438 426 472 474 430 C514 396 518 334 574 314 C624 296 666 326 674 370 C682 422 608 458 588 524 C574 570 630 604 614 640 C594 686 528 674 500 630 C470 584 416 596 368 566Z" />
+          <path class="minor" d="M398 536 C374 516 374 494 392 478 C420 454 442 484 484 454 C522 426 538 370 584 356 C618 346 640 366 642 392 C646 430 576 464 558 522 C548 554 586 584 566 602 C536 630 514 586 492 564 C466 538 430 562 398 536Z" />
+          <path class="major" d="M438 518 C416 500 430 482 456 492 C492 506 510 466 540 430 C574 390 612 400 604 430 C596 460 548 480 530 526 C516 562 474 548 438 518Z" />
+
+          <path class="major" d="M732 806 C656 760 666 662 742 618 C820 572 914 622 940 696 C968 776 916 872 818 880 C784 882 766 828 732 806Z" />
+          <path class="minor" d="M760 788 C712 754 716 692 766 662 C822 628 888 660 904 714 C922 772 880 828 816 834 C790 836 786 806 760 788Z" />
+          <path class="minor" d="M790 766 C762 740 770 710 794 696 C832 674 870 696 874 732 C880 772 834 796 804 790 C794 788 802 778 790 766Z" />
+
+          <path class="major" d="M902 410 C820 370 824 278 900 234 C984 186 1052 250 1076 328" />
+          <path class="minor" d="M888 452 C782 404 786 260 892 196 C986 140 1070 194 1110 288" />
+          <path class="minor" d="M874 498 C738 444 736 240 884 154 C1000 86 1102 162 1148 258" />
+
+          <path class="dash" d="M-34 834 C112 762 212 806 332 736 C428 680 482 608 602 642 C724 676 778 774 910 738 C984 718 1026 666 1060 626" />
+          <path class="dash" d="M-44 362 C104 336 178 384 282 334 C392 282 426 196 542 178 C640 164 706 212 776 260 C866 322 940 330 1056 284" />
+
+          <path class="mark" d="M170 260 h22 M181 249 v22 M846 526 h22 M857 515 v22 M228 836 h22 M239 825 v22 M706 164 h22 M717 153 v22" />
+        </svg>
         <div class="chain-orbit-center">
           <span>Panel</span>
           <strong>SPX Gamma</strong>
