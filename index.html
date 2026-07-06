@@ -102,6 +102,20 @@
       flex-wrap: wrap;
     }
     .header-left { flex: 1 1 420px; min-width: 0; }
+    .header-left > h1,
+    .header-left > .sub { display: none; }
+    .product-title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .product-sub {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--blue-200);
+      font-family: 'Consolas', 'SF Mono', monospace;
+    }
     header h1 {
       margin: 0;
       font-size: 22px;
@@ -1787,6 +1801,8 @@
 
   <header>
     <div class="header-left">
+      <div class="product-title">SPX <span class="accent">Gamma Levels</span> - Iron Condor Dashboard</div>
+      <div class="product-sub">SpotGamma manual | filtro %Open dentro del rango de walls | seguimiento de primas intradia</div>
       <h1>🦅 SPX <span class="accent">Volatility Bands</span> — Iron Condor Dashboard</h1>
       <div class="sub">σ<sub>high/low</sub> = std rolling 90d &nbsp;·&nbsp; C<sub>t</sub> = sigmoid(IV/HV, VIX) ∈ [0.5, 0.95] &nbsp;·&nbsp; Bands<sub>t</sub> = Close<sub>t-1</sub> × (1 ± C<sub>t</sub> × k × mult × σ)</div>
     </div>
@@ -1898,6 +1914,7 @@
       </details>
     </div>
 
+    <section id="legacyModelSection" hidden aria-hidden="true">
     <div class="card">
       <h2>Controls</h2>
       <div class="controls">
@@ -2362,8 +2379,9 @@
         <table id="tradesTable"></table>
       </div>
     </div>
+    </section>
   </main>
 
-  <script src="script.js?v=20260622-spotgamma-worker"></script>
+  <script src="script.js?v=20260706-gamma-layout"></script>
 </body>
 </html>
