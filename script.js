@@ -6350,6 +6350,7 @@ function initResearchCore() {
   function openResearch() {
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
+    overlay.scrollTop = 0;
     close.focus();
   }
 
@@ -6370,6 +6371,9 @@ function initResearchCore() {
     if (!detail) return;
     detail.classList.add('open');
     detail.setAttribute('aria-hidden', 'false');
+    overlay.scrollTop = 0;
+    detail.scrollTop = 0;
+    if (detail.parentElement) detail.parentElement.scrollTop = 0;
     if (section === 'volsurface') {
       renderVolSurfaceLab();
     } else {

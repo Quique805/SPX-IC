@@ -2497,7 +2497,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 28px;
+      padding: clamp(4px, 1.2vw, 14px);
       background: rgba(238,238,235,0.72);
       backdrop-filter: blur(14px);
     }
@@ -2508,13 +2508,13 @@
 
     .research-modal {
       position: relative;
-      width: min(1120px, calc(100vw - 24px));
-      height: min(1040px, calc(100dvh - 24px));
-      min-height: min(820px, calc(100dvh - 24px));
+      width: min(1280px, calc(100vw - 8px));
+      height: calc(100dvh - 8px);
+      min-height: calc(100dvh - 8px);
       overflow: hidden;
       border: 1px solid rgba(0,0,0,0.1);
-      border-radius: 44px;
-      padding: 34px;
+      border-radius: 34px;
+      padding: clamp(18px, 2.8vw, 34px);
       background:
         radial-gradient(circle at 50% 20%, rgba(255,255,255,0.96), transparent 28rem),
         linear-gradient(135deg, rgba(255,255,255,0.9), rgba(232,232,228,0.86));
@@ -2631,13 +2631,13 @@
 
     .research-detail {
       position: absolute;
-      inset: 14px;
+      inset: 6px;
       z-index: 3;
       display: none;
       overflow: auto;
       border: 1px solid rgba(0,0,0,0.1);
-      border-radius: 34px;
-      padding: 26px;
+      border-radius: 30px;
+      padding: clamp(14px, 2.2vw, 26px);
       background:
         radial-gradient(circle at 60% 10%, rgba(255,255,255,0.94), transparent 28rem),
         linear-gradient(145deg, rgba(250,250,247,0.98), rgba(228,228,224,0.96));
@@ -2701,9 +2701,9 @@
 
     .vol-surface-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 12px;
+      grid-template-columns: 1fr;
+      gap: 28px;
+      margin-top: 16px;
     }
 
     .vol-surface-panel {
@@ -2720,7 +2720,7 @@
     }
 
     .vol-surface-chart {
-      min-height: clamp(620px, 68dvh, 820px);
+      min-height: clamp(760px, 82dvh, 980px);
       border: 1px solid rgba(0,0,0,0.08);
       border-radius: 28px;
       background: rgba(255,255,255,0.76);
@@ -2792,15 +2792,15 @@
         font-size: 0.86rem;
       }
       .research-overlay {
-        padding: 12px;
+        padding: 3px;
       }
       .research-modal {
-        width: calc(100vw - 12px);
-        height: calc(100dvh - 12px);
-        min-height: calc(100dvh - 12px);
-        border-radius: 32px;
-        padding: 28px 18px;
-        overflow-y: auto;
+        width: calc(100vw - 6px);
+        height: calc(100dvh - 6px);
+        min-height: calc(100dvh - 6px);
+        border-radius: 24px;
+        padding: 16px 10px;
+        overflow: hidden;
       }
       .research-grid {
         grid-template-columns: 1fr;
@@ -2809,18 +2809,19 @@
         min-height: 170px;
       }
       .research-detail {
-        inset: 6px;
-        padding: 18px;
-        border-radius: 28px;
+        inset: 3px;
+        padding: 12px;
+        border-radius: 22px;
       }
       .vol-surface-toolbar {
         grid-template-columns: 1fr;
       }
       .vol-surface-grid {
         grid-template-columns: 1fr;
+        gap: 24px;
       }
       .vol-surface-chart {
-        min-height: 72dvh;
+        min-height: 86dvh;
       }
     }
   </style>
@@ -3478,6 +3479,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260706-vol-surface-split"></script>
+  <script src="script.js?v=20260710-vol-surface-tall-stack-2"></script>
 </body>
 </html>
