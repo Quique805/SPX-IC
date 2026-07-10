@@ -35,6 +35,9 @@ jobs:
       - name: Generate GEX model lab data
         run: python gex_models.py
 
+      - name: Generate DEX model lab data
+        run: python dex_models.py
+
       - name: Generate signal and send scheduled card
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

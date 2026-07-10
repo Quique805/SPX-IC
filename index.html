@@ -3049,6 +3049,109 @@
       text-transform: uppercase;
     }
 
+    .dex-lab-note {
+      max-width: 940px;
+      margin: 0 0 16px;
+      color: #666;
+      font-size: 0.92rem;
+      line-height: 1.58;
+    }
+
+    .dex-toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      margin: 18px 0;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 24px;
+      padding: 14px;
+      background: rgba(255,255,255,0.7);
+    }
+
+    .dex-toolbar input[type="range"] {
+      width: 100%;
+      accent-color: #050505;
+    }
+
+    .dex-date-pill,
+    .dex-target-pill {
+      border-radius: 999px;
+      padding: 9px 12px;
+      color: #fff;
+      background: #050505;
+      font-size: 0.78rem;
+      font-weight: 900;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    .dex-target-pill {
+      color: #111;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+
+    .dex-summary-grid,
+    .dex-level-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0 18px;
+    }
+
+    .dex-summary-card,
+    .dex-level-card,
+    .dex-panel {
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 24px;
+      background: rgba(255,255,255,0.72);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.92);
+    }
+
+    .dex-summary-card,
+    .dex-level-card {
+      padding: 14px;
+    }
+
+    .dex-summary-card span,
+    .dex-level-card span,
+    .dex-panel-title {
+      display: block;
+      color: #777;
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .dex-summary-card strong,
+    .dex-level-card strong {
+      display: block;
+      margin-top: 8px;
+      color: #050505;
+      font-size: clamp(1rem, 2vw, 1.45rem);
+      letter-spacing: -0.04em;
+      white-space: nowrap;
+    }
+
+    .dex-panel {
+      padding: clamp(14px, 2vw, 22px);
+      margin-top: 18px;
+    }
+
+    .dex-panel-title {
+      margin-bottom: 10px;
+    }
+
+    .dex-chart {
+      min-height: 520px;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 20px;
+      background: #050505;
+    }
+
     .gex-empty {
       padding: 22px;
       border-radius: 20px;
@@ -3166,6 +3269,16 @@
         min-height: 430px;
       }
       .gex-evolution-chart {
+        min-height: 460px;
+      }
+      .dex-toolbar {
+        grid-template-columns: 1fr;
+      }
+      .dex-summary-grid,
+      .dex-level-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .dex-chart {
         min-height: 460px;
       }
     }
@@ -3824,6 +3937,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260710-gex-evolution-help-v3"></script>
+  <script src="script.js?v=20260710-dex-lab-v1"></script>
 </body>
 </html>

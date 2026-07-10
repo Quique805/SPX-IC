@@ -5277,6 +5277,263 @@ async function renderGexLab() {
   }
 }
 
+const DEX_LEVEL_META = {
+  callDeltaWall: { label: 'Call Delta Wall', color: '#7CFF9A' },
+  putDeltaWall: { label: 'Put Delta Wall', color: '#ff4d5e' },
+  dexFlip: { label: 'DEX Flip', color: '#60a5fa' },
+  maxPositiveDex: { label: 'Max + DEX', color: '#b388ff' },
+  maxNegativeDex: { label: 'Max - DEX', color: '#ffb347' }
+};
+
+async function loadDexModelIndex() {
+  return fetchFirstJson([
+    `data/dex-models-index.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/dex-models-index.json?t=${Date.now()}`
+  ]);
+}
+
+async function loadDexModelRecord(date) {
+  return fetchFirstJson([
+    `data/dex-models/${date}.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/dex-models/${date}.json?t=${Date.now()}`
+  ]);
+}
+
+function dexNum(value, digits = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  return n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+}
+
+function dexLarge(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  return dexNum(n, 0);
+}
+
+function dexHistogramRange(levels, spot) {
+  const callWall = Number(levels?.callDeltaWall);
+  const putWall = Number(levels?.putDeltaWall);
+  if (Number.isFinite(callWall) && Number.isFinite(putWall) && callWall > putWall) {
+    return [putWall - 150, callWall + 150];
+  }
+  const center = Number(spot);
+  if (Number.isFinite(center)) return [center - 350, center + 350];
+  return undefined;
+}
+
+function renderDexSummary(record, records) {
+  const levels = record.levels || {};
+  const regime = record.diagnostics?.regime || 'neutral';
+  const regimeLabel = regime === 'positive' ? 'DEX positivo' : regime === 'negative' ? 'DEX negativo' : 'DEX neutral';
+  return `
+    <div class="dex-summary-grid">
+      <div class="dex-summary-card"><span>Cadena cierre</span><strong>${record.date}</strong></div>
+      <div class="dex-summary-card"><span>Sesion aplicada</span><strong>${record.targetSession}</strong></div>
+      <div class="dex-summary-card"><span>Spot cierre</span><strong>${dexNum(record.spot, 2)}</strong></div>
+      <div class="dex-summary-card"><span>Regimen DEX</span><strong>${regimeLabel}</strong></div>
+      <div class="dex-summary-card"><span>Net DEX spot</span><strong>${dexLarge(levels.netDexAtSpot)}</strong></div>
+      <div class="dex-summary-card"><span>Vencimientos</span><strong>${levels.expirationsUsed?.length || 0}</strong></div>
+      <div class="dex-summary-card"><span>Sesiones JSON</span><strong>${records.length}</strong></div>
+      <div class="dex-summary-card"><span>Version</span><strong>${record.version || '-'}</strong></div>
+    </div>
+  `;
+}
+
+function renderDexLevels(record) {
+  const levels = record.levels || {};
+  return `
+    <div class="dex-level-grid">
+      ${Object.entries(DEX_LEVEL_META).map(([key, meta]) => `
+        <div class="dex-level-card">
+          <span style="color:${meta.color}">${meta.label}</span>
+          <strong>${dexNum(levels[key])}</strong>
+        </div>
+      `).join('')}
+      <div class="dex-level-card">
+        <span>Modelo</span>
+        <strong>${record.model?.name || 'Weighted DEX'}</strong>
+      </div>
+      <div class="dex-level-card">
+        <span>Fuente</span>
+        <strong>${record.sourceChain || '-'}</strong>
+      </div>
+      <div class="dex-level-card">
+        <span>Captura</span>
+        <strong>${record.capturedAt ? formatMadridTime(record.capturedAt) : '-'}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderDexHistogram(elementId, record) {
+  const element = document.getElementById(elementId);
+  const levels = record?.levels || {};
+  const rows = levels.histogram || [];
+  if (!element || !rows.length) {
+    if (element) element.innerHTML = '<div class="gex-empty">No hay histograma DEX para esta sesion.</div>';
+    return;
+  }
+  const x = rows.map(row => row.strike);
+  const y = rows.map(row => Number(row.netDex || 0));
+  const colors = y.map(value => value >= 0 ? '#d9d9d4' : '#888883');
+  const custom = rows.map(row => [row.callDex, row.putDex, row.absDex]);
+  const maxAbs = Math.max(...y.map(value => Math.abs(value)).filter(Number.isFinite), 1);
+  const xRange = dexHistogramRange(levels, record.spot);
+  const shapes = [];
+  const annotations = [];
+  for (const [key, meta] of Object.entries(DEX_LEVEL_META)) {
+    const value = Number(levels[key]);
+    if (!Number.isFinite(value)) continue;
+    shapes.push({
+      type: 'line',
+      x0: value,
+      x1: value,
+      y0: -maxAbs * 1.05,
+      y1: maxAbs * 1.05,
+      xref: 'x',
+      yref: 'y',
+      line: { color: meta.color, width: 2 }
+    });
+    annotations.push({
+      x: value,
+      y: maxAbs * 1.08,
+      xref: 'x',
+      yref: 'y',
+      text: meta.label,
+      showarrow: false,
+      font: { color: meta.color, size: 10 },
+      textangle: -90,
+      yanchor: 'bottom'
+    });
+  }
+  const spot = Number(record.spot);
+  if (Number.isFinite(spot)) {
+    shapes.push({
+      type: 'line',
+      x0: spot,
+      x1: spot,
+      y0: -maxAbs * 1.05,
+      y1: maxAbs * 1.05,
+      xref: 'x',
+      yref: 'y',
+      line: { color: '#ffffff', width: 1.5, dash: 'dot' }
+    });
+  }
+  safePlotly(elementId, [{
+    type: 'bar',
+    x,
+    y,
+    marker: { color: colors },
+    customdata: custom,
+    hovertemplate: 'Strike %{x}<br>Net DEX %{y:,.0f}<br>Call DEX %{customdata[0]:,.0f}<br>Put DEX %{customdata[1]:,.0f}<br>Abs DEX %{customdata[2]:,.0f}<extra></extra>'
+  }], {
+    margin: { l: 62, r: 18, t: 42, b: 48 },
+    paper_bgcolor: '#050505',
+    plot_bgcolor: '#050505',
+    bargap: 0.08,
+    shapes,
+    annotations,
+    font: { color: '#e8e8e2' },
+    xaxis: { title: 'Strike', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false, fixedrange: true, range: xRange },
+    yaxis: { title: 'Net DEX', gridcolor: 'rgba(255,255,255,0.08)', zerolinecolor: 'rgba(255,255,255,0.32)', fixedrange: true },
+    dragmode: false,
+    showlegend: false
+  }, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
+}
+
+function renderDexEvolutionChart(elementId, records) {
+  const element = document.getElementById(elementId);
+  if (!element) return;
+  const traces = Object.entries(DEX_LEVEL_META).map(([key, meta]) => ({
+    type: 'scatter',
+    mode: 'lines+markers',
+    name: meta.label,
+    x: records.map(record => record.targetSession || record.date),
+    y: records.map(record => {
+      const value = Number(record.levels?.[key]);
+      return Number.isFinite(value) ? value : null;
+    }),
+    line: { color: meta.color, width: 3 },
+    marker: { color: meta.color, size: 7 },
+    hovertemplate: `${meta.label}<br>Sesion %{x}<br>Nivel %{y:,.0f}<extra></extra>`
+  }));
+  safePlotly(elementId, traces, {
+    margin: { l: 58, r: 18, t: 32, b: 74 },
+    paper_bgcolor: '#050505',
+    plot_bgcolor: '#050505',
+    font: { color: '#e8e8e2' },
+    hovermode: 'x unified',
+    legend: { orientation: 'h', x: 0, y: 1.12, font: { color: '#e8e8e2' } },
+    xaxis: { title: 'Sesion aplicada', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false, fixedrange: true, tickangle: -35 },
+    yaxis: { title: 'Nivel SPX (strike)', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false, fixedrange: true }
+  }, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
+}
+
+async function renderDexLab() {
+  const content = document.getElementById('researchDetailContent');
+  if (!content) return;
+  content.innerHTML = `
+    <h3>Cálculos DEX</h3>
+    <p class="dex-lab-note">
+      Lectura inicial de Delta Exposure desde las cadenas guardadas al cierre. Usa una ponderacion decreciente por vencimiento
+      para que el vencimiento cercano domine, sin perder el contexto de las siguientes expiraciones.
+    </p>
+    <div class="dex-toolbar">
+      <input id="dexDateRange" type="range" min="0" max="0" value="0" step="1" aria-label="Fecha DEX">
+      <div id="dexDateLabel" class="dex-date-pill">Cargando</div>
+      <div id="dexTargetLabel" class="dex-target-pill">Sesion -</div>
+    </div>
+    <div id="dexLabStatus" class="dex-lab-note">Cargando modelos DEX...</div>
+    <div id="dexSummary"></div>
+    <div id="dexLevels"></div>
+    <section class="dex-panel">
+      <span class="dex-panel-title">Mapa DEX por strike</span>
+      <div id="dexHistogramChart" class="dex-chart"></div>
+    </section>
+    <section class="dex-panel">
+      <span class="dex-panel-title">Evolución histórica de niveles DEX</span>
+      <div id="dexEvolutionChart" class="dex-chart"></div>
+    </section>
+  `;
+
+  try {
+    const index = await loadDexModelIndex();
+    const dates = (index.dates || []).filter(Boolean).sort();
+    if (!dates.length) throw new Error('No hay JSON DEX generado todavia');
+    const records = await Promise.all(dates.map(date => loadDexModelRecord(date)));
+    const slider = document.getElementById('dexDateRange');
+    const dateLabel = document.getElementById('dexDateLabel');
+    const targetLabel = document.getElementById('dexTargetLabel');
+    const status = document.getElementById('dexLabStatus');
+    const summaryEl = document.getElementById('dexSummary');
+    const levelsEl = document.getElementById('dexLevels');
+    if (!slider || !dateLabel || !targetLabel || !status || !summaryEl || !levelsEl) return;
+    slider.max = String(dates.length - 1);
+    slider.value = String(dates.length - 1);
+
+    function drawSelected() {
+      const idx = Math.max(0, Math.min(dates.length - 1, Number(slider.value)));
+      const record = records[idx];
+      dateLabel.textContent = record.date;
+      targetLabel.textContent = `Aplica ${record.targetSession}`;
+      status.textContent = `${dates.length} sesiones utiles | Fuente ${record.sourceChain} | Generado ${record.generatedAt || '-'}`;
+      summaryEl.innerHTML = renderDexSummary(record, records);
+      levelsEl.innerHTML = renderDexLevels(record);
+      renderDexHistogram('dexHistogramChart', record);
+      renderDexEvolutionChart('dexEvolutionChart', records);
+    }
+
+    slider.addEventListener('input', drawSelected);
+    drawSelected();
+  } catch (e) {
+    content.innerHTML += `<div class="gex-empty">Error cargando Cálculos DEX: ${e.message}</div>`;
+  }
+}
+
 function renderResearchPlaceholder(section) {
   const content = document.getElementById('researchDetailContent');
   if (!content) return;
@@ -6867,6 +7124,8 @@ function initResearchCore() {
     if (detail.parentElement) detail.parentElement.scrollTop = 0;
     if (section === 'gex') {
       renderGexLab();
+    } else if (section === 'dex') {
+      renderDexLab();
     } else if (section === 'volsurface') {
       renderVolSurfaceLab();
     } else {
