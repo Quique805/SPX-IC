@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-07-10T09:07:15.205140+00:00",
+  "generatedAt": "2026-07-10T14:07:17.053131+00:00",
   "date": "2026-07-09",
   "targetSession": "2026-07-10",
   "sourceChain": "data/chains-close/2026-07-09.json",
@@ -88,12 +88,12 @@
           },
           {
             "strike": 7205.0,
-            "callGex": 41351.423090466305,
-            "putGex": -4325031.1239811145,
-            "netGex": -4283679.700890648,
-            "absGex": 4366382.547071581,
-            "callScore": 41351.423090466305,
-            "putScore": 4325031.1239811145
+            "callGex": 41351.4230904663,
+            "putGex": -4325031.12398111,
+            "netGex": -4283679.7008906435,
+            "absGex": 4366382.547071576,
+            "callScore": 41351.4230904663,
+            "putScore": 4325031.12398111
           },
           {
             "strike": 7210.0,
@@ -791,11 +791,11 @@
           {
             "strike": 7595.0,
             "callGex": 225830610.16853607,
-            "putGex": -26155983.826023135,
+            "putGex": -26155983.826023128,
             "netGex": 199674626.34251294,
             "absGex": 251986593.9945592,
             "callScore": 225830610.16853607,
-            "putScore": 26155983.826023135
+            "putScore": 26155983.826023128
           },
           {
             "strike": 7600.0,
@@ -1713,12 +1713,12 @@
           },
           {
             "strike": 7205.0,
-            "callGex": 165225.2033865774,
-            "putGex": -10123365.620527068,
-            "netGex": -9958140.417140491,
-            "absGex": 10288590.823913645,
-            "callScore": 165225.2033865774,
-            "putScore": 10123365.620527068
+            "callGex": 165225.20338657737,
+            "putGex": -10123365.62052706,
+            "netGex": -9958140.417140484,
+            "absGex": 10288590.823913638,
+            "callScore": 165225.20338657737,
+            "putScore": 10123365.62052706
           },
           {
             "strike": 7210.0,
@@ -2416,11 +2416,11 @@
           {
             "strike": 7595.0,
             "callGex": 319549792.8870512,
-            "putGex": -36750878.76907148,
+            "putGex": -36750878.769071475,
             "netGex": 282798914.11797976,
             "absGex": 356300671.6561227,
             "callScore": 319549792.8870512,
-            "putScore": 36750878.76907148
+            "putScore": 36750878.769071475
           },
           {
             "strike": 7600.0,
@@ -3399,12 +3399,12 @@
           },
           {
             "strike": 7205.0,
-            "callGex": 41351.423090466305,
-            "putGex": -4325031.1239811145,
-            "netGex": -4283679.700890648,
-            "absGex": 4366382.547071581,
+            "callGex": 41351.4230904663,
+            "putGex": -4325031.12398111,
+            "netGex": -4283679.7008906435,
+            "absGex": 4366382.547071576,
             "callScore": 5.177595834206876,
-            "putScore": 12.524198355122472
+            "putScore": 12.52419835512247
           },
           {
             "strike": 7210.0,
@@ -3637,7 +3637,7 @@
             "putGex": -24285913.861987915,
             "netGex": -22864599.69646638,
             "absGex": 25707228.02750945,
-            "callScore": 14.045638258686788,
+            "callScore": 14.045638258686786,
             "putScore": 23.527369084310394
           },
           {
@@ -4102,7 +4102,7 @@
           {
             "strike": 7595.0,
             "callGex": 225830610.16853607,
-            "putGex": -26155983.826023135,
+            "putGex": -26155983.826023128,
             "netGex": 199674626.34251294,
             "absGex": 251986593.9945592,
             "callScore": 37.36402033473245,
@@ -5024,12 +5024,12 @@
           },
           {
             "strike": 7205.0,
-            "callGex": 165225.2033865774,
-            "putGex": -10123365.620527068,
-            "netGex": -9958140.417140491,
-            "absGex": 10288590.823913645,
+            "callGex": 165225.20338657737,
+            "putGex": -10123365.62052706,
+            "netGex": -9958140.417140484,
+            "absGex": 10288590.823913638,
             "callScore": 6.290648047554821,
-            "putScore": 13.670791261033573
+            "putScore": 13.67079126103357
           },
           {
             "strike": 7210.0,
@@ -5388,7 +5388,7 @@
             "putGex": -161922624.08818963,
             "netGex": -133082277.66143759,
             "absGex": 190762970.5149417,
-            "callScore": 24.640477895132754,
+            "callScore": 24.64047789513275,
             "putScore": 32.208000181860335
           },
           {
@@ -5686,7 +5686,7 @@
             "netGex": 557598970.1472788,
             "absGex": 781808603.047586,
             "callScore": 43.269359609074186,
-            "putScore": 33.989129950897855
+            "putScore": 33.98912995089786
           },
           {
             "strike": 7575.0,
@@ -5727,7 +5727,7 @@
           {
             "strike": 7595.0,
             "callGex": 319549792.8870512,
-            "putGex": -36750878.76907148,
+            "putGex": -36750878.769071475,
             "netGex": 282798914.11797976,
             "absGex": 356300671.6561227,
             "callScore": 38.965888784112764,
@@ -6028,7 +6028,7 @@
             "netGex": 9824618.523075184,
             "absGex": 10224817.766317533,
             "callScore": 19.861654841844356,
-            "putScore": 9.348424534732061
+            "putScore": 9.348424534732063
           },
           {
             "strike": 7765.0,
@@ -6252,7 +6252,7 @@
             "putGex": -40600.67807637085,
             "netGex": 410408.15809035976,
             "absGex": 491609.51424310147,
-            "callScore": 7.406889917472077,
+            "callScore": 7.406889917472075,
             "putScore": 4.848203183023431
           },
           {
@@ -6710,12 +6710,12 @@
           },
           {
             "strike": 7205.0,
-            "callGex": 41351.423090466305,
-            "putGex": -4325031.1239811145,
-            "netGex": -4283679.700890648,
-            "absGex": 4366382.547071581,
+            "callGex": 41351.4230904663,
+            "putGex": -4325031.12398111,
+            "netGex": -4283679.7008906435,
+            "absGex": 4366382.547071576,
             "callScore": 5.177595834206876,
-            "putScore": 12.524198355122472
+            "putScore": 12.52419835512247
           },
           {
             "strike": 7210.0,
@@ -6948,7 +6948,7 @@
             "putGex": -24285913.861987915,
             "netGex": -22864599.69646638,
             "absGex": 25707228.02750945,
-            "callScore": 14.045638258686788,
+            "callScore": 14.045638258686786,
             "putScore": 23.527369084310394
           },
           {
@@ -7413,7 +7413,7 @@
           {
             "strike": 7595.0,
             "callGex": 225830610.16853607,
-            "putGex": -26155983.826023135,
+            "putGex": -26155983.826023128,
             "netGex": 199674626.34251294,
             "absGex": 251986593.9945592,
             "callScore": 37.36402033473245,
@@ -8335,12 +8335,12 @@
           },
           {
             "strike": 7205.0,
-            "callGex": 165225.2033865774,
-            "putGex": -10123365.620527068,
-            "netGex": -9958140.417140491,
-            "absGex": 10288590.823913645,
+            "callGex": 165225.20338657737,
+            "putGex": -10123365.62052706,
+            "netGex": -9958140.417140484,
+            "absGex": 10288590.823913638,
             "callScore": 6.290648047554821,
-            "putScore": 13.670791261033573
+            "putScore": 13.67079126103357
           },
           {
             "strike": 7210.0,
@@ -8699,7 +8699,7 @@
             "putGex": -161922624.08818963,
             "netGex": -133082277.66143759,
             "absGex": 190762970.5149417,
-            "callScore": 24.640477895132754,
+            "callScore": 24.64047789513275,
             "putScore": 32.208000181860335
           },
           {
@@ -8997,7 +8997,7 @@
             "netGex": 557598970.1472788,
             "absGex": 781808603.047586,
             "callScore": 43.269359609074186,
-            "putScore": 33.989129950897855
+            "putScore": 33.98912995089786
           },
           {
             "strike": 7575.0,
@@ -9038,7 +9038,7 @@
           {
             "strike": 7595.0,
             "callGex": 319549792.8870512,
-            "putGex": -36750878.76907148,
+            "putGex": -36750878.769071475,
             "netGex": 282798914.11797976,
             "absGex": 356300671.6561227,
             "callScore": 38.965888784112764,
@@ -9339,7 +9339,7 @@
             "netGex": 9824618.523075184,
             "absGex": 10224817.766317533,
             "callScore": 19.861654841844356,
-            "putScore": 9.348424534732061
+            "putScore": 9.348424534732063
           },
           {
             "strike": 7765.0,
@@ -9563,7 +9563,7 @@
             "putGex": -40600.67807637085,
             "netGex": 410408.15809035976,
             "absGex": 491609.51424310147,
-            "callScore": 7.406889917472077,
+            "callScore": 7.406889917472075,
             "putScore": 4.848203183023431
           },
           {
@@ -9942,54 +9942,115 @@
     }
   },
   "reference": {
-    "spotgamma": null
+    "spotgamma": {
+      "callWall": 7600.0,
+      "putWall": 7300.0,
+      "gammaFlip": 7450.0,
+      "volTrigger": 7475.0,
+      "source": "SpotGamma manual",
+      "updatedAt": "2026-07-10T09:30:36.199Z"
+    }
   },
   "diagnostics": {
     "pure_gex": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 50.0,
+          "putWall": 200.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 25.0,
+          "weightedError": 98.75
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 96.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 50.0,
+          "putWall": 200.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 25.0,
+          "weightedError": 98.75
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 96.0
         }
       }
     },
     "liquidity_weighted": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 50.0,
+          "putWall": 200.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 25.0,
+          "weightedError": 98.75
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 96.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 50.0,
+          "putWall": 200.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 25.0,
+          "weightedError": 98.75
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 96.0
         }
       }
     },
     "spotgamma_fit": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 50.0,
+          "putWall": 75.0,
+          "gammaFlip": 25.0,
+          "volTrigger": 25.0,
+          "weightedError": 51.25
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 62.909090909090914,
+          "sellCall": 7650.0,
+          "sellPut": 7375.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7560.0,
+          "low": 7543.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 50.0,
+          "putWall": 75.0,
+          "gammaFlip": 25.0,
+          "volTrigger": 25.0,
+          "weightedError": 51.25
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 62.909090909090914,
+          "sellCall": 7650.0,
+          "sellPut": 7375.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7560.0,
+          "low": 7543.0
         }
       }
     }
