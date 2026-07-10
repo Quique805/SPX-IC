@@ -2629,6 +2629,221 @@
       line-height: 1.55;
     }
 
+    .ml-gateway-card {
+      position: relative;
+      grid-column: 1 / -1;
+      min-height: 300px;
+      overflow: hidden;
+      border-color: rgba(0,0,0,0.16);
+      color: #f7f7f3;
+      background:
+        radial-gradient(circle at 22% 24%, rgba(124,255,154,0.22), transparent 16rem),
+        radial-gradient(circle at 76% 30%, rgba(96,165,250,0.2), transparent 18rem),
+        linear-gradient(135deg, #050505, #161616 52%, #2a2a27);
+      box-shadow: 0 34px 92px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+
+    .ml-gateway-card::before {
+      content: "";
+      position: absolute;
+      inset: -35%;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, transparent 0 18%, rgba(255,255,255,0.09) 18.2% 18.55%, transparent 18.75%),
+        linear-gradient(0deg, transparent 0 22%, rgba(255,255,255,0.05) 22.2% 22.55%, transparent 22.75%);
+      background-size: 120px 120px;
+      opacity: 0.34;
+      animation: mlGridDrift 16s linear infinite;
+    }
+
+    .ml-gateway-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at var(--ml-x, 28%) var(--ml-y, 42%), rgba(124,255,154,0.32), transparent 14rem),
+        linear-gradient(100deg, transparent 0 42%, rgba(255,255,255,0.16) 49%, transparent 58%);
+      mix-blend-mode: screen;
+      opacity: 0.65;
+      animation: mlSweep 5.8s ease-in-out infinite alternate;
+    }
+
+    .ml-gateway-content {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+      gap: clamp(18px, 3vw, 42px);
+      align-items: center;
+      min-height: 256px;
+    }
+
+    .ml-gateway-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 999px;
+      padding: 8px 11px;
+      color: rgba(255,255,255,0.78);
+      background: rgba(255,255,255,0.08);
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .ml-gateway-kicker i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #7CFF9A;
+      box-shadow: 0 0 20px rgba(124,255,154,0.92);
+      animation: mlPulse 1.8s ease-in-out infinite;
+    }
+
+    .ml-gateway-card h3 {
+      max-width: 720px;
+      margin: 0 0 12px;
+      color: #fff;
+      font-size: clamp(2rem, 5vw, 4.5rem);
+      line-height: 0.92;
+      letter-spacing: -0.08em;
+    }
+
+    .ml-gateway-card p {
+      max-width: 650px;
+      color: rgba(255,255,255,0.72);
+      font-size: 0.96rem;
+    }
+
+    .ml-gateway-status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+    }
+
+    .ml-gateway-status span {
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 999px;
+      padding: 8px 10px;
+      color: rgba(255,255,255,0.8);
+      background: rgba(255,255,255,0.08);
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .ml-lab-visual {
+      position: relative;
+      min-height: 230px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 28px;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.12), transparent 11rem),
+        rgba(255,255,255,0.06);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 24px 70px rgba(0,0,0,0.24);
+      overflow: hidden;
+    }
+
+    .ml-lab-visual span {
+      position: absolute;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.7);
+      box-shadow: 0 0 24px rgba(255,255,255,0.55);
+      animation: mlNodeFloat 4.2s ease-in-out infinite;
+    }
+
+    .ml-lab-visual span:nth-child(1) { width: 9px; height: 9px; left: 18%; top: 26%; animation-delay: -0.4s; }
+    .ml-lab-visual span:nth-child(2) { width: 12px; height: 12px; left: 74%; top: 24%; background: #7CFF9A; animation-delay: -1.1s; }
+    .ml-lab-visual span:nth-child(3) { width: 7px; height: 7px; left: 62%; top: 72%; background: #60a5fa; animation-delay: -1.8s; }
+    .ml-lab-visual span:nth-child(4) { width: 10px; height: 10px; left: 28%; top: 70%; background: #b388ff; animation-delay: -2.4s; }
+
+    .ml-lab-core {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 118px;
+      height: 118px;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, rgba(124,255,154,0.05), rgba(124,255,154,0.54), rgba(96,165,250,0.12), rgba(179,136,255,0.42), rgba(124,255,154,0.05));
+      box-shadow: 0 0 55px rgba(124,255,154,0.18), inset 0 0 28px rgba(255,255,255,0.08);
+      animation: mlCoreSpin 8s linear infinite;
+    }
+
+    .ml-lab-core::after {
+      content: "ML";
+      position: absolute;
+      inset: 18px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: rgba(5,5,5,0.82);
+      font-size: 1.25rem;
+      font-weight: 1000;
+      letter-spacing: -0.05em;
+    }
+
+    .ml-market-lines {
+      position: absolute;
+      inset: auto 24px 22px 24px;
+      height: 54px;
+      opacity: 0.75;
+    }
+
+    .ml-market-lines i {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, transparent, rgba(124,255,154,0.9), rgba(96,165,250,0.55), transparent);
+      transform-origin: left center;
+      animation: mlMarketLine 3.4s ease-in-out infinite;
+    }
+
+    .ml-market-lines i:nth-child(1) { top: 8px; transform: rotate(-4deg); animation-delay: -0.3s; }
+    .ml-market-lines i:nth-child(2) { top: 25px; transform: rotate(2deg); animation-delay: -1.2s; }
+    .ml-market-lines i:nth-child(3) { top: 42px; transform: rotate(-1deg); animation-delay: -2.1s; }
+
+    @keyframes mlGridDrift {
+      from { transform: translate3d(0,0,0); }
+      to { transform: translate3d(120px,120px,0); }
+    }
+
+    @keyframes mlSweep {
+      from { --ml-x: 18%; --ml-y: 34%; opacity: 0.48; }
+      to { --ml-x: 82%; --ml-y: 62%; opacity: 0.78; }
+    }
+
+    @keyframes mlPulse {
+      0%, 100% { transform: scale(0.82); opacity: 0.68; }
+      50% { transform: scale(1.3); opacity: 1; }
+    }
+
+    @keyframes mlNodeFloat {
+      0%, 100% { transform: translate3d(0,0,0) scale(1); opacity: 0.72; }
+      50% { transform: translate3d(12px,-16px,0) scale(1.2); opacity: 1; }
+    }
+
+    @keyframes mlCoreSpin {
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+
+    @keyframes mlMarketLine {
+      0%, 100% { clip-path: inset(0 68% 0 0); opacity: 0.45; }
+      50% { clip-path: inset(0 4% 0 0); opacity: 1; }
+    }
+
     .research-detail {
       position: absolute;
       inset: 6px;
@@ -3235,6 +3450,19 @@
       .research-card {
         min-height: 170px;
       }
+      .ml-gateway-card {
+        min-height: 430px;
+      }
+      .ml-gateway-content {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+      .ml-lab-visual {
+        min-height: 190px;
+      }
+      .ml-gateway-card h3 {
+        font-size: clamp(2.2rem, 14vw, 4rem);
+      }
       .research-detail {
         inset: 3px;
         padding: 12px;
@@ -3460,6 +3688,32 @@
           <button type="button" class="research-card" data-research-section="volsurface">
             <h3>Volatility surface</h3>
             <p>Base para modelar la superficie de volatilidad y observar estructura por strikes y vencimientos.</p>
+          </button>
+          <button type="button" class="research-card ml-gateway-card" aria-label="Entrada futura al laboratorio de Machine Learning">
+            <div class="ml-gateway-content">
+              <div>
+                <div class="ml-gateway-kicker"><i></i> Próxima fase cuantitativa</div>
+                <h3>Machine Learning Lab</h3>
+                <p>
+                  Puerta de entrada a los futuros modelos que unirán GEX, DEX y superficie de volatilidad.
+                  Cuando el histórico tenga suficiente profundidad, aquí entrenaremos diagnósticos, pesos y alertas de régimen.
+                </p>
+                <div class="ml-gateway-status">
+                  <span>Dataset en formación</span>
+                  <span>GEX conectado</span>
+                  <span>DEX conectado</span>
+                  <span>Vol Surface conectada</span>
+                </div>
+              </div>
+              <div class="ml-lab-visual" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <div class="ml-lab-core"></div>
+                <div class="ml-market-lines"><i></i><i></i><i></i></div>
+              </div>
+            </div>
           </button>
         </div>
         <div id="researchDetail" class="research-detail" aria-hidden="true">
