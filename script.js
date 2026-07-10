@@ -5772,6 +5772,13 @@ async function loadMlSpotGammaDataset() {
   ]);
 }
 
+async function loadMlGexDataset() {
+  return fetchFirstJson([
+    `data/ml-dataset/gex.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/ml-dataset/gex.json?t=${Date.now()}`
+  ]);
+}
+
 function mlNum(value, digits = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '-';
@@ -5922,6 +5929,69 @@ function renderMlSpotGammaTable(rows) {
   `;
 }
 
+function renderMlGexTable(rows) {
+  const latest = (rows || []).slice(-14).reverse();
+  if (!latest.length) {
+    return '<div class="gex-empty">No hay filas de GEX todavia.</div>';
+  }
+  return `
+    <div class="ml-table-panel">
+      <div class="ml-table-head">
+        <strong>Ultimas sesiones - Bloque GEX</strong>
+        <span class="ml-lab-note" style="margin:0">Tres modelos como sensores: niveles, consenso, dispersion y diagnostico separado.</span>
+      </div>
+      <div class="ml-table-wrap">
+        <table class="ml-feature-table">
+          <thead>
+            <tr>
+              <th>Sesion</th>
+              <th>Cadena cierre</th>
+              <th>Spot cadena</th>
+              <th>Open sesion</th>
+              <th>CW consenso</th>
+              <th>PW consenso</th>
+              <th>GF consenso</th>
+              <th>VT consenso</th>
+              <th>CW disp.</th>
+              <th>PW disp.</th>
+              <th>Acuerdo CW</th>
+              <th>Acuerdo PW</th>
+              <th>Net +</th>
+              <th>Net -</th>
+              <th>Diag W/L/NO</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${latest.map(row => {
+              const c = row.consensus?.next || {};
+              const d = row.diagnostics || {};
+              return `
+                <tr>
+                  <td>${row.targetSession || row.date || '-'}</td>
+                  <td>${row.sourceChainDate || '-'}</td>
+                  <td>${mlNum(row.chainSpot, 2)}</td>
+                  <td>${mlNum(row.sessionOpen, 2)}</td>
+                  <td>${mlNum(c.callWallConsensus, 0)}</td>
+                  <td>${mlNum(c.putWallConsensus, 0)}</td>
+                  <td>${mlNum(c.gammaFlipConsensus, 0)}</td>
+                  <td>${mlNum(c.volTriggerConsensus, 0)}</td>
+                  <td>${mlNum(c.callWallDispersionRange, 0)}</td>
+                  <td>${mlNum(c.putWallDispersionRange, 0)}</td>
+                  <td>${c.callWallAgreementWithin25Count ?? '-'}/3</td>
+                  <td>${c.putWallAgreementWithin25Count ?? '-'}/3</td>
+                  <td>${c.positiveNetAtSpotCount ?? '-'}</td>
+                  <td>${c.negativeNetAtSpotCount ?? '-'}</td>
+                  <td>${d.winCount ?? 0}/${d.lossCount ?? 0}/${d.noTradeCount ?? 0}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 async function renderMlLab() {
   const content = document.getElementById('researchDetailContent');
   if (!content) return;
@@ -5935,28 +6005,34 @@ async function renderMlLab() {
     <div id="mlBlocks"></div>
     <div id="mlUnderlyingPreview"></div>
     <div id="mlSpotGammaPreview"></div>
+    <div id="mlGexPreview"></div>
   `;
 
   try {
     const index = await loadMlDatasetIndex();
-    const [underlying, spotgamma] = await Promise.all([
+    const [underlying, spotgamma, gex] = await Promise.all([
       loadMlUnderlyingDataset(),
-      loadMlSpotGammaDataset().catch(() => ({ rows: [] }))
+      loadMlSpotGammaDataset().catch(() => ({ rows: [] })),
+      loadMlGexDataset().catch(() => ({ rows: [] }))
     ]);
     const rows = underlying.rows || [];
     const spotgammaRows = spotgamma.rows || [];
+    const gexRows = gex.rows || [];
     const status = document.getElementById('mlDatasetStatus');
     const blocks = document.getElementById('mlBlocks');
     const preview = document.getElementById('mlUnderlyingPreview');
     const spotgammaPreview = document.getElementById('mlSpotGammaPreview');
+    const gexPreview = document.getElementById('mlGexPreview');
     if (status) {
       const sub = index.blocks?.subyacente || {};
       const sg = index.blocks?.spotgamma || {};
-      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
+      const gx = index.blocks?.gex || {};
+      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | GEX ${gx.rows || gexRows.length} filas | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
     }
     if (blocks) blocks.innerHTML = renderMlBlocks(index);
     if (preview) preview.innerHTML = renderMlUnderlyingTable(rows);
     if (spotgammaPreview) spotgammaPreview.innerHTML = renderMlSpotGammaTable(spotgammaRows);
+    if (gexPreview) gexPreview.innerHTML = renderMlGexTable(gexRows);
   } catch (e) {
     content.innerHTML += `<div class="gex-empty">Error cargando Machine Learning Lab: ${e.message}</div>`;
   }
