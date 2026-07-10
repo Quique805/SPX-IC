@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-07-06T14:07:11.254864+00:00",
+  "lastUpdated": "2026-07-09T20:32:16.544258+00:00",
   "byDate": {
     "2026-04-27": {
       "spx_open": 7153,
@@ -384,12 +384,36 @@
     },
     "2026-07-06": {
       "spx_open": 7507,
-      "spx_high": 7522,
+      "spx_high": 7551,
       "spx_low": 7501,
-      "spx_close": 7513,
+      "spx_close": 7537,
       "vix_open": 16.4,
-      "vix_close": 16.2
+      "vix_close": 15.6
     },
-    "2026-07-03": {}
+    "2026-07-03": {},
+    "2026-07-07": {
+      "spx_open": 7517,
+      "spx_high": 7536,
+      "spx_low": 7479,
+      "spx_close": 7504,
+      "vix_open": 15.9,
+      "vix_close": 16.1
+    },
+    "2026-07-08": {
+      "spx_open": 7477,
+      "spx_high": 7489,
+      "spx_low": 7422,
+      "spx_close": 7483,
+      "vix_open": 16.5,
+      "vix_close": 16.9
+    },
+    "2026-07-09": {
+      "spx_open": 7492,
+      "spx_high": 7547,
+      "spx_low": 7482,
+      "spx_close": 7544,
+      "vix_open": 16.6,
+      "vix_close": 15.8
+    }
   }
 }
