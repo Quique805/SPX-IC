@@ -4391,6 +4391,223 @@ document.querySelectorAll('.theme-btn').forEach(b => {
 });
 
 // Auto-load priority: cached CSV → fetch (http only) → manual entries only
+// ---- Development notes ---------------------------------------------------
+const DEV_NOTES_KEY = 'spx-dev-notes-v1';
+let devNotesState = { notes: [], selectedId: null };
+
+function devNotesEscape(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function loadDevNotes() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DEV_NOTES_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveDevNotes(notes) {
+  localStorage.setItem(DEV_NOTES_KEY, JSON.stringify(notes, null, 2));
+}
+
+function devNoteStatusLabel(status) {
+  return {
+    idea: 'Idea',
+    pending: 'Pendiente',
+    in_progress: 'En desarrollo',
+    done: 'Hecho'
+  }[status] || 'Pendiente';
+}
+
+function createEmptyDevNote() {
+  const now = new Date().toISOString();
+  return {
+    id: `note-${Date.now()}`,
+    status: 'idea',
+    title: '',
+    body: '',
+    codex: '',
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function getSelectedDevNote() {
+  return devNotesState.notes.find(note => note.id === devNotesState.selectedId) || null;
+}
+
+function renderDevNotesList() {
+  const list = document.getElementById('devNotesList');
+  if (!list) return;
+  const notes = devNotesState.notes.slice().sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  if (!notes.length) {
+    list.innerHTML = `
+      <div class="dev-notes-empty">
+        Todavía no hay pendientes. Crea una nota para guardar ideas de ML, mejoras del IC, reglas futuras o dudas que tengamos que revisar.
+      </div>
+    `;
+    return;
+  }
+  list.innerHTML = notes.map(note => `
+    <button type="button" class="dev-note-item ${note.id === devNotesState.selectedId ? 'active' : ''}" data-note-id="${devNotesEscape(note.id)}">
+      <strong>${devNotesEscape(note.title || 'Sin título')}</strong>
+      <span>${devNoteStatusLabel(note.status)} · ${note.updatedAt ? new Date(note.updatedAt).toLocaleDateString('es-ES') : ''}</span>
+    </button>
+  `).join('');
+  list.querySelectorAll('.dev-note-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      devNotesState.selectedId = btn.dataset.noteId;
+      renderDevNotes();
+    });
+  });
+}
+
+function fillDevNotesForm() {
+  const note = getSelectedDevNote();
+  const id = document.getElementById('devNoteId');
+  const status = document.getElementById('devNoteStatus');
+  const title = document.getElementById('devNoteTitleInput');
+  const body = document.getElementById('devNoteBodyInput');
+  const codex = document.getElementById('devNoteCodexInput');
+  const meta = document.getElementById('devNotesMeta');
+  const del = document.getElementById('devNoteDeleteBtn');
+  if (!id || !status || !title || !body || !codex || !meta || !del) return;
+
+  if (!note) {
+    id.value = '';
+    status.value = 'idea';
+    title.value = '';
+    body.value = '';
+    codex.value = '';
+    meta.textContent = 'Crea una nota nueva o selecciona una pendiente existente.';
+    del.disabled = true;
+    return;
+  }
+  id.value = note.id;
+  status.value = note.status || 'idea';
+  title.value = note.title || '';
+  body.value = note.body || '';
+  codex.value = note.codex || '';
+  meta.textContent = `Creada: ${note.createdAt ? new Date(note.createdAt).toLocaleString('es-ES') : '-'} · Actualizada: ${note.updatedAt ? new Date(note.updatedAt).toLocaleString('es-ES') : '-'}`;
+  del.disabled = false;
+}
+
+function renderDevNotes() {
+  renderDevNotesList();
+  fillDevNotesForm();
+}
+
+function openDevNotes() {
+  const overlay = document.getElementById('devNotesOverlay');
+  if (!overlay) return;
+  devNotesState.notes = loadDevNotes();
+  if (!devNotesState.selectedId && devNotesState.notes.length) {
+    devNotesState.selectedId = devNotesState.notes[0].id;
+  }
+  renderDevNotes();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeDevNotes() {
+  const overlay = document.getElementById('devNotesOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function saveDevNotesForm(event) {
+  event.preventDefault();
+  const id = document.getElementById('devNoteId');
+  const status = document.getElementById('devNoteStatus');
+  const title = document.getElementById('devNoteTitleInput');
+  const body = document.getElementById('devNoteBodyInput');
+  const codex = document.getElementById('devNoteCodexInput');
+  if (!id || !status || !title || !body || !codex) return;
+  const now = new Date().toISOString();
+  let note = devNotesState.notes.find(item => item.id === id.value);
+  if (!note) {
+    note = createEmptyDevNote();
+    devNotesState.notes.unshift(note);
+  }
+  note.status = status.value || 'idea';
+  note.title = title.value.trim() || 'Sin título';
+  note.body = body.value.trim();
+  note.codex = codex.value.trim();
+  note.updatedAt = now;
+  if (!note.createdAt) note.createdAt = now;
+  devNotesState.selectedId = note.id;
+  saveDevNotes(devNotesState.notes);
+  renderDevNotes();
+}
+
+function newDevNote() {
+  const note = createEmptyDevNote();
+  devNotesState.notes.unshift(note);
+  devNotesState.selectedId = note.id;
+  saveDevNotes(devNotesState.notes);
+  renderDevNotes();
+  const title = document.getElementById('devNoteTitleInput');
+  if (title) title.focus();
+}
+
+function deleteDevNote() {
+  const note = getSelectedDevNote();
+  if (!note) return;
+  if (!confirm(`¿Eliminar la nota "${note.title || 'Sin título'}"?`)) return;
+  devNotesState.notes = devNotesState.notes.filter(item => item.id !== note.id);
+  devNotesState.selectedId = devNotesState.notes[0]?.id || null;
+  saveDevNotes(devNotesState.notes);
+  renderDevNotes();
+}
+
+async function exportDevNotesSummary() {
+  const notes = loadDevNotes();
+  const text = notes.length
+    ? notes.map((note, idx) => [
+        `${idx + 1}. ${note.title || 'Sin título'} [${devNoteStatusLabel(note.status)}]`,
+        `Usuario: ${note.body || '-'}`,
+        `Codex: ${note.codex || '-'}`,
+      ].join('\n')).join('\n\n')
+    : 'No hay pendientes de desarrollo guardados.';
+  try {
+    await navigator.clipboard.writeText(text);
+    const meta = document.getElementById('devNotesMeta');
+    if (meta) meta.textContent = 'Resumen copiado al portapapeles.';
+  } catch (_) {
+    alert(text);
+  }
+}
+
+function initDevNotes() {
+  const open = document.getElementById('devNotesOpenBtn');
+  const close = document.getElementById('devNotesCloseBtn');
+  const overlay = document.getElementById('devNotesOverlay');
+  const form = document.getElementById('devNotesForm');
+  const add = document.getElementById('devNoteNewBtn');
+  const del = document.getElementById('devNoteDeleteBtn');
+  const exp = document.getElementById('devNotesExportBtn');
+  if (!open || !close || !overlay || !form || !add || !del || !exp) return;
+  open.addEventListener('click', openDevNotes);
+  close.addEventListener('click', closeDevNotes);
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) closeDevNotes();
+  });
+  form.addEventListener('submit', saveDevNotesForm);
+  add.addEventListener('click', newDevNote);
+  del.addEventListener('click', deleteDevNote);
+  exp.addEventListener('click', exportDevNotesSummary);
+}
+
+initDevNotes();
+
 const AUTO_LOAD_NAMES = ['SPX-VIX.fin.csv', 'data.csv'];
 (async () => {
   // 1. Cached CSV — works regardless of file:// vs http
