@@ -3606,6 +3606,137 @@
       background: #050505;
     }
 
+    .ml-lab-note {
+      max-width: 940px;
+      margin: 0 0 16px;
+      color: #666;
+      font-size: 0.92rem;
+      line-height: 1.58;
+    }
+
+    .ml-block-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .ml-block-card,
+    .ml-table-panel {
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 24px;
+      background: rgba(255,255,255,0.72);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.92);
+    }
+
+    .ml-block-card {
+      padding: 14px;
+    }
+
+    .ml-block-card span {
+      display: block;
+      color: #777;
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .ml-block-card strong {
+      display: block;
+      margin-top: 8px;
+      color: #050505;
+      font-size: clamp(1rem, 2vw, 1.45rem);
+      letter-spacing: -0.04em;
+    }
+
+    .ml-block-card.available {
+      border-color: rgba(30,122,77,0.28);
+      background: linear-gradient(145deg, rgba(255,255,255,0.84), rgba(230,247,236,0.72));
+    }
+
+    .ml-status-pill {
+      display: inline-flex;
+      margin-top: 10px;
+      border-radius: 999px;
+      padding: 6px 9px;
+      color: #fff;
+      background: #050505;
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .ml-status-pill.pending {
+      color: #111;
+      background: rgba(255,255,255,0.9);
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+
+    .ml-table-panel {
+      overflow: hidden;
+      margin-top: 18px;
+    }
+
+    .ml-table-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 16px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .ml-table-head strong {
+      color: #050505;
+      font-size: 0.88rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .ml-table-wrap {
+      overflow: auto;
+      max-height: 520px;
+    }
+
+    .ml-feature-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    .ml-feature-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 9px 10px;
+      color: #fff;
+      background: #050505;
+      text-align: right;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .ml-feature-table th:first-child,
+    .ml-feature-table td:first-child {
+      text-align: left;
+    }
+
+    .ml-feature-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      background: rgba(255,255,255,0.82);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .ml-feature-table tr:nth-child(even) td {
+      background: rgba(247,247,244,0.82);
+    }
+
     .gex-empty {
       padding: 22px;
       border-radius: 20px;
@@ -3747,6 +3878,9 @@
       }
       .dex-chart {
         min-height: 460px;
+      }
+      .ml-block-grid {
+        grid-template-columns: 1fr;
       }
       .dev-notes-launcher {
         top: 10px;
@@ -4006,7 +4140,7 @@
             <h3>Volatility surface</h3>
             <p>Base para modelar la superficie de volatilidad y observar estructura por strikes y vencimientos.</p>
           </button>
-          <button type="button" class="research-card ml-gateway-card" aria-label="Entrada futura al laboratorio de Machine Learning">
+          <button type="button" class="research-card ml-gateway-card" data-research-section="ml" aria-label="Entrada al laboratorio de Machine Learning">
             <div class="ml-gateway-content">
               <div>
                 <div class="ml-gateway-kicker"><i></i> Próxima fase cuantitativa</div>
@@ -4508,6 +4642,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260710-dev-notes-v1"></script>
+  <script src="script.js?v=20260710-ml-dataset-v1"></script>
 </body>
 </html>

@@ -1,0 +1,28 @@
+{
+  "version": "ml-dataset-subyacente-v1",
+  "lastUpdated": "2026-07-10T15:51:23.552811+00:00",
+  "blocks": {
+    "subyacente": {
+      "status": "available",
+      "file": "data/ml-dataset/subyacente.json",
+      "rows": 52,
+      "firstDate": "2026-04-27",
+      "lastDate": "2026-07-10"
+    },
+    "spotgamma": {
+      "status": "pending"
+    },
+    "gex": {
+      "status": "pending"
+    },
+    "dex": {
+      "status": "pending"
+    },
+    "vol_surface": {
+      "status": "pending"
+    },
+    "premiums_labels": {
+      "status": "pending"
+    }
+  }
+}

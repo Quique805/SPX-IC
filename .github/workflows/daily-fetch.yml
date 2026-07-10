@@ -38,6 +38,9 @@ jobs:
       - name: Generate DEX model lab data
         run: python dex_models.py
 
+      - name: Generate ML dataset
+        run: python ml_dataset.py
+
       - name: Generate signal and send scheduled card
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

@@ -5751,6 +5751,136 @@ async function renderDexLab() {
   }
 }
 
+async function loadMlDatasetIndex() {
+  return fetchFirstJson([
+    `data/ml-dataset-index.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/ml-dataset-index.json?t=${Date.now()}`
+  ]);
+}
+
+async function loadMlUnderlyingDataset() {
+  return fetchFirstJson([
+    `data/ml-dataset/subyacente.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/ml-dataset/subyacente.json?t=${Date.now()}`
+  ]);
+}
+
+function mlNum(value, digits = 2) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  return n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+}
+
+function renderMlBlocks(index) {
+  const labels = {
+    subyacente: 'Subyacente',
+    spotgamma: 'SpotGamma',
+    gex: 'GEX',
+    dex: 'DEX',
+    vol_surface: 'Vol Surface',
+    premiums_labels: 'Primas / Labels'
+  };
+  const blocks = index.blocks || {};
+  return `
+    <div class="ml-block-grid">
+      ${Object.entries(labels).map(([key, label]) => {
+        const block = blocks[key] || { status: 'pending' };
+        const available = block.status === 'available';
+        return `
+          <div class="ml-block-card ${available ? 'available' : ''}">
+            <span>${label}</span>
+            <strong>${available ? `${block.rows || 0} filas` : 'Pendiente'}</strong>
+            <div class="ml-status-pill ${available ? '' : 'pending'}">${available ? 'Disponible' : 'Por construir'}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderMlUnderlyingTable(rows) {
+  const latest = (rows || []).slice(-14).reverse();
+  if (!latest.length) {
+    return '<div class="gex-empty">No hay filas de subyacente todavía.</div>';
+  }
+  return `
+    <div class="ml-table-panel">
+      <div class="ml-table-head">
+        <strong>Últimas sesiones · Bloque Subyacente</strong>
+        <span class="ml-lab-note" style="margin:0">Variables base para el primer modelo de venta de volatilidad.</span>
+      </div>
+      <div class="ml-table-wrap">
+        <table class="ml-feature-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Open</th>
+              <th>Close</th>
+              <th>Gap %</th>
+              <th>Open % rango prev.</th>
+              <th>Range % 1D</th>
+              <th>Range % 5D</th>
+              <th>RV 5D</th>
+              <th>Trend 5D</th>
+              <th>VIX Open</th>
+              <th>VIX Chg %</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${latest.map(row => `
+              <tr>
+                <td>${row.date}</td>
+                <td>${mlNum(row.open, 2)}</td>
+                <td>${mlNum(row.close, 2)}</td>
+                <td>${mlNum(row.gapPct, 2)}</td>
+                <td>${mlNum(row.openPositionPrevRange, 1)}</td>
+                <td>${mlNum(row.rangePct1d, 2)}</td>
+                <td>${mlNum(row.rangePct5dAvg, 2)}</td>
+                <td>${mlNum(row.realizedVol5d, 4)}</td>
+                <td>${mlNum(row.trend5d, 4)}</td>
+                <td>${mlNum(row.vixOpen, 2)}</td>
+                <td>${mlNum(row.vixChangePct, 2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+async function renderMlLab() {
+  const content = document.getElementById('researchDetailContent');
+  if (!content) return;
+  content.innerHTML = `
+    <h3>Machine Learning Lab</h3>
+    <p class="ml-lab-note">
+      Primer ladrillo del dataset maestro para ML. De momento no entrenamos modelos: construimos datos limpios,
+      diarios y ampliables para mejorar la venta de volatilidad 0DTE.
+    </p>
+    <div id="mlDatasetStatus" class="ml-lab-note">Cargando dataset maestro...</div>
+    <div id="mlBlocks"></div>
+    <div id="mlUnderlyingPreview"></div>
+  `;
+
+  try {
+    const index = await loadMlDatasetIndex();
+    const underlying = await loadMlUnderlyingDataset();
+    const rows = underlying.rows || [];
+    const status = document.getElementById('mlDatasetStatus');
+    const blocks = document.getElementById('mlBlocks');
+    const preview = document.getElementById('mlUnderlyingPreview');
+    if (status) {
+      const sub = index.blocks?.subyacente || {};
+      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | ${sub.firstDate || '-'} → ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
+    }
+    if (blocks) blocks.innerHTML = renderMlBlocks(index);
+    if (preview) preview.innerHTML = renderMlUnderlyingTable(rows);
+  } catch (e) {
+    content.innerHTML += `<div class="gex-empty">Error cargando Machine Learning Lab: ${e.message}</div>`;
+  }
+}
+
 function renderResearchPlaceholder(section) {
   const content = document.getElementById('researchDetailContent');
   if (!content) return;
@@ -7343,6 +7473,8 @@ function initResearchCore() {
       renderGexLab();
     } else if (section === 'dex') {
       renderDexLab();
+    } else if (section === 'ml') {
+      renderMlLab();
     } else if (section === 'volsurface') {
       renderVolSurfaceLab();
     } else {
