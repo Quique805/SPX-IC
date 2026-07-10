@@ -5765,10 +5765,32 @@ async function loadMlUnderlyingDataset() {
   ]);
 }
 
+async function loadMlSpotGammaDataset() {
+  return fetchFirstJson([
+    `data/ml-dataset/spotgamma.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/ml-dataset/spotgamma.json?t=${Date.now()}`
+  ]);
+}
+
 function mlNum(value, digits = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '-';
   return n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+}
+
+function mlZoneLabel(zone) {
+  const labels = {
+    below_put_wall: 'Bajo PW',
+    low_tail_0_10: 'Cola baja 0-10',
+    low_adjust_10_20: 'Ajuste put 10-20',
+    low_adjust_20_30: 'Ajuste put 20-30',
+    middle_30_80: 'Centro 30-80',
+    high_adjust_80_90: 'Ajuste call 80-90',
+    high_tail_90_100: 'Cola alta 90-100',
+    above_call_wall: 'Sobre CW',
+    unknown: '-'
+  };
+  return labels[zone] || zone || '-';
 }
 
 function renderMlBlocks(index) {
@@ -5849,6 +5871,57 @@ function renderMlUnderlyingTable(rows) {
   `;
 }
 
+function renderMlSpotGammaTable(rows) {
+  const latest = (rows || []).slice(-14).reverse();
+  if (!latest.length) {
+    return '<div class="gex-empty">No hay filas de SpotGamma todavía.</div>';
+  }
+  return `
+    <div class="ml-table-panel">
+      <div class="ml-table-head">
+        <strong>Últimas sesiones · Bloque SpotGamma</strong>
+        <span class="ml-lab-note" style="margin:0">Niveles manuales alineados por fecha aplicada a la sesión.</span>
+      </div>
+      <div class="ml-table-wrap">
+        <table class="ml-feature-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Open</th>
+              <th>CW</th>
+              <th>PW</th>
+              <th>GF</th>
+              <th>VT</th>
+              <th>Rango</th>
+              <th>Open % Walls</th>
+              <th>Zona</th>
+              <th>Dist CW</th>
+              <th>Dist PW</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${latest.map(row => `
+              <tr>
+                <td>${row.date}</td>
+                <td>${mlNum(row.open, 2)}</td>
+                <td>${mlNum(row.callWall, 0)}</td>
+                <td>${mlNum(row.putWall, 0)}</td>
+                <td>${mlNum(row.gammaFlip, 0)}</td>
+                <td>${mlNum(row.volTrigger, 0)}</td>
+                <td>${mlNum(row.wallRange, 0)}</td>
+                <td>${mlNum(row.openPctWalls, 1)}</td>
+                <td>${mlZoneLabel(row.openZone)}</td>
+                <td>${mlNum(row.distanceOpenCallWall, 0)}</td>
+                <td>${mlNum(row.distanceOpenPutWall, 0)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 async function renderMlLab() {
   const content = document.getElementById('researchDetailContent');
   if (!content) return;
@@ -5861,21 +5934,29 @@ async function renderMlLab() {
     <div id="mlDatasetStatus" class="ml-lab-note">Cargando dataset maestro...</div>
     <div id="mlBlocks"></div>
     <div id="mlUnderlyingPreview"></div>
+    <div id="mlSpotGammaPreview"></div>
   `;
 
   try {
     const index = await loadMlDatasetIndex();
-    const underlying = await loadMlUnderlyingDataset();
+    const [underlying, spotgamma] = await Promise.all([
+      loadMlUnderlyingDataset(),
+      loadMlSpotGammaDataset().catch(() => ({ rows: [] }))
+    ]);
     const rows = underlying.rows || [];
+    const spotgammaRows = spotgamma.rows || [];
     const status = document.getElementById('mlDatasetStatus');
     const blocks = document.getElementById('mlBlocks');
     const preview = document.getElementById('mlUnderlyingPreview');
+    const spotgammaPreview = document.getElementById('mlSpotGammaPreview');
     if (status) {
       const sub = index.blocks?.subyacente || {};
-      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | ${sub.firstDate || '-'} → ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
+      const sg = index.blocks?.spotgamma || {};
+      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
     }
     if (blocks) blocks.innerHTML = renderMlBlocks(index);
     if (preview) preview.innerHTML = renderMlUnderlyingTable(rows);
+    if (spotgammaPreview) spotgammaPreview.innerHTML = renderMlSpotGammaTable(spotgammaRows);
   } catch (e) {
     content.innerHTML += `<div class="gex-empty">Error cargando Machine Learning Lab: ${e.message}</div>`;
   }

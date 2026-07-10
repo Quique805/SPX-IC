@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the first ML dataset brick: underlying/VIX daily features."""
+"""Build ML dataset bricks from the dashboard data lake."""
 import json
 import math
 import os
@@ -9,10 +9,12 @@ from datetime import datetime, timezone
 from fetch_daily import DATA_DIR, load_json_safe, save_json
 
 OHLC_FILE = os.path.join(DATA_DIR, "daily-ohlc.json")
+SPOTGAMMA_FILE = os.path.join(DATA_DIR, "spotgamma-levels.json")
 OUT_DIR = os.path.join(DATA_DIR, "ml-dataset")
-OUT_FILE = os.path.join(OUT_DIR, "subyacente.json")
+OUT_UNDERLYING_FILE = os.path.join(OUT_DIR, "subyacente.json")
+OUT_SPOTGAMMA_FILE = os.path.join(OUT_DIR, "spotgamma.json")
 OUT_INDEX = os.path.join(DATA_DIR, "ml-dataset-index.json")
-MODEL_VERSION = "ml-dataset-subyacente-v1"
+MODEL_VERSION = "ml-dataset-v2"
 
 
 def safe_num(value, default=None):
@@ -169,31 +171,125 @@ def build_underlying_features(ohlc):
     return features
 
 
+def open_zone(open_pct):
+    value = safe_num(open_pct)
+    if value is None:
+        return "unknown"
+    if value < 0:
+        return "below_put_wall"
+    if value < 10:
+        return "low_tail_0_10"
+    if value <= 20:
+        return "low_adjust_10_20"
+    if value <= 30:
+        return "low_adjust_20_30"
+    if value <= 80:
+        return "middle_30_80"
+    if value <= 90:
+        return "high_adjust_80_90"
+    if value <= 100:
+        return "high_tail_90_100"
+    return "above_call_wall"
+
+
+def build_spotgamma_features(spotgamma, underlying_rows):
+    by_date = spotgamma.get("byDate") or {}
+    underlying_by_date = {row["date"]: row for row in underlying_rows}
+    rows = []
+    previous = None
+    for date_str in sorted(by_date):
+        raw = by_date.get(date_str) or {}
+        underlying = underlying_by_date.get(date_str)
+        open_ = safe_num(underlying.get("open")) if underlying else None
+        call_wall = safe_num(raw.get("callWall"))
+        put_wall = safe_num(raw.get("putWall"))
+        gamma_flip = safe_num(raw.get("gammaFlip"))
+        vol_trigger = safe_num(raw.get("volTrigger"))
+        wall_range = call_wall - put_wall if call_wall is not None and put_wall is not None else None
+        open_pct_walls = None
+        if open_ is not None and wall_range and wall_range > 0:
+            open_pct_walls = (open_ - put_wall) / wall_range * 100
+
+        row = {
+            "date": date_str,
+            "hasUnderlying": underlying is not None,
+            "open": open_,
+            "callWall": call_wall,
+            "putWall": put_wall,
+            "gammaFlip": gamma_flip,
+            "volTrigger": vol_trigger,
+            "wallRange": wall_range,
+            "openPctWalls": open_pct_walls,
+            "openZone": open_zone(open_pct_walls),
+            "openInsideWalls": open_pct_walls is not None and 0 <= open_pct_walls <= 100,
+            "openOperableRange10_90": open_pct_walls is not None and 10 <= open_pct_walls <= 90,
+            "openLowTail0_10": open_pct_walls is not None and 0 <= open_pct_walls < 10,
+            "openLowAdjust10_20": open_pct_walls is not None and 10 <= open_pct_walls <= 20,
+            "openLowAdjust20_30": open_pct_walls is not None and 20 < open_pct_walls <= 30,
+            "openMiddle30_80": open_pct_walls is not None and 30 < open_pct_walls <= 80,
+            "openHighAdjust80_90": open_pct_walls is not None and 80 < open_pct_walls <= 90,
+            "openHighTail90_100": open_pct_walls is not None and 90 < open_pct_walls <= 100,
+            "openOutsideWalls": open_pct_walls is not None and (open_pct_walls < 0 or open_pct_walls > 100),
+            "distanceOpenCallWall": call_wall - open_ if call_wall is not None and open_ is not None else None,
+            "distanceOpenPutWall": open_ - put_wall if put_wall is not None and open_ is not None else None,
+            "distanceOpenGammaFlip": open_ - gamma_flip if gamma_flip is not None and open_ is not None else None,
+            "distanceOpenVolTrigger": open_ - vol_trigger if vol_trigger is not None and open_ is not None else None,
+            "callWallChange": call_wall - previous["callWall"] if previous and call_wall is not None and previous.get("callWall") is not None else None,
+            "putWallChange": put_wall - previous["putWall"] if previous and put_wall is not None and previous.get("putWall") is not None else None,
+            "gammaFlipChange": gamma_flip - previous["gammaFlip"] if previous and gamma_flip is not None and previous.get("gammaFlip") is not None else None,
+            "volTriggerChange": vol_trigger - previous["volTrigger"] if previous and vol_trigger is not None and previous.get("volTrigger") is not None else None,
+            "wallRangeChange": wall_range - previous["wallRange"] if previous and wall_range is not None and previous.get("wallRange") is not None else None,
+            "source": raw.get("source") or "SpotGamma manual",
+            "updatedAt": raw.get("updatedAt"),
+        }
+        rows.append(row)
+        previous = row
+    return rows
+
+
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     ohlc = load_json_safe(OHLC_FILE) or {"byDate": {}}
-    rows = build_underlying_features(ohlc)
-    payload = {
+    spotgamma = load_json_safe(SPOTGAMMA_FILE) or {"byDate": {}}
+    underlying_rows = build_underlying_features(ohlc)
+    spotgamma_rows = build_spotgamma_features(spotgamma, underlying_rows)
+    now = datetime.now(timezone.utc).isoformat()
+    underlying_payload = {
         "version": MODEL_VERSION,
-        "lastUpdated": datetime.now(timezone.utc).isoformat(),
+        "lastUpdated": now,
         "block": "subyacente",
         "description": "Primer bloque del dataset ML: features diarios del subyacente SPX y VIX derivados de daily-ohlc.json.",
         "source": "data/daily-ohlc.json",
-        "rows": rows,
+        "rows": underlying_rows,
     }
-    save_json(OUT_FILE, payload)
+    spotgamma_payload = {
+        "version": MODEL_VERSION,
+        "lastUpdated": now,
+        "block": "spotgamma",
+        "description": "Segundo bloque del dataset ML: niveles SpotGamma manuales alineados por fecha aplicada a la sesion.",
+        "source": "data/spotgamma-levels.json",
+        "rows": spotgamma_rows,
+    }
+    save_json(OUT_UNDERLYING_FILE, underlying_payload)
+    save_json(OUT_SPOTGAMMA_FILE, spotgamma_payload)
     index = {
         "version": MODEL_VERSION,
-        "lastUpdated": payload["lastUpdated"],
+        "lastUpdated": now,
         "blocks": {
             "subyacente": {
                 "status": "available",
                 "file": "data/ml-dataset/subyacente.json",
-                "rows": len(rows),
-                "firstDate": rows[0]["date"] if rows else None,
-                "lastDate": rows[-1]["date"] if rows else None,
+                "rows": len(underlying_rows),
+                "firstDate": underlying_rows[0]["date"] if underlying_rows else None,
+                "lastDate": underlying_rows[-1]["date"] if underlying_rows else None,
             },
-            "spotgamma": {"status": "pending"},
+            "spotgamma": {
+                "status": "available",
+                "file": "data/ml-dataset/spotgamma.json",
+                "rows": len(spotgamma_rows),
+                "firstDate": spotgamma_rows[0]["date"] if spotgamma_rows else None,
+                "lastDate": spotgamma_rows[-1]["date"] if spotgamma_rows else None,
+            },
             "gex": {"status": "pending"},
             "dex": {"status": "pending"},
             "vol_surface": {"status": "pending"},
@@ -201,7 +297,7 @@ def main():
         },
     }
     save_json(OUT_INDEX, index)
-    print(f"OK ML dataset subyacente: {len(rows)} rows")
+    print(f"OK ML dataset: subyacente={len(underlying_rows)} rows, spotgamma={len(spotgamma_rows)} rows")
 
 
 if __name__ == "__main__":
