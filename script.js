@@ -7489,6 +7489,10 @@ function initResearchCore() {
   document.querySelectorAll('.research-card[data-research-section]').forEach(card => {
     card.addEventListener('click', () => openDetail(card.dataset.researchSection));
   });
+  const mlGateway = document.getElementById('mlGatewayCard');
+  if (mlGateway) {
+    mlGateway.addEventListener('click', () => openDetail('ml'));
+  }
   overlay.addEventListener('click', event => {
     if (event.target === overlay) closeResearch();
   });
