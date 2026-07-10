@@ -1,6 +1,6 @@
 {
-  "version": "ml-dataset-v3",
-  "lastUpdated": "2026-07-10T17:00:44.807010+00:00",
+  "version": "ml-dataset-v4",
+  "lastUpdated": "2026-07-10T17:13:17.735791+00:00",
   "blocks": {
     "subyacente": {
       "status": "available",
@@ -25,7 +25,12 @@
       "sourceVersion": "gex-lab-v1"
     },
     "dex": {
-      "status": "pending"
+      "status": "available",
+      "file": "data/ml-dataset/dex.json",
+      "rows": 13,
+      "firstDate": "2026-06-23",
+      "lastDate": "2026-07-10",
+      "sourceVersion": "dex-lab-v1"
     },
     "vol_surface": {
       "status": "pending"

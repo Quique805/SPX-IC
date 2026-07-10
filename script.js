@@ -5779,6 +5779,13 @@ async function loadMlGexDataset() {
   ]);
 }
 
+async function loadMlDexDataset() {
+  return fetchFirstJson([
+    `data/ml-dataset/dex.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/ml-dataset/dex.json?t=${Date.now()}`
+  ]);
+}
+
 function mlNum(value, digits = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '-';
@@ -5992,6 +5999,69 @@ function renderMlGexTable(rows) {
   `;
 }
 
+function renderMlDexTable(rows) {
+  const latest = (rows || []).slice(-14).reverse();
+  if (!latest.length) {
+    return '<div class="gex-empty">No hay filas de DEX todavia.</div>';
+  }
+  return `
+    <div class="ml-table-panel">
+      <div class="ml-table-head">
+        <strong>Ultimas sesiones - Bloque DEX</strong>
+        <span class="ml-lab-note" style="margin:0">Firma compacta del Weighted DEX: delta walls, DEX flip, extremos, regimen y cambios diarios.</span>
+      </div>
+      <div class="ml-table-wrap">
+        <table class="ml-feature-table">
+          <thead>
+            <tr>
+              <th>Sesion</th>
+              <th>Cadena cierre</th>
+              <th>Spot cadena</th>
+              <th>Open sesion</th>
+              <th>Call Delta Wall</th>
+              <th>Put Delta Wall</th>
+              <th>DEX Flip</th>
+              <th>Max +DEX</th>
+              <th>Max -DEX</th>
+              <th>Net DEX</th>
+              <th>Regimen</th>
+              <th>Open % DEX</th>
+              <th>Zona</th>
+              <th>Venc.</th>
+              <th>Cambio Flip</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${latest.map(row => {
+              const l = row.levels || {};
+              const ch = row.changes || {};
+              return `
+                <tr>
+                  <td>${row.targetSession || row.date || '-'}</td>
+                  <td>${row.sourceChainDate || '-'}</td>
+                  <td>${mlNum(row.chainSpot, 2)}</td>
+                  <td>${mlNum(row.sessionOpen, 2)}</td>
+                  <td>${mlNum(l.callDeltaWall, 0)}</td>
+                  <td>${mlNum(l.putDeltaWall, 0)}</td>
+                  <td>${mlNum(l.dexFlip, 0)}</td>
+                  <td>${mlNum(l.maxPositiveDex, 0)}</td>
+                  <td>${mlNum(l.maxNegativeDex, 0)}</td>
+                  <td>${mlNum(l.netDexAtSpot, 0)}</td>
+                  <td>${l.netDexAtSpotSign || row.diagnostics?.regime || '-'}</td>
+                  <td>${mlNum(l.openPctDexWalls, 1)}</td>
+                  <td>${mlZoneLabel(l.openZoneDexWalls)}</td>
+                  <td>${l.expirationsUsedCount ?? '-'}</td>
+                  <td>${mlNum(ch.dexFlipChange, 0)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 async function renderMlLab() {
   const content = document.getElementById('researchDetailContent');
   if (!content) return;
@@ -6006,33 +6076,39 @@ async function renderMlLab() {
     <div id="mlUnderlyingPreview"></div>
     <div id="mlSpotGammaPreview"></div>
     <div id="mlGexPreview"></div>
+    <div id="mlDexPreview"></div>
   `;
 
   try {
     const index = await loadMlDatasetIndex();
-    const [underlying, spotgamma, gex] = await Promise.all([
+    const [underlying, spotgamma, gex, dex] = await Promise.all([
       loadMlUnderlyingDataset(),
       loadMlSpotGammaDataset().catch(() => ({ rows: [] })),
-      loadMlGexDataset().catch(() => ({ rows: [] }))
+      loadMlGexDataset().catch(() => ({ rows: [] })),
+      loadMlDexDataset().catch(() => ({ rows: [] }))
     ]);
     const rows = underlying.rows || [];
     const spotgammaRows = spotgamma.rows || [];
     const gexRows = gex.rows || [];
+    const dexRows = dex.rows || [];
     const status = document.getElementById('mlDatasetStatus');
     const blocks = document.getElementById('mlBlocks');
     const preview = document.getElementById('mlUnderlyingPreview');
     const spotgammaPreview = document.getElementById('mlSpotGammaPreview');
     const gexPreview = document.getElementById('mlGexPreview');
+    const dexPreview = document.getElementById('mlDexPreview');
     if (status) {
       const sub = index.blocks?.subyacente || {};
       const sg = index.blocks?.spotgamma || {};
       const gx = index.blocks?.gex || {};
-      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | GEX ${gx.rows || gexRows.length} filas | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
+      const dx = index.blocks?.dex || {};
+      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | GEX ${gx.rows || gexRows.length} filas | DEX ${dx.rows || dexRows.length} filas | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
     }
     if (blocks) blocks.innerHTML = renderMlBlocks(index);
     if (preview) preview.innerHTML = renderMlUnderlyingTable(rows);
     if (spotgammaPreview) spotgammaPreview.innerHTML = renderMlSpotGammaTable(spotgammaRows);
     if (gexPreview) gexPreview.innerHTML = renderMlGexTable(gexRows);
+    if (dexPreview) dexPreview.innerHTML = renderMlDexTable(dexRows);
   } catch (e) {
     content.innerHTML += `<div class="gex-empty">Error cargando Machine Learning Lab: ${e.message}</div>`;
   }

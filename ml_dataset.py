@@ -12,16 +12,20 @@ OHLC_FILE = os.path.join(DATA_DIR, "daily-ohlc.json")
 SPOTGAMMA_FILE = os.path.join(DATA_DIR, "spotgamma-levels.json")
 GEX_INDEX_FILE = os.path.join(DATA_DIR, "gex-models-index.json")
 GEX_MODELS_DIR = os.path.join(DATA_DIR, "gex-models")
+DEX_INDEX_FILE = os.path.join(DATA_DIR, "dex-models-index.json")
+DEX_MODELS_DIR = os.path.join(DATA_DIR, "dex-models")
 OUT_DIR = os.path.join(DATA_DIR, "ml-dataset")
 OUT_UNDERLYING_FILE = os.path.join(OUT_DIR, "subyacente.json")
 OUT_SPOTGAMMA_FILE = os.path.join(OUT_DIR, "spotgamma.json")
 OUT_GEX_FILE = os.path.join(OUT_DIR, "gex.json")
+OUT_DEX_FILE = os.path.join(OUT_DIR, "dex.json")
 OUT_INDEX = os.path.join(DATA_DIR, "ml-dataset-index.json")
-MODEL_VERSION = "ml-dataset-v3"
+MODEL_VERSION = "ml-dataset-v4"
 
 GEX_MODEL_IDS = ("pure_gex", "liquidity_weighted", "spotgamma_fit")
 GEX_MODE_IDS = ("next", "multi")
 GEX_LEVEL_KEYS = ("callWall", "putWall", "gammaFlip", "volTrigger")
+DEX_LEVEL_KEYS = ("callDeltaWall", "putDeltaWall", "dexFlip", "maxPositiveDex", "maxNegativeDex")
 
 
 def safe_num(value, default=None):
@@ -503,14 +507,130 @@ def build_gex_features(gex_index, underlying_rows):
     return rows
 
 
+def dex_top_summary(levels):
+    top_rows = (levels or {}).get("topRows") or []
+    histogram = (levels or {}).get("histogram") or []
+    rows = top_rows if top_rows else histogram
+    if not rows:
+        return {
+            "topAbsDexStrike": None,
+            "topAbsDex": None,
+            "topNetDexStrike": None,
+            "topNegativeDexStrike": None,
+        }
+    top_abs = max(rows, key=lambda row: safe_num(row.get("absDex"), 0))
+    top_net = max(rows, key=lambda row: safe_num(row.get("netDex"), 0))
+    top_negative = min(rows, key=lambda row: safe_num(row.get("netDex"), 0))
+    return {
+        "topAbsDexStrike": safe_num(top_abs.get("strike")),
+        "topAbsDex": safe_num(top_abs.get("absDex")),
+        "topNetDexStrike": safe_num(top_net.get("strike")),
+        "topNegativeDexStrike": safe_num(top_negative.get("strike")),
+    }
+
+
+def compact_dex_levels(levels, chain_spot, session_open):
+    if not levels:
+        return None
+    call_wall = safe_num(levels.get("callDeltaWall"))
+    put_wall = safe_num(levels.get("putDeltaWall"))
+    dex_flip = safe_num(levels.get("dexFlip"))
+    max_positive = safe_num(levels.get("maxPositiveDex"))
+    max_negative = safe_num(levels.get("maxNegativeDex"))
+    wall_range = call_wall - put_wall if call_wall is not None and put_wall is not None else None
+    open_pct_walls = None
+    if session_open is not None and wall_range and wall_range > 0:
+        open_pct_walls = (session_open - put_wall) / wall_range * 100
+    compact = {
+        "callDeltaWall": call_wall,
+        "putDeltaWall": put_wall,
+        "dexFlip": dex_flip,
+        "maxPositiveDex": max_positive,
+        "maxNegativeDex": max_negative,
+        "deltaWallRange": wall_range,
+        "netDexAtSpot": safe_num(levels.get("netDexAtSpot")),
+        "netDexAtSpotSign": gex_sign(levels.get("netDexAtSpot")),
+        "distanceChainSpotCallDeltaWall": call_wall - chain_spot if call_wall is not None and chain_spot is not None else None,
+        "distanceChainSpotPutDeltaWall": chain_spot - put_wall if put_wall is not None and chain_spot is not None else None,
+        "distanceChainSpotDexFlip": chain_spot - dex_flip if dex_flip is not None and chain_spot is not None else None,
+        "distanceChainSpotMaxPositiveDex": chain_spot - max_positive if max_positive is not None and chain_spot is not None else None,
+        "distanceChainSpotMaxNegativeDex": chain_spot - max_negative if max_negative is not None and chain_spot is not None else None,
+        "distanceOpenCallDeltaWall": call_wall - session_open if call_wall is not None and session_open is not None else None,
+        "distanceOpenPutDeltaWall": session_open - put_wall if put_wall is not None and session_open is not None else None,
+        "distanceOpenDexFlip": session_open - dex_flip if dex_flip is not None and session_open is not None else None,
+        "distanceOpenMaxPositiveDex": session_open - max_positive if max_positive is not None and session_open is not None else None,
+        "distanceOpenMaxNegativeDex": session_open - max_negative if max_negative is not None and session_open is not None else None,
+        "openPctDexWalls": open_pct_walls,
+        "openZoneDexWalls": open_zone(open_pct_walls),
+    }
+    compact.update(expiration_summary(levels))
+    compact.update(dex_top_summary(levels))
+    return compact
+
+
+def build_dex_features(dex_index, underlying_rows):
+    dates = (dex_index or {}).get("dates") or []
+    underlying_by_date = {row["date"]: row for row in underlying_rows}
+    rows = []
+    previous = None
+    for source_date in sorted(dates):
+        path = os.path.join(DEX_MODELS_DIR, f"{source_date}.json")
+        record = load_json_safe(path)
+        if not record:
+            continue
+        target_session = record.get("targetSession")
+        underlying = underlying_by_date.get(target_session) or {}
+        session_open = safe_num(underlying.get("open"))
+        chain_spot = safe_num(record.get("spot"))
+        levels = compact_dex_levels(record.get("levels"), chain_spot, session_open)
+        row = {
+            "date": target_session,
+            "targetSession": target_session,
+            "sourceChainDate": source_date,
+            "sourceChain": record.get("sourceChain"),
+            "dexModelVersion": record.get("version"),
+            "generatedAt": record.get("generatedAt"),
+            "capturedAt": record.get("capturedAt"),
+            "chainSpot": chain_spot,
+            "sessionOpen": session_open,
+            "hasUnderlying": bool(underlying),
+            "model": record.get("model"),
+            "levels": levels,
+            "diagnostics": {
+                "regime": (record.get("diagnostics") or {}).get("regime"),
+            },
+        }
+        if previous and levels and previous.get("levels"):
+            prev_levels = previous["levels"]
+            row["changes"] = {
+                "callDeltaWallChange": levels.get("callDeltaWall") - prev_levels.get("callDeltaWall") if levels.get("callDeltaWall") is not None and prev_levels.get("callDeltaWall") is not None else None,
+                "putDeltaWallChange": levels.get("putDeltaWall") - prev_levels.get("putDeltaWall") if levels.get("putDeltaWall") is not None and prev_levels.get("putDeltaWall") is not None else None,
+                "dexFlipChange": levels.get("dexFlip") - prev_levels.get("dexFlip") if levels.get("dexFlip") is not None and prev_levels.get("dexFlip") is not None else None,
+                "netDexAtSpotChange": levels.get("netDexAtSpot") - prev_levels.get("netDexAtSpot") if levels.get("netDexAtSpot") is not None and prev_levels.get("netDexAtSpot") is not None else None,
+            }
+        else:
+            row["changes"] = {
+                "callDeltaWallChange": None,
+                "putDeltaWallChange": None,
+                "dexFlipChange": None,
+                "netDexAtSpotChange": None,
+            }
+        rows.append(row)
+        previous = row
+    rows.sort(key=lambda item: item.get("targetSession") or item.get("sourceChainDate") or "")
+    return rows
+
+
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     ohlc = load_json_safe(OHLC_FILE) or {"byDate": {}}
     spotgamma = load_json_safe(SPOTGAMMA_FILE) or {"byDate": {}}
     gex_index = load_json_safe(GEX_INDEX_FILE) or {"dates": []}
+    dex_index = load_json_safe(DEX_INDEX_FILE) or {"dates": []}
     underlying_rows = build_underlying_features(ohlc)
     spotgamma_rows = build_spotgamma_features(spotgamma, underlying_rows)
     gex_rows = build_gex_features(gex_index, underlying_rows)
+    dex_rows = build_dex_features(dex_index, underlying_rows)
     now = datetime.now(timezone.utc).isoformat()
     underlying_payload = {
         "version": MODEL_VERSION,
@@ -537,9 +657,19 @@ def main():
         "gexModelSourceVersion": gex_index.get("version"),
         "rows": gex_rows,
     }
+    dex_payload = {
+        "version": MODEL_VERSION,
+        "lastUpdated": now,
+        "block": "dex",
+        "description": "Cuarto bloque del dataset ML: firma compacta del modelo Weighted DEX con delta walls, DEX flip, extremos y regimen.",
+        "source": "data/dex-models/*.json",
+        "dexModelSourceVersion": dex_index.get("version"),
+        "rows": dex_rows,
+    }
     save_json(OUT_UNDERLYING_FILE, underlying_payload)
     save_json(OUT_SPOTGAMMA_FILE, spotgamma_payload)
     save_json(OUT_GEX_FILE, gex_payload)
+    save_json(OUT_DEX_FILE, dex_payload)
     index = {
         "version": MODEL_VERSION,
         "lastUpdated": now,
@@ -566,13 +696,20 @@ def main():
                 "lastDate": gex_rows[-1]["targetSession"] if gex_rows else None,
                 "sourceVersion": gex_index.get("version"),
             },
-            "dex": {"status": "pending"},
+            "dex": {
+                "status": "available",
+                "file": "data/ml-dataset/dex.json",
+                "rows": len(dex_rows),
+                "firstDate": dex_rows[0]["targetSession"] if dex_rows else None,
+                "lastDate": dex_rows[-1]["targetSession"] if dex_rows else None,
+                "sourceVersion": dex_index.get("version"),
+            },
             "vol_surface": {"status": "pending"},
             "premiums_labels": {"status": "pending"},
         },
     }
     save_json(OUT_INDEX, index)
-    print(f"OK ML dataset: subyacente={len(underlying_rows)} rows, spotgamma={len(spotgamma_rows)} rows, gex={len(gex_rows)} rows")
+    print(f"OK ML dataset: subyacente={len(underlying_rows)} rows, spotgamma={len(spotgamma_rows)} rows, gex={len(gex_rows)} rows, dex={len(dex_rows)} rows")
 
 
 if __name__ == "__main__":
