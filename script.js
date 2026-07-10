@@ -4786,6 +4786,334 @@ async function renderVolSurfaceLab() {
   }
 }
 
+const GEX_MODEL_ORDER = ['pure_gex', 'liquidity_weighted', 'spotgamma_fit'];
+const GEX_MODE_ORDER = [
+  { id: 'next', label: 'GEX proximo vencimiento' },
+  { id: 'multi', label: 'GEX multi-vencimiento' }
+];
+const GEX_LEVEL_META = {
+  callWall: { label: 'Call Wall', color: '#7CFF9A' },
+  putWall: { label: 'Put Wall', color: '#ff4d5e' },
+  gammaFlip: { label: 'Gamma Flip', color: '#ffb347' },
+  volTrigger: { label: 'VT', color: '#b388ff' }
+};
+
+async function loadGexModelIndex() {
+  return fetchFirstJson([
+    `data/gex-models-index.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/gex-models-index.json?t=${Date.now()}`
+  ]);
+}
+
+async function loadGexModelRecord(date) {
+  return fetchFirstJson([
+    `data/gex-models/${date}.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/gex-models/${date}.json?t=${Date.now()}`
+  ]);
+}
+
+function gexNum(value, digits = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  return n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+}
+
+function gexStatusLabel(status) {
+  const map = {
+    win: 'Acierto',
+    loss: 'Tocado',
+    no_trade: 'No opera',
+    pending: 'Pendiente'
+  };
+  return map[status] || '-';
+}
+
+function gexOperationClass(status) {
+  if (status === 'win') return '#0b7f3a';
+  if (status === 'loss') return '#a20f2d';
+  if (status === 'no_trade') return '#7a4a00';
+  return '#555';
+}
+
+function summarizeGexRecords(records) {
+  const summary = {};
+  for (const modelId of GEX_MODEL_ORDER) {
+    summary[modelId] = {};
+    for (const mode of GEX_MODE_ORDER) {
+      const stats = { errors: [], wins: 0, losses: 0, noTrade: 0, pending: 0, totalSignals: 0 };
+      for (const record of records) {
+        const diag = record?.diagnostics?.[modelId]?.[mode.id];
+        const err = Number(diag?.spotgammaError?.weightedError);
+        if (Number.isFinite(err)) stats.errors.push(err);
+        const op = diag?.operation || {};
+        if (op.status === 'win') {
+          stats.wins += 1;
+          stats.totalSignals += 1;
+        } else if (op.status === 'loss') {
+          stats.losses += 1;
+          stats.totalSignals += 1;
+        } else if (op.status === 'no_trade') {
+          stats.noTrade += 1;
+        } else {
+          stats.pending += 1;
+        }
+      }
+      const avgError = stats.errors.length ? stats.errors.reduce((a, b) => a + b, 0) / stats.errors.length : null;
+      const wr = stats.totalSignals ? stats.wins / stats.totalSignals * 100 : null;
+      summary[modelId][mode.id] = { ...stats, avgError, wr };
+    }
+  }
+  return summary;
+}
+
+function levelValueNear(level, strike, tolerance = 12.5) {
+  const a = Number(level);
+  const b = Number(strike);
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tolerance;
+}
+
+function gexBarColor(row, levels) {
+  const strike = row.strike;
+  if (levelValueNear(levels.callWall, strike)) return GEX_LEVEL_META.callWall.color;
+  if (levelValueNear(levels.putWall, strike)) return GEX_LEVEL_META.putWall.color;
+  if (levelValueNear(levels.gammaFlip, strike)) return GEX_LEVEL_META.gammaFlip.color;
+  if (levelValueNear(levels.volTrigger, strike)) return GEX_LEVEL_META.volTrigger.color;
+  return '#d9d9d4';
+}
+
+function renderGexHistogram(elementId, record, modelId, modeId) {
+  const element = document.getElementById(elementId);
+  const levels = record?.models?.[modelId]?.[modeId];
+  const rows = levels?.histogram || [];
+  if (!element || !levels || !rows.length) {
+    if (element) element.innerHTML = '<div class="gex-empty">No hay histograma GEX para esta sesion.</div>';
+    return;
+  }
+
+  const x = rows.map(row => row.strike);
+  const y = rows.map(row => Math.abs(Number(row.callGex || 0)) + Math.abs(Number(row.putGex || 0)));
+  const colors = rows.map(row => gexBarColor(row, levels));
+  const custom = rows.map(row => [row.callGex, row.putGex, row.netGex, row.callScore, row.putScore]);
+  const maxY = Math.max(...y.filter(Number.isFinite), 1);
+  const shapes = [];
+  const annotations = [];
+  for (const [key, meta] of Object.entries(GEX_LEVEL_META)) {
+    const value = Number(levels[key]);
+    if (!Number.isFinite(value)) continue;
+    shapes.push({
+      type: 'line',
+      x0: value,
+      x1: value,
+      y0: 0,
+      y1: maxY * 1.08,
+      xref: 'x',
+      yref: 'y',
+      line: { color: meta.color, width: 2 }
+    });
+    annotations.push({
+      x: value,
+      y: maxY * 1.1,
+      xref: 'x',
+      yref: 'y',
+      text: meta.label,
+      showarrow: false,
+      font: { color: meta.color, size: 10 },
+      textangle: -90,
+      yanchor: 'bottom'
+    });
+  }
+  const spot = Number(record.spot);
+  if (Number.isFinite(spot)) {
+    shapes.push({
+      type: 'line',
+      x0: spot,
+      x1: spot,
+      y0: 0,
+      y1: maxY * 1.08,
+      xref: 'x',
+      yref: 'y',
+      line: { color: '#ffffff', width: 1.5, dash: 'dot' }
+    });
+  }
+
+  const trace = {
+    type: 'bar',
+    x,
+    y,
+    marker: { color: colors },
+    customdata: custom,
+    hovertemplate:
+      'Strike %{x}<br>Abs GEX %{y:,.0f}<br>Call GEX %{customdata[0]:,.0f}<br>Put GEX %{customdata[1]:,.0f}<br>Net GEX %{customdata[2]:,.0f}<extra></extra>'
+  };
+  const layout = {
+    margin: { l: 54, r: 18, t: 42, b: 46 },
+    paper_bgcolor: '#050505',
+    plot_bgcolor: '#050505',
+    bargap: 0.08,
+    shapes,
+    annotations,
+    font: { color: '#e8e8e2' },
+    xaxis: { title: 'Strike', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false },
+    yaxis: { title: 'Abs GEX', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false },
+    showlegend: false
+  };
+  safePlotly(elementId, [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+function renderGexLevelChips(levels) {
+  return Object.entries(GEX_LEVEL_META).map(([key, meta]) => `
+    <div class="gex-level-chip">
+      <span style="color:${meta.color}">${meta.label}</span>
+      <strong>${gexNum(levels?.[key])}</strong>
+    </div>
+  `).join('');
+}
+
+function renderGexDiagnosticChips(diag, globalStats) {
+  const op = diag?.operation || {};
+  const err = diag?.spotgammaError?.weightedError;
+  const wr = globalStats?.wr;
+  const opColor = gexOperationClass(op.status);
+  return `
+    <div class="gex-diagnostic-chip">
+      <span>Error SG medio</span>
+      <strong>${gexNum(globalStats?.avgError, 1)} pts</strong>
+    </div>
+    <div class="gex-diagnostic-chip">
+      <span>Error SG sesion</span>
+      <strong>${gexNum(err, 1)} pts</strong>
+    </div>
+    <div class="gex-diagnostic-chip">
+      <span>WR historico</span>
+      <strong>${wr === null || wr === undefined ? '-' : gexNum(wr, 1) + '%'}</strong>
+    </div>
+    <div class="gex-diagnostic-chip">
+      <span>Sesion objetivo</span>
+      <strong style="color:${opColor}">${gexStatusLabel(op.status)}</strong>
+    </div>
+  `;
+}
+
+function renderGexModelCard(record, summary, modelId, modelIndex) {
+  const model = record.models[modelId];
+  const chartBase = `gexChart_${modelId}_${record.date.replaceAll('-', '')}`;
+  const modes = GEX_MODE_ORDER.map(mode => {
+    const levels = model[mode.id];
+    const diag = record.diagnostics?.[modelId]?.[mode.id];
+    const stats = summary?.[modelId]?.[mode.id];
+    const chartId = `${chartBase}_${mode.id}`;
+    const expirations = levels?.expirationsUsed?.length || 0;
+    return `
+      <section class="gex-mode-panel">
+        <span class="gex-mode-label">${mode.label} · ${expirations} venc.</span>
+        <div class="gex-level-row">${renderGexLevelChips(levels)}</div>
+        <div class="gex-diagnostic-row">${renderGexDiagnosticChips(diag, stats)}</div>
+        <div id="${chartId}" class="gex-chart"></div>
+      </section>
+    `;
+  }).join('');
+  return `
+    <article class="gex-model-card">
+      <div class="gex-model-head">
+        <div>
+          <h4>${model.name || modelId}</h4>
+          <p>${model.description || ''}</p>
+        </div>
+        <span class="gex-model-badge">Modelo ${modelIndex + 1}</span>
+      </div>
+      <div class="gex-mode-grid">${modes}</div>
+    </article>
+  `;
+}
+
+function renderGexSummary(record, records, summary) {
+  const ref = record.reference?.spotgamma;
+  const best = [];
+  for (const modelId of GEX_MODEL_ORDER) {
+    for (const mode of GEX_MODE_ORDER) {
+      const stats = summary?.[modelId]?.[mode.id];
+      if (Number.isFinite(stats?.avgError)) {
+        best.push({ modelId, mode: mode.id, avgError: stats.avgError });
+      }
+    }
+  }
+  best.sort((a, b) => a.avgError - b.avgError);
+  const bestLabel = best.length
+    ? `${record.models[best[0].modelId]?.name || best[0].modelId} · ${best[0].mode === 'next' ? 'next' : 'multi'}`
+    : '-';
+  return `
+    <div class="gex-summary-grid">
+      <div class="gex-summary-card"><span>Cadena cierre</span><strong>${record.date}</strong></div>
+      <div class="gex-summary-card"><span>Sesion aplicada</span><strong>${record.targetSession}</strong></div>
+      <div class="gex-summary-card"><span>Spot cierre</span><strong>${gexNum(record.spot, 2)}</strong></div>
+      <div class="gex-summary-card"><span>Referencia SG</span><strong>${ref ? `${gexNum(ref.callWall)} / ${gexNum(ref.putWall)}` : 'Sin referencia'}</strong></div>
+      <div class="gex-summary-card"><span>Sesiones JSON</span><strong>${records.length}</strong></div>
+      <div class="gex-summary-card"><span>Mejor cercania</span><strong>${bestLabel}</strong></div>
+      <div class="gex-summary-card"><span>Error mejor</span><strong>${best.length ? gexNum(best[0].avgError, 1) + ' pts' : '-'}</strong></div>
+      <div class="gex-summary-card"><span>Version</span><strong>${record.version || '-'}</strong></div>
+    </div>
+  `;
+}
+
+async function renderGexLab() {
+  const content = document.getElementById('researchDetailContent');
+  if (!content) return;
+  content.innerHTML = `
+    <h3>Cálculos GEX</h3>
+    <p class="gex-lab-note">
+      Tres modelos experimentales calculados con las cadenas guardadas al cierre. Cada uno ofrece dos lecturas:
+      proximo vencimiento y multi-vencimiento. El JSON queda persistido para comparar contra SpotGamma y alimentar
+      futuros estudios de machine learning.
+    </p>
+    <div class="gex-toolbar">
+      <input id="gexDateRange" type="range" min="0" max="0" value="0" step="1" aria-label="Fecha GEX">
+      <div id="gexDateLabel" class="gex-date-pill">Cargando</div>
+      <div id="gexTargetLabel" class="gex-target-pill">Sesion -</div>
+    </div>
+    <div id="gexLabStatus" class="gex-lab-note">Cargando modelos GEX...</div>
+    <div id="gexSummary"></div>
+    <div id="gexModelGrid" class="gex-model-grid"></div>
+  `;
+
+  try {
+    const index = await loadGexModelIndex();
+    const dates = (index.dates || []).filter(Boolean).sort();
+    if (!dates.length) throw new Error('No hay JSON GEX generado todavia');
+    const records = await Promise.all(dates.map(date => loadGexModelRecord(date)));
+    const summary = summarizeGexRecords(records);
+    const slider = document.getElementById('gexDateRange');
+    const dateLabel = document.getElementById('gexDateLabel');
+    const targetLabel = document.getElementById('gexTargetLabel');
+    const status = document.getElementById('gexLabStatus');
+    const summaryEl = document.getElementById('gexSummary');
+    const grid = document.getElementById('gexModelGrid');
+    if (!slider || !dateLabel || !targetLabel || !status || !summaryEl || !grid) return;
+    slider.max = String(dates.length - 1);
+    slider.value = String(dates.length - 1);
+
+    function drawSelected() {
+      const idx = Math.max(0, Math.min(dates.length - 1, Number(slider.value)));
+      const record = records[idx];
+      dateLabel.textContent = record.date;
+      targetLabel.textContent = `Aplica ${record.targetSession}`;
+      status.textContent = `${dates.length} sesiones utiles | Fuente ${record.sourceChain} | Generado ${record.generatedAt || '-'}`;
+      summaryEl.innerHTML = renderGexSummary(record, records, summary);
+      grid.innerHTML = GEX_MODEL_ORDER.map((modelId, modelIndex) => renderGexModelCard(record, summary, modelId, modelIndex)).join('');
+      for (const modelId of GEX_MODEL_ORDER) {
+        for (const mode of GEX_MODE_ORDER) {
+          const chartId = `gexChart_${modelId}_${record.date.replaceAll('-', '')}_${mode.id}`;
+          renderGexHistogram(chartId, record, modelId, mode.id);
+        }
+      }
+    }
+
+    slider.addEventListener('input', drawSelected);
+    drawSelected();
+  } catch (e) {
+    content.innerHTML += `<div class="gex-empty">Error cargando Cálculos GEX: ${e.message}</div>`;
+  }
+}
+
 function renderResearchPlaceholder(section) {
   const content = document.getElementById('researchDetailContent');
   if (!content) return;
@@ -6374,7 +6702,9 @@ function initResearchCore() {
     overlay.scrollTop = 0;
     detail.scrollTop = 0;
     if (detail.parentElement) detail.parentElement.scrollTop = 0;
-    if (section === 'volsurface') {
+    if (section === 'gex') {
+      renderGexLab();
+    } else if (section === 'volsurface') {
       renderVolSurfaceLab();
     } else {
       renderResearchPlaceholder(section);

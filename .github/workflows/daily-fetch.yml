@@ -32,6 +32,9 @@ jobs:
       - name: Run fetch script
         run: python fetch_daily.py
 
+      - name: Generate GEX model lab data
+        run: python gex_models.py
+
       - name: Generate signal and send scheduled card
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

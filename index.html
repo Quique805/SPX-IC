@@ -2733,6 +2733,198 @@
       line-height: 1.55;
     }
 
+    .gex-lab-note {
+      max-width: 940px;
+      margin: 0 0 16px;
+      color: #666;
+      font-size: 0.92rem;
+      line-height: 1.58;
+    }
+
+    .gex-toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      margin: 18px 0;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 24px;
+      padding: 14px;
+      background: rgba(255,255,255,0.7);
+    }
+
+    .gex-toolbar input[type="range"] {
+      width: 100%;
+      accent-color: #050505;
+    }
+
+    .gex-date-pill,
+    .gex-target-pill {
+      border-radius: 999px;
+      padding: 9px 12px;
+      color: #fff;
+      background: #050505;
+      font-size: 0.78rem;
+      font-weight: 900;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    .gex-target-pill {
+      color: #111;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+
+    .gex-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0 22px;
+    }
+
+    .gex-summary-card,
+    .gex-model-card {
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 24px;
+      background: rgba(255,255,255,0.72);
+      box-shadow: 0 18px 48px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.92);
+    }
+
+    .gex-summary-card {
+      padding: 14px;
+    }
+
+    .gex-summary-card span,
+    .gex-mode-label {
+      display: block;
+      color: #777;
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .gex-summary-card strong {
+      display: block;
+      margin-top: 8px;
+      color: #050505;
+      font-size: clamp(1rem, 2vw, 1.45rem);
+      letter-spacing: -0.04em;
+    }
+
+    .gex-model-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 22px;
+    }
+
+    .gex-model-card {
+      overflow: hidden;
+      padding: clamp(14px, 2vw, 22px);
+    }
+
+    .gex-model-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+
+    .gex-model-head h4 {
+      margin: 0 0 6px;
+      color: #050505;
+      font-size: clamp(1.25rem, 3vw, 2rem);
+      letter-spacing: -0.05em;
+    }
+
+    .gex-model-head p {
+      margin: 0;
+      color: #666;
+      line-height: 1.5;
+      font-size: 0.9rem;
+    }
+
+    .gex-model-badge {
+      border-radius: 999px;
+      padding: 8px 11px;
+      color: #fff;
+      background: #050505;
+      font-size: 0.7rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .gex-mode-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .gex-mode-panel {
+      min-width: 0;
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 22px;
+      padding: 12px;
+      background: rgba(247,247,244,0.78);
+    }
+
+    .gex-level-row,
+    .gex-diagnostic-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .gex-level-chip,
+    .gex-diagnostic-chip {
+      border-radius: 16px;
+      padding: 9px;
+      background: rgba(255,255,255,0.86);
+      border: 1px solid rgba(0,0,0,0.06);
+      min-width: 0;
+    }
+
+    .gex-level-chip span,
+    .gex-diagnostic-chip span {
+      display: block;
+      color: #777;
+      font-size: 0.64rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .gex-level-chip strong,
+    .gex-diagnostic-chip strong {
+      display: block;
+      margin-top: 5px;
+      color: #050505;
+      font-size: 0.95rem;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .gex-chart {
+      min-height: 390px;
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 20px;
+      background: #050505;
+    }
+
+    .gex-empty {
+      padding: 22px;
+      border-radius: 20px;
+      color: #7a4a00;
+      background: #fff6df;
+      border: 1px solid #ead6a8;
+    }
+
     @keyframes researchZoom {
       from { opacity: 0; transform: scale(0.76); }
       to { opacity: 1; transform: scale(1); }
@@ -2822,6 +3014,21 @@
       }
       .vol-surface-chart {
         min-height: 86dvh;
+      }
+      .gex-toolbar {
+        grid-template-columns: 1fr;
+      }
+      .gex-summary-grid,
+      .gex-mode-grid,
+      .gex-level-row,
+      .gex-diagnostic-row {
+        grid-template-columns: 1fr 1fr;
+      }
+      .gex-model-head {
+        grid-template-columns: 1fr;
+      }
+      .gex-chart {
+        min-height: 430px;
       }
     }
   </style>
@@ -3479,6 +3686,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260710-vol-surface-tall-stack-2"></script>
+  <script src="script.js?v=20260710-gex-lab-v1"></script>
 </body>
 </html>
