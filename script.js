@@ -4797,6 +4797,20 @@ const GEX_LEVEL_META = {
   gammaFlip: { label: 'Gamma Flip', color: '#ffb347' },
   volTrigger: { label: 'VT', color: '#b388ff' }
 };
+const GEX_HELP_TEXT = {
+  bestError: {
+    title: 'Error medio mejor',
+    body: 'Es el menor error medio historico entre todos los modelos y modos. Compara los niveles estimados contra tus niveles SpotGamma manuales usando una ponderacion: Call Wall 35%, Put Wall 35%, Gamma Flip 15% y VT 15%. Sirve para ver que modelo se esta acercando mas a SpotGamma en el historico disponible.'
+  },
+  avgError: {
+    title: 'Error SG medio',
+    body: 'Es el error medio historico de ese modelo y modo frente a SpotGamma. Para cada sesion con referencia manual, calcula la distancia en puntos de los niveles estimados contra SpotGamma y despues promedia esas diferencias. Cuanto menor sea, mas parecido esta siendo el modelo a SpotGamma.'
+  },
+  sessionError: {
+    title: 'Error SG sesion',
+    body: 'Es el error solo de la sesion seleccionada. Mide cuantos puntos se alejan los niveles del modelo frente a los niveles SpotGamma introducidos para esa fecha aplicada. Si no hay referencia SpotGamma para esa sesion, aparece vacio.'
+  }
+};
 
 async function loadGexModelIndex() {
   return fetchFirstJson([
@@ -4907,6 +4921,52 @@ function toggleGexChartExpanded(element) {
   }
 }
 
+function showGexHelp(key) {
+  const help = GEX_HELP_TEXT[key];
+  if (!help) return;
+  const overlay = document.getElementById('gexHelpOverlay');
+  const title = document.getElementById('gexHelpTitle');
+  const body = document.getElementById('gexHelpBody');
+  if (!overlay || !title || !body) return;
+  title.textContent = help.title;
+  body.textContent = help.body;
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeGexHelp() {
+  const overlay = document.getElementById('gexHelpOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function gexModelKey(modelId, date) {
+  return `${modelId}_${String(date || '').replaceAll('-', '')}`;
+}
+
+function toggleGexModelView(modelId, date) {
+  const key = gexModelKey(modelId, date);
+  const card = document.getElementById(`gexModelCard_${key}`);
+  if (!card) return;
+  const modes = card.querySelector('.gex-mode-grid');
+  const evolution = card.querySelector('.gex-evolution-panel');
+  const button = card.querySelector('.gex-evolution-btn');
+  const open = !evolution?.classList.contains('open');
+  if (modes) modes.style.display = open ? 'none' : '';
+  if (evolution) evolution.classList.toggle('open', open);
+  if (button) {
+    button.classList.toggle('active', open);
+    button.textContent = open ? 'Histogramas' : 'Evolución';
+  }
+  const chart = document.getElementById(`gexEvolution_${key}`);
+  if (chart && typeof Plotly !== 'undefined') {
+    setTimeout(() => {
+      try { Plotly.Plots.resize(chart); } catch (_) {}
+    }, 80);
+  }
+}
+
 function renderGexHistogram(elementId, record, modelId, modeId) {
   const element = document.getElementById(elementId);
   const levels = record?.models?.[modelId]?.[modeId];
@@ -4989,6 +5049,51 @@ function renderGexHistogram(elementId, record, modelId, modeId) {
   element.onclick = () => toggleGexChartExpanded(element);
 }
 
+function renderGexEvolutionChart(elementId, records, modelId) {
+  const element = document.getElementById(elementId);
+  if (!element) return;
+  const cleanRecords = (records || []).filter(record => record?.models?.[modelId]?.next);
+  if (!cleanRecords.length) {
+    element.innerHTML = '<div class="gex-empty">No hay datos historicos para este modelo.</div>';
+    return;
+  }
+  const traces = Object.entries(GEX_LEVEL_META).map(([key, meta]) => ({
+    type: 'scatter',
+    mode: 'lines+markers',
+    name: meta.label,
+    x: cleanRecords.map(record => record.targetSession || record.date),
+    y: cleanRecords.map(record => {
+      const value = Number(record.models?.[modelId]?.next?.[key]);
+      return Number.isFinite(value) ? value : null;
+    }),
+    line: { color: meta.color, width: 3 },
+    marker: { color: meta.color, size: 7 },
+    hovertemplate: `${meta.label}<br>Sesion %{x}<br>Nivel %{y:,.0f}<extra></extra>`
+  }));
+  const layout = {
+    margin: { l: 58, r: 18, t: 32, b: 74 },
+    paper_bgcolor: '#050505',
+    plot_bgcolor: '#050505',
+    font: { color: '#e8e8e2' },
+    hovermode: 'x unified',
+    legend: { orientation: 'h', x: 0, y: 1.12, font: { color: '#e8e8e2' } },
+    xaxis: {
+      title: 'Sesion aplicada',
+      gridcolor: 'rgba(255,255,255,0.08)',
+      zeroline: false,
+      fixedrange: true,
+      tickangle: -35
+    },
+    yaxis: {
+      title: 'Nivel SPX (strike)',
+      gridcolor: 'rgba(255,255,255,0.08)',
+      zeroline: false,
+      fixedrange: true
+    }
+  };
+  safePlotly(elementId, traces, layout, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
+}
+
 function renderGexLevelChips(levels) {
   return Object.entries(GEX_LEVEL_META).map(([key, meta]) => `
     <div class="gex-level-chip">
@@ -5008,12 +5113,16 @@ function renderGexDiagnosticChips(diag, globalStats) {
   const opColor = gexOperationClass(op.status);
   return `
     <div class="gex-diagnostic-chip">
-      <span>Error SG medio</span>
-      <strong>${gexNum(globalStats?.avgError, 1)} pts</strong>
+      <button type="button" class="gex-info-trigger" onclick="showGexHelp('avgError')">
+        <span>Error SG medio</span>
+        <strong>${gexNum(globalStats?.avgError, 1)} pts</strong>
+      </button>
     </div>
     <div class="gex-diagnostic-chip">
-      <span>Error SG sesion</span>
-      <strong>${gexNum(err, 1)} pts</strong>
+      <button type="button" class="gex-info-trigger" onclick="showGexHelp('sessionError')">
+        <span>Error SG sesion</span>
+        <strong>${gexNum(err, 1)} pts</strong>
+      </button>
     </div>
     <div class="gex-diagnostic-chip">
       <span>WR historico</span>
@@ -5029,6 +5138,8 @@ function renderGexDiagnosticChips(diag, globalStats) {
 function renderGexModelCard(record, summary, modelId, modelIndex) {
   const model = record.models[modelId];
   const chartBase = `gexChart_${modelId}_${record.date.replaceAll('-', '')}`;
+  const key = gexModelKey(modelId, record.date);
+  const evolutionId = `gexEvolution_${key}`;
   const modes = GEX_MODE_ORDER.map(mode => {
     const levels = model[mode.id];
     const diag = record.diagnostics?.[modelId]?.[mode.id];
@@ -5045,15 +5156,22 @@ function renderGexModelCard(record, summary, modelId, modelIndex) {
     `;
   }).join('');
   return `
-    <article class="gex-model-card">
+    <article id="gexModelCard_${key}" class="gex-model-card">
       <div class="gex-model-head">
         <div>
           <h4>${model.name || modelId}</h4>
           <p>${model.description || ''}</p>
         </div>
-        <span class="gex-model-badge">Modelo ${modelIndex + 1}</span>
+        <div class="gex-model-actions">
+          <span class="gex-model-badge">Modelo ${modelIndex + 1}</span>
+          <button type="button" class="gex-evolution-btn" onclick="toggleGexModelView('${modelId}', '${record.date}')">Evolución</button>
+        </div>
       </div>
       <div class="gex-mode-grid">${modes}</div>
+      <section class="gex-evolution-panel">
+        <span class="gex-mode-label">Evolución histórica · lectura 1 vencimiento</span>
+        <div id="${evolutionId}" class="gex-evolution-chart"></div>
+      </section>
     </article>
   `;
 }
@@ -5081,7 +5199,12 @@ function renderGexSummary(record, records, summary) {
       <div class="gex-summary-card"><span>Referencia SG</span><strong>${ref ? `${gexNum(ref.callWall)} / ${gexNum(ref.putWall)}` : 'Sin referencia'}</strong></div>
       <div class="gex-summary-card"><span>Sesiones JSON</span><strong>${records.length}</strong></div>
       <div class="gex-summary-card"><span>Mejor cercania</span><strong>${bestLabel}</strong></div>
-      <div class="gex-summary-card"><span>Error medio mejor</span><strong>${best.length ? gexNum(best[0].avgError, 1) + ' pts' : '-'}</strong></div>
+      <div class="gex-summary-card">
+        <button type="button" class="gex-info-trigger" onclick="showGexHelp('bestError')">
+          <span>Error medio mejor</span>
+          <strong>${best.length ? gexNum(best[0].avgError, 1) + ' pts' : '-'}</strong>
+        </button>
+      </div>
       <div class="gex-summary-card"><span>Version</span><strong>${record.version || '-'}</strong></div>
     </div>
   `;
@@ -5105,6 +5228,13 @@ async function renderGexLab() {
     <div id="gexLabStatus" class="gex-lab-note">Cargando modelos GEX...</div>
     <div id="gexSummary"></div>
     <div id="gexModelGrid" class="gex-model-grid"></div>
+    <div id="gexHelpOverlay" class="gex-help-overlay" aria-hidden="true" onclick="if (event.target === this) closeGexHelp()">
+      <section class="gex-help-card" role="dialog" aria-modal="true" aria-labelledby="gexHelpTitle">
+        <h4 id="gexHelpTitle"></h4>
+        <p id="gexHelpBody"></p>
+        <button type="button" onclick="closeGexHelp()">Cerrar</button>
+      </section>
+    </div>
   `;
 
   try {
@@ -5136,6 +5266,7 @@ async function renderGexLab() {
           const chartId = `gexChart_${modelId}_${record.date.replaceAll('-', '')}_${mode.id}`;
           renderGexHistogram(chartId, record, modelId, mode.id);
         }
+        renderGexEvolutionChart(`gexEvolution_${gexModelKey(modelId, record.date)}`, records, modelId);
       }
     }
 
@@ -6755,6 +6886,11 @@ function initResearchCore() {
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
+      const helpOverlay = document.getElementById('gexHelpOverlay');
+      if (helpOverlay?.classList.contains('open')) {
+        closeGexHelp();
+        return;
+      }
       const expandedChart = document.querySelector('.gex-chart.is-expanded');
       if (expandedChart) {
         expandedChart.classList.remove('is-expanded');
