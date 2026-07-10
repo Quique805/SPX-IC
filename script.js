@@ -4881,6 +4881,32 @@ function gexBarColor(row, levels) {
   return '#d9d9d4';
 }
 
+function gexHistogramRange(levels, spot) {
+  const callWall = Number(levels?.callWall);
+  const putWall = Number(levels?.putWall);
+  if (Number.isFinite(callWall) && Number.isFinite(putWall) && callWall > putWall) {
+    return [putWall - 100, callWall + 100];
+  }
+  const center = Number(spot);
+  if (Number.isFinite(center)) return [center - 300, center + 300];
+  return undefined;
+}
+
+function toggleGexChartExpanded(element) {
+  if (!element) return;
+  const expanded = element.classList.toggle('is-expanded');
+  if (typeof Plotly !== 'undefined') {
+    setTimeout(() => {
+      try { Plotly.Plots.resize(element); } catch (_) {}
+    }, 80);
+  }
+  if (expanded) {
+    element.setAttribute('aria-label', 'Histograma GEX ampliado. Pulsa Escape o haz clic para cerrar.');
+  } else {
+    element.removeAttribute('aria-label');
+  }
+}
+
 function renderGexHistogram(elementId, record, modelId, modeId) {
   const element = document.getElementById(elementId);
   const levels = record?.models?.[modelId]?.[modeId];
@@ -4895,6 +4921,7 @@ function renderGexHistogram(elementId, record, modelId, modeId) {
   const colors = rows.map(row => gexBarColor(row, levels));
   const custom = rows.map(row => [row.callGex, row.putGex, row.netGex, row.callScore, row.putScore]);
   const maxY = Math.max(...y.filter(Number.isFinite), 1);
+  const xRange = gexHistogramRange(levels, record.spot);
   const shapes = [];
   const annotations = [];
   for (const [key, meta] of Object.entries(GEX_LEVEL_META)) {
@@ -4953,11 +4980,13 @@ function renderGexHistogram(elementId, record, modelId, modeId) {
     shapes,
     annotations,
     font: { color: '#e8e8e2' },
-    xaxis: { title: 'Strike', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false },
-    yaxis: { title: 'Abs GEX', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false },
+    xaxis: { title: 'Strike', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false, fixedrange: true, range: xRange },
+    yaxis: { title: 'Abs GEX', gridcolor: 'rgba(255,255,255,0.08)', zeroline: false, fixedrange: true },
+    dragmode: false,
     showlegend: false
   };
-  safePlotly(elementId, [trace], layout, { responsive: true, displayModeBar: false });
+  safePlotly(elementId, [trace], layout, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
+  element.onclick = () => toggleGexChartExpanded(element);
 }
 
 function renderGexLevelChips(levels) {
@@ -4973,6 +5002,9 @@ function renderGexDiagnosticChips(diag, globalStats) {
   const op = diag?.operation || {};
   const err = diag?.spotgammaError?.weightedError;
   const wr = globalStats?.wr;
+  const wrText = wr === null || wr === undefined
+    ? 'Sin ops.'
+    : `${gexNum(wr, 1)}%`;
   const opColor = gexOperationClass(op.status);
   return `
     <div class="gex-diagnostic-chip">
@@ -4985,7 +5017,7 @@ function renderGexDiagnosticChips(diag, globalStats) {
     </div>
     <div class="gex-diagnostic-chip">
       <span>WR historico</span>
-      <strong>${wr === null || wr === undefined ? '-' : gexNum(wr, 1) + '%'}</strong>
+      <strong>${wrText}</strong>
     </div>
     <div class="gex-diagnostic-chip">
       <span>Sesion objetivo</span>
@@ -5049,7 +5081,7 @@ function renderGexSummary(record, records, summary) {
       <div class="gex-summary-card"><span>Referencia SG</span><strong>${ref ? `${gexNum(ref.callWall)} / ${gexNum(ref.putWall)}` : 'Sin referencia'}</strong></div>
       <div class="gex-summary-card"><span>Sesiones JSON</span><strong>${records.length}</strong></div>
       <div class="gex-summary-card"><span>Mejor cercania</span><strong>${bestLabel}</strong></div>
-      <div class="gex-summary-card"><span>Error mejor</span><strong>${best.length ? gexNum(best[0].avgError, 1) + ' pts' : '-'}</strong></div>
+      <div class="gex-summary-card"><span>Error medio mejor</span><strong>${best.length ? gexNum(best[0].avgError, 1) + ' pts' : '-'}</strong></div>
       <div class="gex-summary-card"><span>Version</span><strong>${record.version || '-'}</strong></div>
     </div>
   `;
@@ -6722,7 +6754,19 @@ function initResearchCore() {
     if (event.target === overlay) closeResearch();
   });
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && overlay.classList.contains('open')) closeResearch();
+    if (event.key === 'Escape') {
+      const expandedChart = document.querySelector('.gex-chart.is-expanded');
+      if (expandedChart) {
+        expandedChart.classList.remove('is-expanded');
+        if (typeof Plotly !== 'undefined') {
+          setTimeout(() => {
+            try { Plotly.Plots.resize(expandedChart); } catch (_) {}
+          }, 80);
+        }
+        return;
+      }
+      if (overlay.classList.contains('open')) closeResearch();
+    }
   });
 }
 
