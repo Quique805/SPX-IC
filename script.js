@@ -5786,6 +5786,13 @@ async function loadMlDexDataset() {
   ]);
 }
 
+async function loadMlVolSurfaceDataset() {
+  return fetchFirstJson([
+    `data/ml-dataset/vol_surface.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/ml-dataset/vol_surface.json?t=${Date.now()}`
+  ]);
+}
+
 function mlNum(value, digits = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '-';
@@ -6062,6 +6069,76 @@ function renderMlDexTable(rows) {
   `;
 }
 
+function renderMlVolSurfaceTable(rows) {
+  const latest = (rows || []).slice(-14).reverse();
+  if (!latest.length) {
+    return '<div class="gex-empty">No hay filas de Vol Surface todavia.</div>';
+  }
+  return `
+    <div class="ml-table-panel">
+      <div class="ml-table-head">
+        <strong>Ultimas sesiones - Bloque Vol Surface</strong>
+        <span class="ml-lab-note" style="margin:0">Firma compacta de IV: ATM, skew, term structure, alas vendibles, liquidez y calidad.</span>
+      </div>
+      <div class="ml-table-wrap">
+        <table class="ml-feature-table">
+          <thead>
+            <tr>
+              <th>Sesion</th>
+              <th>Cadena cierre</th>
+              <th>Venc.</th>
+              <th>ATM IV front</th>
+              <th>Put skew</th>
+              <th>Call skew</th>
+              <th>Skew balance</th>
+              <th>Curvatura</th>
+              <th>Front - 2o</th>
+              <th>Sell Put IV</th>
+              <th>Sell Call IV</th>
+              <th>Put prem. USD</th>
+              <th>Call prem. USD</th>
+              <th>Put score</th>
+              <th>Call score</th>
+              <th>Put seca</th>
+              <th>Call seca</th>
+              <th>IV faltante</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${latest.map(row => {
+              const f = row.front || {};
+              const t = row.termStructure || {};
+              const q = row.quality || {};
+              return `
+                <tr>
+                  <td>${row.targetSession || row.date || '-'}</td>
+                  <td>${row.sourceChainDate || '-'}</td>
+                  <td>${q.expirationsUsedCount ?? '-'}</td>
+                  <td>${mlNum(f.atmIv, 4)}</td>
+                  <td>${mlNum(f.putSkew1Pct, 4)}</td>
+                  <td>${mlNum(f.callSkew1Pct, 4)}</td>
+                  <td>${mlNum(f.skewBalance1Pct, 4)}</td>
+                  <td>${mlNum(f.smileCurvature1Pct, 4)}</td>
+                  <td>${mlNum(t.frontMinusSecond, 4)}</td>
+                  <td>${mlNum(f.sellPutIv, 4)}</td>
+                  <td>${mlNum(f.sellCallIv, 4)}</td>
+                  <td>${mlNum(f.sellPutPremiumUsd, 0)}</td>
+                  <td>${mlNum(f.sellCallPremiumUsd, 0)}</td>
+                  <td>${mlNum(f.sellPutTradableScore, 2)}</td>
+                  <td>${mlNum(f.sellCallTradableScore, 2)}</td>
+                  <td>${f.sellPutIsDry === true ? 'Si' : f.sellPutIsDry === false ? 'No' : '-'}</td>
+                  <td>${f.sellCallIsDry === true ? 'Si' : f.sellCallIsDry === false ? 'No' : '-'}</td>
+                  <td>${mlNum(q.missingIvPct, 1)}%</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
 async function renderMlLab() {
   const content = document.getElementById('researchDetailContent');
   if (!content) return;
@@ -6077,38 +6154,44 @@ async function renderMlLab() {
     <div id="mlSpotGammaPreview"></div>
     <div id="mlGexPreview"></div>
     <div id="mlDexPreview"></div>
+    <div id="mlVolSurfacePreview"></div>
   `;
 
   try {
     const index = await loadMlDatasetIndex();
-    const [underlying, spotgamma, gex, dex] = await Promise.all([
+    const [underlying, spotgamma, gex, dex, volSurface] = await Promise.all([
       loadMlUnderlyingDataset(),
       loadMlSpotGammaDataset().catch(() => ({ rows: [] })),
       loadMlGexDataset().catch(() => ({ rows: [] })),
-      loadMlDexDataset().catch(() => ({ rows: [] }))
+      loadMlDexDataset().catch(() => ({ rows: [] })),
+      loadMlVolSurfaceDataset().catch(() => ({ rows: [] }))
     ]);
     const rows = underlying.rows || [];
     const spotgammaRows = spotgamma.rows || [];
     const gexRows = gex.rows || [];
     const dexRows = dex.rows || [];
+    const volSurfaceRows = volSurface.rows || [];
     const status = document.getElementById('mlDatasetStatus');
     const blocks = document.getElementById('mlBlocks');
     const preview = document.getElementById('mlUnderlyingPreview');
     const spotgammaPreview = document.getElementById('mlSpotGammaPreview');
     const gexPreview = document.getElementById('mlGexPreview');
     const dexPreview = document.getElementById('mlDexPreview');
+    const volSurfacePreview = document.getElementById('mlVolSurfacePreview');
     if (status) {
       const sub = index.blocks?.subyacente || {};
       const sg = index.blocks?.spotgamma || {};
       const gx = index.blocks?.gex || {};
       const dx = index.blocks?.dex || {};
-      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | GEX ${gx.rows || gexRows.length} filas | DEX ${dx.rows || dexRows.length} filas | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
+      const vs = index.blocks?.vol_surface || {};
+      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | GEX ${gx.rows || gexRows.length} filas | DEX ${dx.rows || dexRows.length} filas | Vol Surface ${vs.rows || volSurfaceRows.length} filas | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
     }
     if (blocks) blocks.innerHTML = renderMlBlocks(index);
     if (preview) preview.innerHTML = renderMlUnderlyingTable(rows);
     if (spotgammaPreview) spotgammaPreview.innerHTML = renderMlSpotGammaTable(spotgammaRows);
     if (gexPreview) gexPreview.innerHTML = renderMlGexTable(gexRows);
     if (dexPreview) dexPreview.innerHTML = renderMlDexTable(dexRows);
+    if (volSurfacePreview) volSurfacePreview.innerHTML = renderMlVolSurfaceTable(volSurfaceRows);
   } catch (e) {
     content.innerHTML += `<div class="gex-empty">Error cargando Machine Learning Lab: ${e.message}</div>`;
   }

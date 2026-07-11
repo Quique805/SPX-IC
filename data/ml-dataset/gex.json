@@ -1,6 +1,6 @@
 {
-  "version": "ml-dataset-v4",
-  "lastUpdated": "2026-07-10T17:13:17.735791+00:00",
+  "version": "ml-dataset-v5",
+  "lastUpdated": "2026-07-11T08:46:12.852083+00:00",
   "block": "gex",
   "description": "Tercer bloque del dataset ML: firma compacta de los tres modelos GEX, consenso, dispersion y diagnosticos separados.",
   "source": "data/gex-models/*.json",

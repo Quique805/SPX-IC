@@ -6,10 +6,12 @@ import os
 import statistics
 from datetime import datetime, timezone
 
-from fetch_daily import DATA_DIR, load_json_safe, save_json
+from fetch_daily import DATA_DIR, is_trading_day, load_json_safe, save_json
 
 OHLC_FILE = os.path.join(DATA_DIR, "daily-ohlc.json")
 SPOTGAMMA_FILE = os.path.join(DATA_DIR, "spotgamma-levels.json")
+CHAINS_CLOSE_INDEX_FILE = os.path.join(DATA_DIR, "chains-close-index.json")
+CHAINS_CLOSE_DIR = os.path.join(DATA_DIR, "chains-close")
 GEX_INDEX_FILE = os.path.join(DATA_DIR, "gex-models-index.json")
 GEX_MODELS_DIR = os.path.join(DATA_DIR, "gex-models")
 DEX_INDEX_FILE = os.path.join(DATA_DIR, "dex-models-index.json")
@@ -19,8 +21,9 @@ OUT_UNDERLYING_FILE = os.path.join(OUT_DIR, "subyacente.json")
 OUT_SPOTGAMMA_FILE = os.path.join(OUT_DIR, "spotgamma.json")
 OUT_GEX_FILE = os.path.join(OUT_DIR, "gex.json")
 OUT_DEX_FILE = os.path.join(OUT_DIR, "dex.json")
+OUT_VOL_SURFACE_FILE = os.path.join(OUT_DIR, "vol_surface.json")
 OUT_INDEX = os.path.join(DATA_DIR, "ml-dataset-index.json")
-MODEL_VERSION = "ml-dataset-v4"
+MODEL_VERSION = "ml-dataset-v5"
 
 GEX_MODEL_IDS = ("pure_gex", "liquidity_weighted", "spotgamma_fit")
 GEX_MODE_IDS = ("next", "multi")
@@ -83,6 +86,17 @@ def median(values):
 def value_range(values):
     clean = [v for v in values if v is not None and math.isfinite(float(v))]
     return max(clean) - min(clean) if clean else None
+
+
+def trading_next(date_str):
+    from datetime import date, timedelta
+
+    y, m, d = [int(x) for x in date_str.split("-")]
+    cur = date(y, m, d)
+    while True:
+        cur += timedelta(days=1)
+        if is_trading_day(cur):
+            return cur.isoformat()
 
 
 def day_name(date_str):
@@ -621,16 +635,317 @@ def build_dex_features(dex_index, underlying_rows):
     return rows
 
 
+def valid_iv(value):
+    value = safe_num(value)
+    if value is None or value <= 0.01 or value > 5:
+        return None
+    return value
+
+
+def option_mid(row, side):
+    bid = safe_num(row.get(f"{side}_bid"))
+    ask = safe_num(row.get(f"{side}_ask"))
+    last = safe_num(row.get(f"{side}_last"))
+    if bid is not None and ask is not None and ask >= bid and ask > 0:
+        return (bid + ask) / 2
+    if last is not None and last > 0:
+        return last
+    return None
+
+
+def option_spread(row, side):
+    bid = safe_num(row.get(f"{side}_bid"))
+    ask = safe_num(row.get(f"{side}_ask"))
+    if bid is None or ask is None or ask < bid or ask <= 0:
+        return None
+    return ask - bid
+
+
+def nearest_option(strikes, target, side=None):
+    clean = []
+    for row in strikes or []:
+        strike = safe_num(row.get("strike"))
+        if strike is None:
+            continue
+        if side == "call" and strike < target:
+            continue
+        if side == "put" and strike > target:
+            continue
+        clean.append(row)
+    if not clean:
+        clean = [row for row in strikes or [] if safe_num(row.get("strike")) is not None]
+    if not clean:
+        return None
+    return min(clean, key=lambda row: abs(safe_num(row.get("strike")) - target))
+
+
+def option_snapshot(row, side, target=None):
+    if not row:
+        return {
+            "strike": None,
+            "distanceToTarget": None,
+            "iv": None,
+            "bid": None,
+            "ask": None,
+            "mid": None,
+            "spread": None,
+            "spreadPct": None,
+            "volume": None,
+            "openInterest": None,
+            "premiumUsd": None,
+            "tradableScore": None,
+            "isDry": None,
+        }
+    strike = safe_num(row.get("strike"))
+    bid = safe_num(row.get(f"{side}_bid"))
+    ask = safe_num(row.get(f"{side}_ask"))
+    mid = option_mid(row, side)
+    spread = option_spread(row, side)
+    volume = safe_num(row.get(f"{side}_volume"), 0)
+    oi = safe_num(row.get(f"{side}_oi"), 0)
+    spread_pct = spread / mid * 100 if spread is not None and mid and mid > 0 else None
+    premium_usd = mid * 100 if mid is not None else None
+    liquidity_score = math.log1p(volume or 0) + 0.65 * math.log1p(oi or 0)
+    spread_penalty = 1 / (1 + max(spread_pct or 0, 0) / 25)
+    premium_score = math.log1p(max(premium_usd or 0, 0))
+    tradable_score = liquidity_score * spread_penalty * (1 + 0.12 * premium_score)
+    is_dry = (premium_usd is None or premium_usd <= 5) or (spread_pct is not None and spread_pct > 80) or ((volume or 0) == 0 and (oi or 0) < 25)
+    return {
+        "strike": strike,
+        "distanceToTarget": strike - target if strike is not None and target is not None else None,
+        "iv": valid_iv(row.get(f"{side}_iv")),
+        "bid": bid,
+        "ask": ask,
+        "mid": mid,
+        "spread": spread,
+        "spreadPct": spread_pct,
+        "volume": volume,
+        "openInterest": oi,
+        "premiumUsd": premium_usd,
+        "tradableScore": tradable_score,
+        "isDry": is_dry,
+    }
+
+
+def atm_snapshot(strikes, spot):
+    row = nearest_option(strikes, spot)
+    call = option_snapshot(row, "call", spot)
+    put = option_snapshot(row, "put", spot)
+    ivs = [call.get("iv"), put.get("iv")]
+    return {
+        "strike": safe_num(row.get("strike")) if row else None,
+        "iv": mean(ivs),
+        "callIv": call.get("iv"),
+        "putIv": put.get("iv"),
+        "callMid": call.get("mid"),
+        "putMid": put.get("mid"),
+        "straddleMid": (call.get("mid") or 0) + (put.get("mid") or 0) if call.get("mid") is not None or put.get("mid") is not None else None,
+        "callSpreadPct": call.get("spreadPct"),
+        "putSpreadPct": put.get("spreadPct"),
+    }
+
+
+def expiry_surface_features(expiration, spot, spotgamma_ref):
+    strikes = expiration.get("strikes") or []
+    dte = safe_num(expiration.get("dte"))
+    atm = atm_snapshot(strikes, spot)
+    put_wing_1 = option_snapshot(nearest_option(strikes, spot * 0.99, "put"), "put", spot * 0.99)
+    call_wing_1 = option_snapshot(nearest_option(strikes, spot * 1.01, "call"), "call", spot * 1.01)
+    put_wing_2 = option_snapshot(nearest_option(strikes, spot * 0.98, "put"), "put", spot * 0.98)
+    call_wing_2 = option_snapshot(nearest_option(strikes, spot * 1.02, "call"), "call", spot * 1.02)
+    put_skew_1 = put_wing_1.get("iv") - atm.get("iv") if put_wing_1.get("iv") is not None and atm.get("iv") is not None else None
+    call_skew_1 = call_wing_1.get("iv") - atm.get("iv") if call_wing_1.get("iv") is not None and atm.get("iv") is not None else None
+    put_skew_2 = put_wing_2.get("iv") - atm.get("iv") if put_wing_2.get("iv") is not None and atm.get("iv") is not None else None
+    call_skew_2 = call_wing_2.get("iv") - atm.get("iv") if call_wing_2.get("iv") is not None and atm.get("iv") is not None else None
+    curvature_1 = mean([put_wing_1.get("iv"), call_wing_1.get("iv")]) - atm.get("iv") if atm.get("iv") is not None else None
+    curvature_2 = mean([put_wing_2.get("iv"), call_wing_2.get("iv")]) - atm.get("iv") if atm.get("iv") is not None else None
+
+    wall_targets = {}
+    if spotgamma_ref:
+        call_wall = safe_num(spotgamma_ref.get("callWall"))
+        put_wall = safe_num(spotgamma_ref.get("putWall"))
+        open_ = safe_num(spotgamma_ref.get("open"))
+        open_pct = safe_num(spotgamma_ref.get("openPctWalls"))
+        sell_call = call_wall
+        sell_put = put_wall
+        if open_pct is not None:
+            if 10 <= open_pct <= 20 and put_wall is not None:
+                sell_put = put_wall - 35
+            elif 20 < open_pct <= 30 and put_wall is not None:
+                sell_put = put_wall - 20
+            elif 80 < open_pct <= 90 and call_wall is not None:
+                sell_call = call_wall + 15
+        wall_targets = {
+            "callWall": call_wall,
+            "putWall": put_wall,
+            "sellCall": sell_call,
+            "sellPut": sell_put,
+            "sessionOpen": open_,
+        }
+
+    target_metrics = {}
+    for name, target, side in (
+        ("callWall", wall_targets.get("callWall"), "call"),
+        ("putWall", wall_targets.get("putWall"), "put"),
+        ("sellCall", wall_targets.get("sellCall"), "call"),
+        ("sellPut", wall_targets.get("sellPut"), "put"),
+    ):
+        target_metrics[name] = option_snapshot(nearest_option(strikes, target, side) if target is not None else None, side, target)
+
+    iv_values = []
+    valid_points = 0
+    total_points = 0
+    for row in strikes:
+        for side in ("call", "put"):
+            total_points += 1
+            iv = valid_iv(row.get(f"{side}_iv"))
+            if iv is not None:
+                valid_points += 1
+                iv_values.append(iv)
+    strike_values = [safe_num(row.get("strike")) for row in strikes if safe_num(row.get("strike")) is not None]
+    return {
+        "expiration": expiration.get("expiration"),
+        "dte": dte,
+        "atm": atm,
+        "putWing1Pct": put_wing_1,
+        "callWing1Pct": call_wing_1,
+        "putWing2Pct": put_wing_2,
+        "callWing2Pct": call_wing_2,
+        "putSkew1Pct": put_skew_1,
+        "callSkew1Pct": call_skew_1,
+        "skewBalance1Pct": put_skew_1 - call_skew_1 if put_skew_1 is not None and call_skew_1 is not None else None,
+        "putSkew2Pct": put_skew_2,
+        "callSkew2Pct": call_skew_2,
+        "skewBalance2Pct": put_skew_2 - call_skew_2 if put_skew_2 is not None and call_skew_2 is not None else None,
+        "smileCurvature1Pct": curvature_1,
+        "smileCurvature2Pct": curvature_2,
+        "targets": target_metrics,
+        "quality": {
+            "strikeCount": len(strikes),
+            "validIvPoints": valid_points,
+            "totalIvPoints": total_points,
+            "missingIvPct": 100 - (valid_points / total_points * 100) if total_points else None,
+            "minStrike": min(strike_values) if strike_values else None,
+            "maxStrike": max(strike_values) if strike_values else None,
+            "ivMin": min(iv_values) if iv_values else None,
+            "ivMax": max(iv_values) if iv_values else None,
+            "ivMedian": median(iv_values),
+        },
+    }
+
+
+def build_vol_surface_features(chains_index, underlying_rows, spotgamma_rows):
+    dates = (chains_index or {}).get("dates") or []
+    underlying_by_date = {row["date"]: row for row in underlying_rows}
+    spotgamma_by_date = {row["date"]: row for row in spotgamma_rows}
+    rows = []
+    for source_date in sorted(dates):
+        path = os.path.join(CHAINS_CLOSE_DIR, f"{source_date}.json")
+        chain = load_json_safe(path)
+        if not chain:
+            continue
+        target_session = trading_next(source_date)
+        spot = safe_num(chain.get("spot"))
+        expirations = []
+        for expiration, data in (chain.get("expirations") or {}).items():
+            dte = safe_num(data.get("dte"))
+            if dte is None or dte <= 0:
+                continue
+            expirations.append({
+                "expiration": expiration,
+                "dte": dte,
+                "strikes": data.get("strikes") or [],
+            })
+        expirations.sort(key=lambda item: item["dte"])
+        if not expirations:
+            continue
+        spotgamma_ref = spotgamma_by_date.get(target_session)
+        expiry_features = [expiry_surface_features(exp, spot, spotgamma_ref) for exp in expirations]
+        atm_curve = [item["atm"]["iv"] for item in expiry_features if item.get("atm", {}).get("iv") is not None]
+        front = expiry_features[0] if expiry_features else {}
+        second = expiry_features[1] if len(expiry_features) > 1 else {}
+        last = expiry_features[-1] if expiry_features else {}
+        target_surface = front.get("targets") or {}
+        put_sell = target_surface.get("sellPut") or {}
+        call_sell = target_surface.get("sellCall") or {}
+        all_quality = [item.get("quality") or {} for item in expiry_features]
+        valid_points = sum(q.get("validIvPoints") or 0 for q in all_quality)
+        total_points = sum(q.get("totalIvPoints") or 0 for q in all_quality)
+        row = {
+            "date": target_session,
+            "targetSession": target_session,
+            "sourceChainDate": source_date,
+            "sourceChain": f"data/chains-close/{source_date}.json",
+            "capturedAt": chain.get("capturedAt"),
+            "chainSpot": spot,
+            "sessionOpen": safe_num((underlying_by_date.get(target_session) or {}).get("open")),
+            "hasUnderlying": target_session in underlying_by_date,
+            "hasSpotGamma": bool(spotgamma_ref),
+            "front": {
+                "expiration": front.get("expiration"),
+                "dte": front.get("dte"),
+                "atmIv": (front.get("atm") or {}).get("iv"),
+                "putSkew1Pct": front.get("putSkew1Pct"),
+                "callSkew1Pct": front.get("callSkew1Pct"),
+                "skewBalance1Pct": front.get("skewBalance1Pct"),
+                "smileCurvature1Pct": front.get("smileCurvature1Pct"),
+                "putWingIv1Pct": (front.get("putWing1Pct") or {}).get("iv"),
+                "callWingIv1Pct": (front.get("callWing1Pct") or {}).get("iv"),
+                "putWingTradableScore": (front.get("putWing1Pct") or {}).get("tradableScore"),
+                "callWingTradableScore": (front.get("callWing1Pct") or {}).get("tradableScore"),
+                "sellPutIv": put_sell.get("iv"),
+                "sellCallIv": call_sell.get("iv"),
+                "sellPutPremiumUsd": put_sell.get("premiumUsd"),
+                "sellCallPremiumUsd": call_sell.get("premiumUsd"),
+                "sellPutSpreadPct": put_sell.get("spreadPct"),
+                "sellCallSpreadPct": call_sell.get("spreadPct"),
+                "sellPutTradableScore": put_sell.get("tradableScore"),
+                "sellCallTradableScore": call_sell.get("tradableScore"),
+                "sellPutIsDry": put_sell.get("isDry"),
+                "sellCallIsDry": call_sell.get("isDry"),
+                "sellWingIvAsymmetry": put_sell.get("iv") - call_sell.get("iv") if put_sell.get("iv") is not None and call_sell.get("iv") is not None else None,
+                "sellWingPremiumAsymmetryUsd": put_sell.get("premiumUsd") - call_sell.get("premiumUsd") if put_sell.get("premiumUsd") is not None and call_sell.get("premiumUsd") is not None else None,
+            },
+            "termStructure": {
+                "atmIvFirst": (front.get("atm") or {}).get("iv"),
+                "atmIvSecond": (second.get("atm") or {}).get("iv"),
+                "atmIvLast": (last.get("atm") or {}).get("iv"),
+                "atmIvMean": mean(atm_curve),
+                "atmIvStdev": stdev(atm_curve),
+                "frontMinusSecond": (front.get("atm") or {}).get("iv") - (second.get("atm") or {}).get("iv") if (front.get("atm") or {}).get("iv") is not None and (second.get("atm") or {}).get("iv") is not None else None,
+                "frontMinusLast": (front.get("atm") or {}).get("iv") - (last.get("atm") or {}).get("iv") if (front.get("atm") or {}).get("iv") is not None and (last.get("atm") or {}).get("iv") is not None else None,
+            },
+            "quality": {
+                "expirationsUsedCount": len(expiry_features),
+                "minDte": min(item["dte"] for item in expiry_features if item.get("dte") is not None),
+                "maxDte": max(item["dte"] for item in expiry_features if item.get("dte") is not None),
+                "validIvPoints": valid_points,
+                "totalIvPoints": total_points,
+                "missingIvPct": 100 - (valid_points / total_points * 100) if total_points else None,
+                "frontStrikeCount": (front.get("quality") or {}).get("strikeCount"),
+                "frontMissingIvPct": (front.get("quality") or {}).get("missingIvPct"),
+                "strikeCoverageLowPct": ((front.get("quality") or {}).get("minStrike") / spot - 1) * 100 if spot and (front.get("quality") or {}).get("minStrike") else None,
+                "strikeCoverageHighPct": ((front.get("quality") or {}).get("maxStrike") / spot - 1) * 100 if spot and (front.get("quality") or {}).get("maxStrike") else None,
+            },
+            "expirations": expiry_features[:8],
+        }
+        rows.append(row)
+    rows.sort(key=lambda item: item.get("targetSession") or item.get("sourceChainDate") or "")
+    return rows
+
+
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     ohlc = load_json_safe(OHLC_FILE) or {"byDate": {}}
     spotgamma = load_json_safe(SPOTGAMMA_FILE) or {"byDate": {}}
+    chains_index = load_json_safe(CHAINS_CLOSE_INDEX_FILE) or {"dates": []}
     gex_index = load_json_safe(GEX_INDEX_FILE) or {"dates": []}
     dex_index = load_json_safe(DEX_INDEX_FILE) or {"dates": []}
     underlying_rows = build_underlying_features(ohlc)
     spotgamma_rows = build_spotgamma_features(spotgamma, underlying_rows)
     gex_rows = build_gex_features(gex_index, underlying_rows)
     dex_rows = build_dex_features(dex_index, underlying_rows)
+    vol_surface_rows = build_vol_surface_features(chains_index, underlying_rows, spotgamma_rows)
     now = datetime.now(timezone.utc).isoformat()
     underlying_payload = {
         "version": MODEL_VERSION,
@@ -666,10 +981,19 @@ def main():
         "dexModelSourceVersion": dex_index.get("version"),
         "rows": dex_rows,
     }
+    vol_surface_payload = {
+        "version": MODEL_VERSION,
+        "lastUpdated": now,
+        "block": "vol_surface",
+        "description": "Quinto bloque del dataset ML: firma compacta de superficie de volatilidad, skew, term structure, liquidez y calidad.",
+        "source": "data/chains-close/*.json",
+        "rows": vol_surface_rows,
+    }
     save_json(OUT_UNDERLYING_FILE, underlying_payload)
     save_json(OUT_SPOTGAMMA_FILE, spotgamma_payload)
     save_json(OUT_GEX_FILE, gex_payload)
     save_json(OUT_DEX_FILE, dex_payload)
+    save_json(OUT_VOL_SURFACE_FILE, vol_surface_payload)
     index = {
         "version": MODEL_VERSION,
         "lastUpdated": now,
@@ -704,12 +1028,18 @@ def main():
                 "lastDate": dex_rows[-1]["targetSession"] if dex_rows else None,
                 "sourceVersion": dex_index.get("version"),
             },
-            "vol_surface": {"status": "pending"},
+            "vol_surface": {
+                "status": "available",
+                "file": "data/ml-dataset/vol_surface.json",
+                "rows": len(vol_surface_rows),
+                "firstDate": vol_surface_rows[0]["targetSession"] if vol_surface_rows else None,
+                "lastDate": vol_surface_rows[-1]["targetSession"] if vol_surface_rows else None,
+            },
             "premiums_labels": {"status": "pending"},
         },
     }
     save_json(OUT_INDEX, index)
-    print(f"OK ML dataset: subyacente={len(underlying_rows)} rows, spotgamma={len(spotgamma_rows)} rows, gex={len(gex_rows)} rows, dex={len(dex_rows)} rows")
+    print(f"OK ML dataset: subyacente={len(underlying_rows)} rows, spotgamma={len(spotgamma_rows)} rows, gex={len(gex_rows)} rows, dex={len(dex_rows)} rows, vol_surface={len(vol_surface_rows)} rows")
 
 
 if __name__ == "__main__":
