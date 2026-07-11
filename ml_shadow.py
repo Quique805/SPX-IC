@@ -16,9 +16,10 @@ from datetime import datetime, timezone
 
 from fetch_daily import DATA_DIR, load_json_safe, save_json
 
-VERSION = "ml-shadow-v1"
+VERSION = "ml-shadow-v1.1"
 STRIKE_STEP = 5
 SPREAD_WIDTH = 20
+PROTECTION_WIDTHS = (5, 10, 15, 20, 25, 30, 40)
 MIN_REASONABLE_CREDIT_USD = 5.0
 MIN_TRAIN_DAYS = 8
 
@@ -221,6 +222,15 @@ def wing_snapshot(chain, date_str, side, sell_strike, width=SPREAD_WIDTH):
     buy_row = nearest_strike_row(exp_data, buy_strike)
     sell = side_snapshot(sell_row, side)
     buy = side_snapshot(buy_row, side)
+    actual_buy_strike = safe_num(buy.get("strike"))
+    if actual_buy_strike is not None:
+        if side == "call" and actual_buy_strike <= sell_strike:
+            buy = {}
+            actual_buy_strike = None
+        if side == "put" and actual_buy_strike >= sell_strike:
+            buy = {}
+            actual_buy_strike = None
+    actual_width = abs(actual_buy_strike - sell_strike) if actual_buy_strike is not None else width
     sell_bid = safe_num(sell.get("bid"))
     buy_ask = safe_num(buy.get("ask"))
     credit = sell_bid - buy_ask if sell_bid is not None and buy_ask is not None else None
@@ -231,10 +241,123 @@ def wing_snapshot(chain, date_str, side, sell_strike, width=SPREAD_WIDTH):
         "sell": sell,
         "buy": buy,
         "buyStrike": buy_strike,
+        "buyStrikeActual": actual_buy_strike,
+        "spreadWidthPoints": actual_width,
         "wingCredit": credit,
         "wingCreditUsd": credit_usd,
+        "maxRiskUsd": actual_width * 100 - credit_usd if credit_usd is not None else None,
         "reasonableCredit": credit_usd is not None and credit_usd > MIN_REASONABLE_CREDIT_USD,
     }
+
+
+def protection_options(chain, date_str, side, sell_strike):
+    options = []
+    for width in PROTECTION_WIDTHS:
+        snap = wing_snapshot(chain, date_str, side, sell_strike, width=width)
+        credit_usd = safe_num(snap.get("wingCreditUsd"))
+        max_risk = safe_num(snap.get("maxRiskUsd"))
+        if credit_usd is None or max_risk is None or max_risk <= 0:
+            continue
+        options.append({
+            "width": safe_num(snap.get("spreadWidthPoints"), width),
+            "buyStrike": snap.get("buyStrikeActual") or snap.get("buyStrike"),
+            "creditUsd": credit_usd,
+            "maxRiskUsd": max_risk,
+            "riskRewardPct": credit_usd / max_risk * 100 if max_risk > 0 else None,
+            "reasonableCredit": credit_usd > MIN_REASONABLE_CREDIT_USD,
+        })
+    return options
+
+
+def protection_target(candidate):
+    prob = safe_num(candidate.get("finalProbNoTouch"), candidate.get("heuristicProbNoTouch")) or 0.5
+    distance = safe_num(candidate.get("distanceOpenPoints"), 0)
+    delta = safe_num(candidate.get("absDelta"), 0.25)
+    risk = (
+        0.55 * (1 - clamp(prob, 0, 1))
+        + 0.25 * clamp(delta / 0.20, 0, 1)
+        + 0.20 * clamp((55 - distance) / 55, 0, 1)
+    )
+    if risk >= 0.45:
+        return 5, "defensivo", "Riesgo alto: proteccion muy cercana para reducir cola y capital en riesgo."
+    if risk >= 0.34:
+        return 10, "prudente", "Riesgo medio: compra OTM cercana para no regalar demasiado riesgo por poca prima."
+    if risk >= 0.23:
+        return 20, "equilibrado", "Riesgo controlado: spread intermedio entre prima y proteccion."
+    if risk >= 0.15:
+        return 30, "ampliado", "Riesgo bajo: se amplia el spread para capturar mas prima."
+    return 40, "expansivo", "Riesgo muy bajo: se permite una proteccion mas alejada para exprimir prima."
+
+
+def choose_protection_option(candidate, options):
+    if not options:
+        return None
+    target_width, profile, reason = protection_target(candidate)
+    reasonable = [opt for opt in options if opt.get("reasonableCredit")]
+    pool = reasonable or options
+
+    def rank(option):
+        width_gap = abs(option["width"] - target_width)
+        credit = safe_num(option.get("creditUsd"), 0)
+        rr = safe_num(option.get("riskRewardPct"), 0)
+        if option["width"] < target_width and option.get("reasonableCredit"):
+            width_gap -= 0.35
+        return (width_gap, -min(credit, 220), -rr)
+
+    selected = sorted(pool, key=rank)[0]
+    selected = dict(selected)
+    selected["targetWidth"] = target_width
+    selected["profile"] = profile
+    selected["reason"] = reason
+    return selected
+
+
+def apply_protection_profiles(candidates, context):
+    chain = context["chain"]
+    date_str = context["date"]
+    for row in candidates:
+        options = protection_options(chain, date_str, row["side"], row["strike"])
+        selected = choose_protection_option(row, options)
+        row["baseFinalScore"] = row.get("finalScore")
+        row["baseWingCreditUsd"] = row.get("wingCreditUsd")
+        row["protectionOptionsCount"] = len(options)
+        if not selected:
+            row["buyStrike"] = None
+            row["spreadWidthPoints"] = None
+            row["maxRiskUsd"] = None
+            row["riskRewardPct"] = None
+            row["protectionProfile"] = "sin_datos"
+            row["protectionReason"] = "No hay datos suficientes para calcular la pata comprada."
+            continue
+        row["buyStrike"] = selected.get("buyStrike")
+        row["spreadWidthPoints"] = selected.get("width")
+        row["wingCreditUsd"] = selected.get("creditUsd")
+        row["maxRiskUsd"] = selected.get("maxRiskUsd")
+        row["riskRewardPct"] = selected.get("riskRewardPct")
+        row["reasonableCredit"] = bool(selected.get("reasonableCredit"))
+        row["isDry"] = bool(row.get("isDry") or not selected.get("reasonableCredit"))
+        row["protectionProfile"] = selected.get("profile")
+        row["protectionReason"] = selected.get("reason")
+        credit = safe_num(row.get("wingCreditUsd"), 0)
+        max_risk = safe_num(row.get("maxRiskUsd"), 10**9)
+        spread_pct = safe_num(row.get("spreadPct"), 250)
+        tradable = safe_num(row.get("tradableScore"), 0)
+        premium_score = clamp((credit - MIN_REASONABLE_CREDIT_USD) / 85, 0, 1)
+        liquidity_score = clamp(tradable / 20, 0, 1)
+        risk_penalty = clamp(max_risk / 20000, 0, 0.16)
+        spread_penalty = clamp(spread_pct / 140, 0, 0.42)
+        dry_penalty = 0.24 if row.get("isDry") else 0
+        row["finalScore"] = clamp(
+            0.62 * safe_num(row.get("finalProbNoTouch"), 0.5)
+            + 0.24 * premium_score
+            + 0.10 * liquidity_score
+            - risk_penalty
+            - spread_penalty
+            - dry_penalty,
+            0,
+            1,
+        )
+    return candidates
 
 
 def collect_level_values(gex, dex, side):
@@ -666,6 +789,7 @@ def choose_wings(candidates):
             row
             and row.get("reasonableCredit")
             and not row.get("isDry")
+            and row.get("buyStrike") is not None
             and safe_num(row.get("finalProbNoTouch"), 0) >= 0.64
             and safe_num(row.get("finalScore"), 0) >= 0.48
         )
@@ -686,9 +810,10 @@ def choose_wings(candidates):
 
 def slim_candidate(row):
     keys = [
-        "side", "strike", "entrySpot", "sessionOpen", "distanceOpenPoints", "distanceOpenPct",
+        "side", "strike", "buyStrike", "spreadWidthPoints", "entrySpot", "sessionOpen", "distanceOpenPoints", "distanceOpenPct",
         "wingCreditUsd", "sellBidUsd", "sellMidUsd", "spreadPct", "iv", "absDelta",
-        "volume", "openInterest", "tradableScore", "isDry", "reasonableCredit",
+        "volume", "openInterest", "tradableScore", "isDry", "reasonableCredit", "maxRiskUsd", "riskRewardPct",
+        "protectionProfile", "protectionReason", "baseFinalScore", "baseWingCreditUsd",
         "heuristicProbNoTouch", "logisticProbNoTouch", "boostingProbNoTouch",
         "finalProbNoTouch", "finalScore", "labelTouched", "labelNoTouch",
         "gexDistanceSideConsensus", "dexDistanceSideWall",
@@ -696,13 +821,36 @@ def slim_candidate(row):
     return {key: row.get(key) for key in keys}
 
 
+def decision_commentary(action, selected, benchmark):
+    if action == "no_operar" or not selected:
+        return "El Shadow no encuentra una combinacion prima/riesgo suficientemente limpia para vender volatilidad."
+    parts = []
+    benchmark_credit = safe_num(benchmark.get("entryCreditUsd"))
+    total_credit = sum(safe_num(row.get("wingCreditUsd"), 0) for row in selected)
+    if benchmark_credit is not None:
+        diff = total_credit - benchmark_credit
+        parts.append(f"Credito Shadow ${round(total_credit)} frente a benchmark ${round(benchmark_credit)} ({diff:+.0f}).")
+    else:
+        parts.append(f"Credito Shadow estimado ${round(total_credit)}.")
+    for row in selected:
+        side = "call" if row.get("side") == "call" else "put"
+        width = safe_num(row.get("spreadWidthPoints"))
+        parts.append(
+            f"Ala {side}: vende {int(row.get('strike'))}, compra {int(row.get('buyStrike')) if row.get('buyStrike') is not None else '-'} "
+            f"({int(width) if width is not None else '-'} pts, perfil {row.get('protectionProfile') or '-'})."
+        )
+    return " ".join(parts)
+
+
 def prediction_for_date(date_str, context, candidates, train_rows, train_day_count):
     scored, training = score_candidates(candidates, train_rows, train_day_count)
+    scored = apply_protection_profiles(scored, context)
     action, selected, calls, puts = choose_wings(scored)
     selected_slim = [slim_candidate(row) for row in selected]
     labels_known = all(row.get("labelNoTouch") is not None for row in selected) if selected else False
     no_touch_all = all(row.get("labelNoTouch") is True for row in selected) if selected and labels_known else None
     total_credit = sum(safe_num(row.get("wingCreditUsd"), 0) for row in selected)
+    total_max_risk = sum(safe_num(row.get("maxRiskUsd"), 0) for row in selected)
     avg_prob = mean([row.get("finalProbNoTouch") for row in selected])
     avg_score = mean([row.get("finalScore") for row in selected])
     benchmark = context["benchmark"]
@@ -734,9 +882,12 @@ def prediction_for_date(date_str, context, candidates, train_rows, train_day_cou
             "action": action,
             "selectedWings": selected_slim,
             "totalCreditUsd": total_credit,
+            "totalMaxRiskUsd": total_max_risk,
+            "portfolioRiskRewardPct": total_credit / total_max_risk * 100 if total_max_risk else None,
             "averageProbNoTouch": avg_prob,
             "averageScore": avg_score,
             "confidence": "alta" if avg_prob and avg_prob >= 0.78 else "media" if avg_prob and avg_prob >= 0.68 else "baja",
+            "commentary": decision_commentary(action, selected, benchmark),
             "note": "Shadow mode: no altera la senal real ni envia ordenes.",
         },
         "evaluation": {
@@ -781,6 +932,10 @@ def summary_from_predictions(predictions):
     bench_wins = [p for p in bench_eval if p.get("evaluation", {}).get("benchmarkNoTouch") is True]
     credits = [safe_num(p.get("decision", {}).get("totalCreditUsd")) for p in signals]
     credits = [c for c in credits if c is not None]
+    max_risks = [safe_num(p.get("decision", {}).get("totalMaxRiskUsd")) for p in signals]
+    max_risks = [r for r in max_risks if r is not None and r > 0]
+    rr = [safe_num(p.get("decision", {}).get("portfolioRiskRewardPct")) for p in signals]
+    rr = [r for r in rr if r is not None]
     return {
         "predictions": len(predictions),
         "shadowSignals": len(signals),
@@ -791,6 +946,8 @@ def summary_from_predictions(predictions):
         "benchmarkEvaluatedSignals": len(bench_eval),
         "benchmarkNoTouchWr": len(bench_wins) / len(bench_eval) * 100 if bench_eval else None,
         "averageShadowCreditUsd": mean(credits),
+        "averageShadowMaxRiskUsd": mean(max_risks),
+        "averageShadowRiskRewardPct": mean(rr),
     }
 
 
@@ -827,6 +984,7 @@ def build():
         if not chain.get("expirations"):
             continue
         context = {
+            "date": date_str,
             "underlying": underlying[date_str],
             "priorUnderlying": prior_underlying_by_date.get(date_str) or underlying[date_str],
             "priorUnderlyingDate": (prior_underlying_by_date.get(date_str) or {}).get("date"),
@@ -863,7 +1021,8 @@ def build():
         },
         "model": {
             "candidateStepPoints": STRIKE_STEP,
-            "spreadWidthPoints": SPREAD_WIDTH,
+            "baseScoringSpreadWidthPoints": SPREAD_WIDTH,
+            "dynamicProtectionWidths": list(PROTECTION_WIDTHS),
             "minReasonableCreditUsd": MIN_REASONABLE_CREDIT_USD,
             "minTrainDays": MIN_TRAIN_DAYS,
             "featureColumns": FEATURE_COLUMNS,

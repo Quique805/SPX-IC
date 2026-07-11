@@ -1,6 +1,6 @@
 {
-  "version": "ml-shadow-v1",
-  "lastUpdated": "2026-07-11T10:53:11.536901+00:00",
+  "version": "ml-shadow-v1.1",
+  "lastUpdated": "2026-07-11T11:09:12.343114+00:00",
   "mode": "paper_shadow",
   "description": "ML Shadow V1: candidate generator + heuristic + regularized logistic regression + small gradient boosting. No production signals are changed.",
   "objective": "Improve operate/no-operate and wing/strike selection for 0DTE volatility selling.",
@@ -10,7 +10,16 @@
   },
   "model": {
     "candidateStepPoints": 5,
-    "spreadWidthPoints": 20,
+    "baseScoringSpreadWidthPoints": 20,
+    "dynamicProtectionWidths": [
+      5,
+      10,
+      15,
+      20,
+      25,
+      30,
+      40
+    ],
     "minReasonableCreditUsd": 5.0,
     "minTrainDays": 8,
     "featureColumns": [
@@ -68,13 +77,15 @@
   "latestFile": "data/ml-shadow/predictions/2026-07-10.json",
   "summary": {
     "predictions": 12,
-    "shadowSignals": 12,
-    "shadowNoTrade": 0,
-    "evaluatedShadowSignals": 12,
+    "shadowSignals": 10,
+    "shadowNoTrade": 2,
+    "evaluatedShadowSignals": 10,
     "shadowNoTouchWins": 9,
-    "shadowNoTouchWr": 75.0,
+    "shadowNoTouchWr": 90.0,
     "benchmarkEvaluatedSignals": 9,
     "benchmarkNoTouchWr": 77.77777777777779,
-    "averageShadowCreditUsd": 122.91666666666667
+    "averageShadowCreditUsd": 126.5,
+    "averageShadowMaxRiskUsd": 2073.5,
+    "averageShadowRiskRewardPct": 7.2751368486176515
   }
 }

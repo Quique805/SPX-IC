@@ -5835,6 +5835,10 @@ function mlBoolLabel(value) {
   return '-';
 }
 
+function mlWingBySide(prediction, side) {
+  return (prediction?.decision?.selectedWings || []).find(wing => wing.side === side) || null;
+}
+
 function mlZoneLabel(zone) {
   const labels = {
     below_put_wall: 'Bajo PW',
@@ -6184,15 +6188,19 @@ function renderMlShadowCandidateTable(title, rows) {
         <table class="ml-feature-table ml-shadow-table">
           <thead>
             <tr>
-              <th>Strike</th>
+              <th>Sell</th>
+              <th>Buy</th>
+              <th>Ancho</th>
               <th>Score</th>
               <th>No touch</th>
               <th>LRR</th>
               <th>Boost</th>
               <th>Credito</th>
+              <th>Riesgo</th>
               <th>Dist.</th>
               <th>IV</th>
               <th>Delta</th>
+              <th>Perfil</th>
               <th>Seca</th>
               <th>Touch</th>
             </tr>
@@ -6201,14 +6209,18 @@ function renderMlShadowCandidateTable(title, rows) {
             ${list.map(row => `
               <tr>
                 <td>${mlNum(row.strike, 0)}</td>
+                <td>${mlNum(row.buyStrike, 0)}</td>
+                <td>${mlNum(row.spreadWidthPoints, 0)}</td>
                 <td>${mlPct((row.finalScore || 0) * 100, 1)}</td>
                 <td>${mlPct((row.finalProbNoTouch || 0) * 100, 1)}</td>
                 <td>${mlPct((row.logisticProbNoTouch || 0) * 100, 1)}</td>
                 <td>${mlPct((row.boostingProbNoTouch || 0) * 100, 1)}</td>
                 <td>$${mlNum(row.wingCreditUsd, 0)}</td>
+                <td>$${mlNum(row.maxRiskUsd, 0)}</td>
                 <td>${mlNum(row.distanceOpenPoints, 0)}</td>
                 <td>${mlNum(row.iv, 4)}</td>
                 <td>${mlNum(row.absDelta, 4)}</td>
+                <td>${row.protectionProfile || '-'}</td>
                 <td>${mlBoolLabel(row.isDry)}</td>
                 <td>${mlBoolLabel(row.labelTouched)}</td>
               </tr>
@@ -6220,7 +6232,90 @@ function renderMlShadowCandidateTable(title, rows) {
   `;
 }
 
-function renderMlShadowPanel(index, prediction) {
+function renderMlShadowHistoryTable(predictions) {
+  const rows = (predictions || []).slice().reverse();
+  if (!rows.length) return '';
+  return `
+    <div class="ml-shadow-history-table">
+      <div class="ml-shadow-rank-title">Historial de propuestas Shadow</div>
+      <div class="ml-table-wrap compact">
+        <table class="ml-feature-table ml-shadow-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Decision</th>
+              <th>Call sell/buy</th>
+              <th>Put sell/buy</th>
+              <th>Credito</th>
+              <th>Riesgo max.</th>
+              <th>No-touch</th>
+              <th>WR eval</th>
+              <th>Comentario</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(pred => {
+              const call = mlWingBySide(pred, 'call');
+              const put = mlWingBySide(pred, 'put');
+              const dec = pred.decision || {};
+              return `
+                <tr>
+                  <td>${pred.date || '-'}</td>
+                  <td>${mlActionLabel(dec.action)}</td>
+                  <td>${call ? `${mlNum(call.strike, 0)} / ${mlNum(call.buyStrike, 0)} (${mlNum(call.spreadWidthPoints, 0)}p)` : '-'}</td>
+                  <td>${put ? `${mlNum(put.strike, 0)} / ${mlNum(put.buyStrike, 0)} (${mlNum(put.spreadWidthPoints, 0)}p)` : '-'}</td>
+                  <td>$${mlNum(dec.totalCreditUsd, 0)}</td>
+                  <td>$${mlNum(dec.totalMaxRiskUsd, 0)}</td>
+                  <td>${mlPct((dec.averageProbNoTouch || 0) * 100, 1)}</td>
+                  <td>${mlBoolLabel(pred.evaluation?.noTouchAll)}</td>
+                  <td class="ml-shadow-comment">${dec.commentary || '-'}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderMlShadowHistoryChart(elementId, predictions) {
+  const records = (predictions || []).filter(Boolean);
+  if (!records.length) return;
+  const x = records.map(row => row.date);
+  const callSell = records.map(row => mlWingBySide(row, 'call')?.strike ?? null);
+  const callBuy = records.map(row => mlWingBySide(row, 'call')?.buyStrike ?? null);
+  const putSell = records.map(row => mlWingBySide(row, 'put')?.strike ?? null);
+  const putBuy = records.map(row => mlWingBySide(row, 'put')?.buyStrike ?? null);
+  const open = records.map(row => row.context?.open ?? null);
+  const high = records.map(row => row.context?.high ?? null);
+  const low = records.map(row => row.context?.low ?? null);
+  const credit = records.map(row => row.decision?.totalCreditUsd ?? null);
+  const traces = [
+    { x, y: high, name: 'High SPX', type: 'scatter', mode: 'lines', line: { color: 'rgba(255,255,255,0.38)', width: 1, dash: 'dot' } },
+    { x, y: low, name: 'Low SPX', type: 'scatter', mode: 'lines', line: { color: 'rgba(255,255,255,0.38)', width: 1, dash: 'dot' } },
+    { x, y: open, name: 'Open SPX', type: 'scatter', mode: 'lines+markers', line: { color: '#ffffff', width: 2 }, marker: { size: 6 } },
+    { x, y: callSell, name: 'Call vendida', type: 'scatter', mode: 'lines+markers', line: { color: '#7CFF9A', width: 3 }, marker: { size: 8 } },
+    { x, y: callBuy, name: 'Call comprada', type: 'scatter', mode: 'lines+markers', line: { color: 'rgba(124,255,154,0.42)', width: 2, dash: 'dash' }, marker: { size: 6 } },
+    { x, y: putSell, name: 'Put vendida', type: 'scatter', mode: 'lines+markers', line: { color: '#ff8f8f', width: 3 }, marker: { size: 8 } },
+    { x, y: putBuy, name: 'Put comprada', type: 'scatter', mode: 'lines+markers', line: { color: 'rgba(255,143,143,0.42)', width: 2, dash: 'dash' }, marker: { size: 6 } },
+    { x, y: credit, name: 'Credito $', type: 'bar', yaxis: 'y2', marker: { color: 'rgba(96,165,250,0.32)' } }
+  ];
+  safePlotly(elementId, traces, {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    margin: { l: 52, r: 52, t: 20, b: 46 },
+    font: { color: 'rgba(255,255,255,0.82)', size: 11 },
+    xaxis: { gridcolor: 'rgba(255,255,255,0.08)', tickangle: -25 },
+    yaxis: { title: 'SPX / Strikes', gridcolor: 'rgba(255,255,255,0.09)', zeroline: false },
+    yaxis2: { title: 'Credito $', overlaying: 'y', side: 'right', showgrid: false },
+    legend: { orientation: 'h', y: -0.22, x: 0 },
+    bargap: 0.55,
+    hovermode: 'x unified'
+  }, { responsive: true, displayModeBar: false, scrollZoom: false, doubleClick: false });
+}
+
+function renderMlShadowPanel(index, prediction, history = []) {
   if (!index || !prediction) {
     return `
       <div class="ml-shadow-panel">
@@ -6243,6 +6338,7 @@ function renderMlShadowPanel(index, prediction) {
   const modelStatus = training.modelStatus === 'trained' ? 'Entrenado' : 'Warmup';
   const action = decision.action || 'no_operar';
   const actionClass = action === 'no_operar' ? 'flat' : action.includes('call') ? 'call' : action.includes('put') ? 'put' : 'ic';
+  const historyRows = history.length ? history : [prediction];
   return `
     <div class="ml-shadow-panel">
       <div class="ml-shadow-head">
@@ -6274,6 +6370,11 @@ function renderMlShadowPanel(index, prediction) {
         <div class="ml-shadow-card">
           <span>Credito estimado</span>
           <strong>$${mlNum(decision.totalCreditUsd, 0)}</strong>
+          <small>Riesgo max. $${mlNum(decision.totalMaxRiskUsd, 0)}</small>
+        </div>
+        <div class="ml-shadow-card">
+          <span>R/R cartera</span>
+          <strong>${mlPct(decision.portfolioRiskRewardPct, 1)}</strong>
           <small>Benchmark $${mlNum(prediction.benchmark?.entryCreditUsd, 0)}</small>
         </div>
         <div class="ml-shadow-card">
@@ -6290,9 +6391,9 @@ function renderMlShadowPanel(index, prediction) {
       <div class="ml-shadow-selected">
         ${selected.length ? selected.map(row => `
           <div class="ml-shadow-wing ${row.side}">
-            <span>${row.side === 'call' ? 'Call vendida' : 'Put vendida'}</span>
-            <strong>${mlNum(row.strike, 0)}</strong>
-            <small>$${mlNum(row.wingCreditUsd, 0)} · ${mlPct((row.finalProbNoTouch || 0) * 100, 1)} no-touch · touch ${mlBoolLabel(row.labelTouched)}</small>
+            <span>${row.side === 'call' ? 'Call spread' : 'Put spread'} · ${row.protectionProfile || '-'}</span>
+            <strong>${mlNum(row.strike, 0)} / ${mlNum(row.buyStrike, 0)}</strong>
+            <small>${mlNum(row.spreadWidthPoints, 0)} pts · $${mlNum(row.wingCreditUsd, 0)} credito · riesgo $${mlNum(row.maxRiskUsd, 0)} · ${mlPct((row.finalProbNoTouch || 0) * 100, 1)} no-touch</small>
           </div>
         `).join('') : `
           <div class="ml-shadow-wing none">
@@ -6312,6 +6413,12 @@ function renderMlShadowPanel(index, prediction) {
         <span>LRR ${training.logisticStatus || '-'}</span>
         <span>Boost ${training.boostingStatus || '-'}</span>
       </div>
+      <div class="ml-shadow-commentary">${decision.commentary || ''}</div>
+      <div class="ml-shadow-history-panel">
+        <div class="ml-shadow-rank-title">Evolucion historica Shadow</div>
+        <div id="mlShadowHistoryChart" class="ml-shadow-chart"></div>
+      </div>
+      ${renderMlShadowHistoryTable(historyRows)}
       <div class="ml-shadow-ranking-grid">
         ${renderMlShadowCandidateTable('Ranking Calls', prediction.candidates?.topCalls || [])}
         ${renderMlShadowCandidateTable('Ranking Puts', prediction.candidates?.topPuts || [])}
@@ -6349,9 +6456,13 @@ async function renderMlLab() {
       loadMlVolSurfaceDataset().catch(() => ({ rows: [] })),
       loadMlShadowIndex().catch(() => null)
     ]);
-    const shadowPrediction = shadowIndex?.latestDate
-      ? await loadMlShadowPrediction(shadowIndex.latestDate).catch(() => null)
-      : null;
+    const shadowDates = (shadowIndex?.dates || []).slice(-80);
+    const shadowPredictions = shadowDates.length
+      ? (await Promise.all(shadowDates.map(date => loadMlShadowPrediction(date).catch(() => null)))).filter(Boolean)
+      : [];
+    const shadowPrediction = shadowPredictions.slice(-1)[0] || (
+      shadowIndex?.latestDate ? await loadMlShadowPrediction(shadowIndex.latestDate).catch(() => null) : null
+    );
     const rows = underlying.rows || [];
     const spotgammaRows = spotgamma.rows || [];
     const gexRows = gex.rows || [];
@@ -6375,7 +6486,10 @@ async function renderMlLab() {
       status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | GEX ${gx.rows || gexRows.length} filas | DEX ${dx.rows || dexRows.length} filas | Vol Surface ${vs.rows || volSurfaceRows.length} filas | Shadow ${sh.predictions || 0} predicciones | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
     }
     if (blocks) blocks.innerHTML = renderMlBlocks(index);
-    if (shadowPreview) shadowPreview.innerHTML = renderMlShadowPanel(shadowIndex, shadowPrediction);
+    if (shadowPreview) {
+      shadowPreview.innerHTML = renderMlShadowPanel(shadowIndex, shadowPrediction, shadowPredictions);
+      renderMlShadowHistoryChart('mlShadowHistoryChart', shadowPredictions);
+    }
     if (preview) preview.innerHTML = renderMlUnderlyingTable(rows);
     if (spotgammaPreview) spotgammaPreview.innerHTML = renderMlSpotGammaTable(spotgammaRows);
     if (gexPreview) gexPreview.innerHTML = renderMlGexTable(gexRows);
