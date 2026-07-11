@@ -41,6 +41,9 @@ jobs:
       - name: Generate ML dataset
         run: python ml_dataset.py
 
+      - name: Generate ML Shadow paper model
+        run: python ml_shadow.py
+
       - name: Generate signal and send scheduled card
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

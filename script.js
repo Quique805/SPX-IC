@@ -5793,10 +5793,46 @@ async function loadMlVolSurfaceDataset() {
   ]);
 }
 
+async function loadMlShadowIndex() {
+  return fetchFirstJson([
+    `data/ml-shadow/index.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/ml-shadow/index.json?t=${Date.now()}`
+  ]);
+}
+
+async function loadMlShadowPrediction(date) {
+  return fetchFirstJson([
+    `data/ml-shadow/predictions/${date}.json?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/ml-shadow/predictions/${date}.json?t=${Date.now()}`
+  ]);
+}
+
 function mlNum(value, digits = 2) {
   const n = Number(value);
   if (!Number.isFinite(n)) return '-';
   return n.toLocaleString('en-US', { maximumFractionDigits: digits, minimumFractionDigits: digits });
+}
+
+function mlPct(value, digits = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  return `${mlNum(n, digits)}%`;
+}
+
+function mlActionLabel(action) {
+  const labels = {
+    iron_condor: 'Iron Condor',
+    solo_call: 'Solo call',
+    solo_put: 'Solo put',
+    no_operar: 'No operar'
+  };
+  return labels[action] || action || '-';
+}
+
+function mlBoolLabel(value) {
+  if (value === true) return 'Si';
+  if (value === false) return 'No';
+  return '-';
 }
 
 function mlZoneLabel(zone) {
@@ -6139,17 +6175,163 @@ function renderMlVolSurfaceTable(rows) {
   `;
 }
 
+function renderMlShadowCandidateTable(title, rows) {
+  const list = (rows || []).slice(0, 10);
+  return `
+    <div class="ml-shadow-rank">
+      <div class="ml-shadow-rank-title">${title}</div>
+      <div class="ml-table-wrap compact">
+        <table class="ml-feature-table ml-shadow-table">
+          <thead>
+            <tr>
+              <th>Strike</th>
+              <th>Score</th>
+              <th>No touch</th>
+              <th>LRR</th>
+              <th>Boost</th>
+              <th>Credito</th>
+              <th>Dist.</th>
+              <th>IV</th>
+              <th>Delta</th>
+              <th>Seca</th>
+              <th>Touch</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map(row => `
+              <tr>
+                <td>${mlNum(row.strike, 0)}</td>
+                <td>${mlPct((row.finalScore || 0) * 100, 1)}</td>
+                <td>${mlPct((row.finalProbNoTouch || 0) * 100, 1)}</td>
+                <td>${mlPct((row.logisticProbNoTouch || 0) * 100, 1)}</td>
+                <td>${mlPct((row.boostingProbNoTouch || 0) * 100, 1)}</td>
+                <td>$${mlNum(row.wingCreditUsd, 0)}</td>
+                <td>${mlNum(row.distanceOpenPoints, 0)}</td>
+                <td>${mlNum(row.iv, 4)}</td>
+                <td>${mlNum(row.absDelta, 4)}</td>
+                <td>${mlBoolLabel(row.isDry)}</td>
+                <td>${mlBoolLabel(row.labelTouched)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function renderMlShadowPanel(index, prediction) {
+  if (!index || !prediction) {
+    return `
+      <div class="ml-shadow-panel">
+        <div class="ml-shadow-head">
+          <div>
+            <span class="ml-shadow-kicker">ML Shadow V1</span>
+            <h4>Paper mode pendiente</h4>
+            <p>No hay predicciones Shadow generadas todavia. Se crearan al ejecutar <code>python ml_shadow.py</code>.</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  const summary = index.summary || {};
+  const decision = prediction.decision || {};
+  const training = prediction.training || {};
+  const evaluation = prediction.evaluation || {};
+  const context = prediction.context || {};
+  const selected = decision.selectedWings || [];
+  const modelStatus = training.modelStatus === 'trained' ? 'Entrenado' : 'Warmup';
+  const action = decision.action || 'no_operar';
+  const actionClass = action === 'no_operar' ? 'flat' : action.includes('call') ? 'call' : action.includes('put') ? 'put' : 'ic';
+  return `
+    <div class="ml-shadow-panel">
+      <div class="ml-shadow-head">
+        <div>
+          <span class="ml-shadow-kicker">ML Shadow V1 · Paper mode</span>
+          <h4>Strike Scoring Model</h4>
+          <p>
+            Genera candidatos de 5 puntos, puntua cada ala con heuristica + LRR + boosting pequeno
+            y se autoevalua contra touch/no-touch. No cambia la senal real.
+          </p>
+        </div>
+        <div class="ml-shadow-live">
+          <span>Ultima prediccion</span>
+          <strong>${prediction.date || '-'}</strong>
+          <em>${modelStatus} · ${training.priorTrainingDays || 0} dias previos</em>
+        </div>
+      </div>
+      <div class="ml-shadow-summary">
+        <div class="ml-shadow-card main ${actionClass}">
+          <span>Decision Shadow</span>
+          <strong>${mlActionLabel(action)}</strong>
+          <small>Confianza ${decision.confidence || '-'}</small>
+        </div>
+        <div class="ml-shadow-card">
+          <span>No-touch medio</span>
+          <strong>${mlPct((decision.averageProbNoTouch || 0) * 100, 1)}</strong>
+          <small>Score ${mlPct((decision.averageScore || 0) * 100, 1)}</small>
+        </div>
+        <div class="ml-shadow-card">
+          <span>Credito estimado</span>
+          <strong>$${mlNum(decision.totalCreditUsd, 0)}</strong>
+          <small>Benchmark $${mlNum(prediction.benchmark?.entryCreditUsd, 0)}</small>
+        </div>
+        <div class="ml-shadow-card">
+          <span>WR Shadow</span>
+          <strong>${mlPct(summary.shadowNoTouchWr, 1)}</strong>
+          <small>${summary.evaluatedShadowSignals || 0} evaluadas</small>
+        </div>
+        <div class="ml-shadow-card">
+          <span>WR Benchmark</span>
+          <strong>${mlPct(summary.benchmarkNoTouchWr, 1)}</strong>
+          <small>${summary.benchmarkEvaluatedSignals || 0} evaluadas</small>
+        </div>
+      </div>
+      <div class="ml-shadow-selected">
+        ${selected.length ? selected.map(row => `
+          <div class="ml-shadow-wing ${row.side}">
+            <span>${row.side === 'call' ? 'Call vendida' : 'Put vendida'}</span>
+            <strong>${mlNum(row.strike, 0)}</strong>
+            <small>$${mlNum(row.wingCreditUsd, 0)} · ${mlPct((row.finalProbNoTouch || 0) * 100, 1)} no-touch · touch ${mlBoolLabel(row.labelTouched)}</small>
+          </div>
+        `).join('') : `
+          <div class="ml-shadow-wing none">
+            <span>Sin ala seleccionada</span>
+            <strong>No operar</strong>
+            <small>El scoring no encontro una relacion riesgo/prima suficiente.</small>
+          </div>
+        `}
+      </div>
+      <div class="ml-shadow-meta">
+        <span>Open ${mlNum(context.open, 2)}</span>
+        <span>Spot entrada ${mlNum(context.entrySpot, 2)}</span>
+        <span>CW ${mlNum(context.callWall, 0)}</span>
+        <span>PW ${mlNum(context.putWall, 0)}</span>
+        <span>Open % walls ${mlPct(context.openPctWalls, 1)}</span>
+        <span>Resultado no-touch ${mlBoolLabel(evaluation.noTouchAll)}</span>
+        <span>LRR ${training.logisticStatus || '-'}</span>
+        <span>Boost ${training.boostingStatus || '-'}</span>
+      </div>
+      <div class="ml-shadow-ranking-grid">
+        ${renderMlShadowCandidateTable('Ranking Calls', prediction.candidates?.topCalls || [])}
+        ${renderMlShadowCandidateTable('Ranking Puts', prediction.candidates?.topPuts || [])}
+      </div>
+    </div>
+  `;
+}
+
 async function renderMlLab() {
   const content = document.getElementById('researchDetailContent');
   if (!content) return;
   content.innerHTML = `
     <h3>Machine Learning Lab</h3>
     <p class="ml-lab-note">
-      Primer ladrillo del dataset maestro para ML. De momento no entrenamos modelos: construimos datos limpios,
-      diarios y ampliables para mejorar la venta de volatilidad 0DTE.
+      Dataset maestro y primera version Shadow del modelo. El Shadow trabaja en paper mode:
+      aprende, puntua candidatos y se autoevalua, pero no altera el benchmark ni envia senales reales.
     </p>
     <div id="mlDatasetStatus" class="ml-lab-note">Cargando dataset maestro...</div>
     <div id="mlBlocks"></div>
+    <div id="mlShadowPreview"></div>
     <div id="mlUnderlyingPreview"></div>
     <div id="mlSpotGammaPreview"></div>
     <div id="mlGexPreview"></div>
@@ -6159,13 +6341,17 @@ async function renderMlLab() {
 
   try {
     const index = await loadMlDatasetIndex();
-    const [underlying, spotgamma, gex, dex, volSurface] = await Promise.all([
+    const [underlying, spotgamma, gex, dex, volSurface, shadowIndex] = await Promise.all([
       loadMlUnderlyingDataset(),
       loadMlSpotGammaDataset().catch(() => ({ rows: [] })),
       loadMlGexDataset().catch(() => ({ rows: [] })),
       loadMlDexDataset().catch(() => ({ rows: [] })),
-      loadMlVolSurfaceDataset().catch(() => ({ rows: [] }))
+      loadMlVolSurfaceDataset().catch(() => ({ rows: [] })),
+      loadMlShadowIndex().catch(() => null)
     ]);
+    const shadowPrediction = shadowIndex?.latestDate
+      ? await loadMlShadowPrediction(shadowIndex.latestDate).catch(() => null)
+      : null;
     const rows = underlying.rows || [];
     const spotgammaRows = spotgamma.rows || [];
     const gexRows = gex.rows || [];
@@ -6173,6 +6359,7 @@ async function renderMlLab() {
     const volSurfaceRows = volSurface.rows || [];
     const status = document.getElementById('mlDatasetStatus');
     const blocks = document.getElementById('mlBlocks');
+    const shadowPreview = document.getElementById('mlShadowPreview');
     const preview = document.getElementById('mlUnderlyingPreview');
     const spotgammaPreview = document.getElementById('mlSpotGammaPreview');
     const gexPreview = document.getElementById('mlGexPreview');
@@ -6184,9 +6371,11 @@ async function renderMlLab() {
       const gx = index.blocks?.gex || {};
       const dx = index.blocks?.dex || {};
       const vs = index.blocks?.vol_surface || {};
-      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | GEX ${gx.rows || gexRows.length} filas | DEX ${dx.rows || dexRows.length} filas | Vol Surface ${vs.rows || volSurfaceRows.length} filas | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
+      const sh = shadowIndex?.summary || {};
+      status.textContent = `Dataset ${index.version || ''} | Subyacente ${sub.rows || rows.length} filas | SpotGamma ${sg.rows || spotgammaRows.length} filas | GEX ${gx.rows || gexRows.length} filas | DEX ${dx.rows || dexRows.length} filas | Vol Surface ${vs.rows || volSurfaceRows.length} filas | Shadow ${sh.predictions || 0} predicciones | ${sub.firstDate || '-'} -> ${sub.lastDate || '-'} | Actualizado ${index.lastUpdated || '-'}`;
     }
     if (blocks) blocks.innerHTML = renderMlBlocks(index);
+    if (shadowPreview) shadowPreview.innerHTML = renderMlShadowPanel(shadowIndex, shadowPrediction);
     if (preview) preview.innerHTML = renderMlUnderlyingTable(rows);
     if (spotgammaPreview) spotgammaPreview.innerHTML = renderMlSpotGammaTable(spotgammaRows);
     if (gexPreview) gexPreview.innerHTML = renderMlGexTable(gexRows);

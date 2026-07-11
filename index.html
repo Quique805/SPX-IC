@@ -3737,6 +3737,268 @@
       background: rgba(247,247,244,0.82);
     }
 
+    .ml-shadow-panel {
+      position: relative;
+      overflow: hidden;
+      margin: 20px 0;
+      border: 1px solid rgba(0,0,0,0.16);
+      border-radius: 30px;
+      padding: clamp(16px, 2.4vw, 26px);
+      color: #f7f7f3;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(124,255,154,0.2), transparent 16rem),
+        radial-gradient(circle at 82% 24%, rgba(96,165,250,0.18), transparent 18rem),
+        linear-gradient(145deg, #050505, #141414 52%, #262622);
+      box-shadow: 0 34px 92px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.16);
+    }
+
+    .ml-shadow-panel::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, transparent 0 20%, rgba(255,255,255,0.08) 20.2% 20.5%, transparent 20.75%),
+        linear-gradient(0deg, transparent 0 24%, rgba(255,255,255,0.05) 24.2% 24.5%, transparent 24.75%);
+      background-size: 132px 132px;
+      opacity: 0.28;
+      animation: mlGridDrift 20s linear infinite;
+    }
+
+    .ml-shadow-panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(110deg, transparent 0 42%, rgba(124,255,154,0.12) 48%, transparent 58%);
+      opacity: 0.7;
+      animation: mlSweep 6.6s ease-in-out infinite alternate;
+    }
+
+    .ml-shadow-panel > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .ml-shadow-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 18px;
+    }
+
+    .ml-shadow-kicker {
+      display: inline-flex;
+      margin-bottom: 10px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 999px;
+      padding: 7px 10px;
+      color: rgba(255,255,255,0.76);
+      background: rgba(255,255,255,0.08);
+      font-size: 0.66rem;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .ml-shadow-head h4 {
+      margin: 0 0 8px;
+      color: #fff;
+      font-size: clamp(2rem, 5vw, 4.2rem);
+      line-height: 0.9;
+      letter-spacing: -0.08em;
+    }
+
+    .ml-shadow-head p {
+      max-width: 760px;
+      margin: 0;
+      color: rgba(255,255,255,0.72);
+      line-height: 1.55;
+      font-size: 0.92rem;
+    }
+
+    .ml-shadow-live {
+      min-width: 190px;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 24px;
+      padding: 14px;
+      background: rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+      text-align: right;
+    }
+
+    .ml-shadow-live span,
+    .ml-shadow-card span,
+    .ml-shadow-wing span,
+    .ml-shadow-rank-title {
+      display: block;
+      color: rgba(255,255,255,0.62);
+      font-size: 0.66rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .ml-shadow-live strong {
+      display: block;
+      margin-top: 8px;
+      color: #fff;
+      font-size: 1.28rem;
+      letter-spacing: -0.03em;
+    }
+
+    .ml-shadow-live em {
+      display: block;
+      margin-top: 4px;
+      color: rgba(255,255,255,0.62);
+      font-size: 0.72rem;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .ml-shadow-summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .ml-shadow-card,
+    .ml-shadow-wing,
+    .ml-shadow-rank {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 22px;
+      background: rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    .ml-shadow-card {
+      padding: 13px;
+    }
+
+    .ml-shadow-card.main {
+      background: linear-gradient(145deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+    }
+
+    .ml-shadow-card.main.call {
+      border-color: rgba(124,255,154,0.32);
+    }
+
+    .ml-shadow-card.main.put {
+      border-color: rgba(255,116,116,0.34);
+    }
+
+    .ml-shadow-card.main.ic {
+      border-color: rgba(96,165,250,0.34);
+    }
+
+    .ml-shadow-card.main.flat {
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .ml-shadow-card strong {
+      display: block;
+      margin-top: 8px;
+      color: #fff;
+      font-size: clamp(1rem, 2vw, 1.45rem);
+      letter-spacing: -0.04em;
+    }
+
+    .ml-shadow-card small,
+    .ml-shadow-wing small {
+      display: block;
+      margin-top: 5px;
+      color: rgba(255,255,255,0.64);
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+
+    .ml-shadow-selected {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .ml-shadow-wing {
+      padding: 14px;
+    }
+
+    .ml-shadow-wing strong {
+      display: block;
+      margin-top: 6px;
+      color: #fff;
+      font-size: clamp(1.7rem, 4vw, 3.2rem);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
+    }
+
+    .ml-shadow-wing.call strong {
+      color: #7CFF9A;
+    }
+
+    .ml-shadow-wing.put strong {
+      color: #ff8f8f;
+    }
+
+    .ml-shadow-wing.none {
+      grid-column: 1 / -1;
+    }
+
+    .ml-shadow-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin: 14px 0;
+    }
+
+    .ml-shadow-meta span {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 999px;
+      padding: 7px 9px;
+      color: rgba(255,255,255,0.74);
+      background: rgba(255,255,255,0.07);
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+    }
+
+    .ml-shadow-ranking-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .ml-shadow-rank {
+      overflow: hidden;
+    }
+
+    .ml-shadow-rank-title {
+      padding: 13px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .ml-table-wrap.compact {
+      max-height: 360px;
+    }
+
+    .ml-shadow-table th {
+      color: #111;
+      background: rgba(255,255,255,0.92);
+    }
+
+    .ml-shadow-table td {
+      color: rgba(255,255,255,0.84);
+      background: rgba(255,255,255,0.06);
+      border-bottom-color: rgba(255,255,255,0.08);
+    }
+
+    .ml-shadow-table tr:nth-child(even) td {
+      background: rgba(255,255,255,0.1);
+    }
+
     .gex-empty {
       padding: 22px;
       border-radius: 20px;
@@ -3881,6 +4143,15 @@
       }
       .ml-block-grid {
         grid-template-columns: 1fr;
+      }
+      .ml-shadow-head,
+      .ml-shadow-summary,
+      .ml-shadow-selected,
+      .ml-shadow-ranking-grid {
+        grid-template-columns: 1fr;
+      }
+      .ml-shadow-live {
+        text-align: left;
       }
       .dev-notes-launcher {
         top: 10px;
@@ -4642,6 +4913,6 @@
     </section>
   </main>
 
-  <script src="script.js?v=20260711-ml-vol-surface-v1"></script>
+  <script src="script.js?v=20260711-ml-shadow-v1"></script>
 </body>
 </html>
