@@ -1,0 +1,55 @@
+{
+  "date": "2026-07-16",
+  "createdAt": "2026-07-16T14:07:33.200305+00:00",
+  "sourceCloseDate": "2026-07-16",
+  "levelsSource": "SpotGamma manual",
+  "emails": {
+    "entry": {
+      "id": "d1fe9c40-f57c-4578-b54d-00f73db49232",
+      "sentAt": "2026-07-16T14:07:33.517057+00:00"
+    }
+  },
+  "status": "active",
+  "opex": false,
+  "capitalPercent": 100,
+  "spreadWidth": 20,
+  "entryCredit": 0.1,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7559.0,
+    "open_pct": 86.33333333333333,
+    "call_wall": 7600.0,
+    "put_wall": 7300.0,
+    "sell_call": 7615.0,
+    "sell_put": 7300.0,
+    "adjustment": "Call Wall +15",
+    "skipped_wings": [
+      {
+        "wing": "put",
+        "reason": "NO COMPENSA",
+        "credit": -0.05,
+        "creditUsd": -5.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7300.0,
+        "buyStrike": 7280.0
+      }
+    ]
+  },
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7615.0,
+      "entryBid": 0.25,
+      "entryAsk": 0.3
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7635.0,
+      "entryBid": 0.1,
+      "entryAsk": 0.15
+    }
+  }
+}
