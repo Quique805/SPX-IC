@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-07-16T14:07:19.131037+00:00",
+  "generatedAt": "2026-07-16T20:32:15.117108+00:00",
   "date": "2026-07-15",
   "targetSession": "2026-07-16",
   "sourceChain": "data/chains-close/2026-07-15.json",
@@ -9854,15 +9854,15 @@
           "weightedError": 110.0
         },
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 18.0,
           "sellCall": 7600.0,
           "sellPut": 7515.0,
           "adjustment": "Put Wall -35",
           "upperTouch": false,
-          "lowerTouch": false,
-          "high": 7561.0,
-          "low": 7532.0
+          "lowerTouch": true,
+          "high": 7571.0,
+          "low": 7504.0
         }
       },
       "multi": {
@@ -9874,15 +9874,15 @@
           "weightedError": 102.5
         },
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 18.0,
           "sellCall": 7600.0,
           "sellPut": 7515.0,
           "adjustment": "Put Wall -35",
           "upperTouch": false,
-          "lowerTouch": false,
-          "high": 7561.0,
-          "low": 7532.0
+          "lowerTouch": true,
+          "high": 7571.0,
+          "low": 7504.0
         }
       }
     },
@@ -9896,15 +9896,15 @@
           "weightedError": 110.0
         },
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 18.0,
           "sellCall": 7600.0,
           "sellPut": 7515.0,
           "adjustment": "Put Wall -35",
           "upperTouch": false,
-          "lowerTouch": false,
-          "high": 7561.0,
-          "low": 7532.0
+          "lowerTouch": true,
+          "high": 7571.0,
+          "low": 7504.0
         }
       },
       "multi": {
@@ -9916,15 +9916,15 @@
           "weightedError": 102.5
         },
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 18.0,
           "sellCall": 7600.0,
           "sellPut": 7515.0,
           "adjustment": "Put Wall -35",
           "upperTouch": false,
-          "lowerTouch": false,
-          "high": 7561.0,
-          "low": 7532.0
+          "lowerTouch": true,
+          "high": 7571.0,
+          "low": 7504.0
         }
       }
     },
@@ -9945,8 +9945,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7561.0,
-          "low": 7532.0
+          "high": 7571.0,
+          "low": 7504.0
         }
       },
       "multi": {
@@ -9965,8 +9965,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7561.0,
-          "low": 7532.0
+          "high": 7571.0,
+          "low": 7504.0
         }
       }
     }
