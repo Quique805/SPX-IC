@@ -1,7 +1,7 @@
 {
   "version": "ml-shadow-v1.1",
   "date": "2026-07-17",
-  "generatedAt": "2026-07-17T14:07:31.918838+00:00",
+  "generatedAt": "2026-07-17T20:32:34.586423+00:00",
   "mode": "paper_shadow",
   "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
   "training": {
@@ -22,9 +22,9 @@
     "entryChain": "data/chains/2026-07-17.json",
     "entrySpot": 7457.6099,
     "open": 7448.0,
-    "high": 7489.0,
+    "high": 7498.0,
     "low": 7431.0,
-    "close": 7488.0,
+    "close": 7458.0,
     "callWall": 7600.0,
     "putWall": 7300.0,
     "openPctWalls": 49.333333333333336,
@@ -32,14 +32,33 @@
     "priorUnderlyingFeatureDate": "2026-07-16"
   },
   "benchmark": {
-    "status": null,
+    "status": "no_trade",
     "entryCredit": null,
     "entryCreditUsd": null,
     "callStrike": null,
     "putStrike": null,
-    "skippedWings": [],
-    "openPct": null,
-    "adjustment": null
+    "skippedWings": [
+      {
+        "wing": "call",
+        "reason": "NO COMPENSA",
+        "credit": 0.04999999999999999,
+        "creditUsd": 4.999999999999999,
+        "thresholdUsd": 5,
+        "sellStrike": 7600.0,
+        "buyStrike": 7620.0
+      },
+      {
+        "wing": "put",
+        "reason": "NO COMPENSA",
+        "credit": 0.04999999999999999,
+        "creditUsd": 4.999999999999999,
+        "thresholdUsd": 5,
+        "sellStrike": 7300.0,
+        "buyStrike": 7280.0
+      }
+    ],
+    "openPct": 49.333333333333336,
+    "adjustment": "Sin ajuste"
   },
   "decision": {
     "action": "iron_condor",
@@ -130,7 +149,7 @@
     "available": true,
     "noTouchAll": true,
     "selectedTouchCount": 0,
-    "high": 7489.0,
+    "high": 7498.0,
     "low": 7431.0,
     "benchmarkNoTouch": null
   },
