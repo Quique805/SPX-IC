@@ -1,7 +1,7 @@
 {
   "version": "ml-shadow-v1.1",
   "date": "2026-07-20",
-  "generatedAt": "2026-07-20T14:07:35.340889+00:00",
+  "generatedAt": "2026-07-20T20:32:34.671654+00:00",
   "mode": "paper_shadow",
   "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
   "training": {
@@ -23,8 +23,8 @@
     "entrySpot": 7502.2998,
     "open": 7489.0,
     "high": 7513.0,
-    "low": 7480.0,
-    "close": 7480.0,
+    "low": 7441.0,
+    "close": 7443.0,
     "callWall": 7600.0,
     "putWall": 7300.0,
     "openPctWalls": 63.0,
@@ -32,14 +32,33 @@
     "priorUnderlyingFeatureDate": "2026-07-17"
   },
   "benchmark": {
-    "status": null,
+    "status": "no_trade",
     "entryCredit": null,
     "entryCreditUsd": null,
     "callStrike": null,
     "putStrike": null,
-    "skippedWings": [],
-    "openPct": null,
-    "adjustment": null
+    "skippedWings": [
+      {
+        "wing": "call",
+        "reason": "NO COMPENSA",
+        "credit": 0.0,
+        "creditUsd": 0.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7600.0,
+        "buyStrike": 7620.0
+      },
+      {
+        "wing": "put",
+        "reason": "NO COMPENSA",
+        "credit": 0.0,
+        "creditUsd": 0.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7300.0,
+        "buyStrike": 7280.0
+      }
+    ],
+    "openPct": 63.0,
+    "adjustment": "Sin ajuste"
   },
   "decision": {
     "action": "iron_condor",
@@ -111,8 +130,8 @@
         "boostingProbNoTouch": 0.8436844004422551,
         "finalProbNoTouch": 0.6419332947803874,
         "finalScore": 0.5934227475408862,
-        "labelTouched": false,
-        "labelNoTouch": true,
+        "labelTouched": true,
+        "labelNoTouch": false,
         "gexDistanceSideConsensus": 0.0,
         "dexDistanceSideWall": 0.0
       }
@@ -128,10 +147,10 @@
   },
   "evaluation": {
     "available": true,
-    "noTouchAll": true,
-    "selectedTouchCount": 0,
+    "noTouchAll": false,
+    "selectedTouchCount": 1,
     "high": 7513.0,
-    "low": 7480.0,
+    "low": 7441.0,
     "benchmarkNoTouch": null
   },
   "candidates": {
@@ -818,8 +837,8 @@
         "boostingProbNoTouch": 0.8436844004422551,
         "finalProbNoTouch": 0.6419332947803874,
         "finalScore": 0.5934227475408862,
-        "labelTouched": false,
-        "labelNoTouch": true,
+        "labelTouched": true,
+        "labelNoTouch": false,
         "gexDistanceSideConsensus": 0.0,
         "dexDistanceSideWall": 0.0
       },
@@ -1648,8 +1667,8 @@
         "boostingProbNoTouch": 0.8436844004422551,
         "finalProbNoTouch": 0.6419332947803874,
         "finalScore": 0.5934227475408862,
-        "labelTouched": false,
-        "labelNoTouch": true,
+        "labelTouched": true,
+        "labelNoTouch": false,
         "gexDistanceSideConsensus": 0.0,
         "dexDistanceSideWall": 0.0
       },
