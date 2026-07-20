@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-07-17T20:32:18.047343+00:00",
+  "generatedAt": "2026-07-20T13:32:18.254179+00:00",
   "date": "2026-07-16",
   "targetSession": "2026-07-17",
   "sourceChain": "data/chains-close/2026-07-16.json",
@@ -10242,10 +10242,10 @@
     "spotgamma": {
       "callWall": 7600.0,
       "putWall": 7300.0,
-      "gammaFlip": 7500.0,
+      "gammaFlip": 7530.0,
       "volTrigger": 7500.0,
       "source": "SpotGamma manual",
-      "updatedAt": "2026-07-17T06:51:08.520Z"
+      "updatedAt": "2026-07-20T08:32:11.294Z"
     }
   },
   "diagnostics": {
@@ -10254,9 +10254,9 @@
         "spotgammaError": {
           "callWall": 25.0,
           "putWall": 225.0,
-          "gammaFlip": 75.0,
+          "gammaFlip": 45.0,
           "volTrigger": 50.0,
-          "weightedError": 106.25
+          "weightedError": 101.75
         },
         "operation": {
           "status": "no_trade",
@@ -10268,9 +10268,9 @@
         "spotgammaError": {
           "callWall": 25.0,
           "putWall": 225.0,
-          "gammaFlip": 50.0,
+          "gammaFlip": 20.0,
           "volTrigger": 50.0,
-          "weightedError": 102.5
+          "weightedError": 98.0
         },
         "operation": {
           "status": "no_trade",
@@ -10284,9 +10284,9 @@
         "spotgammaError": {
           "callWall": 25.0,
           "putWall": 225.0,
-          "gammaFlip": 75.0,
+          "gammaFlip": 45.0,
           "volTrigger": 50.0,
-          "weightedError": 106.25
+          "weightedError": 101.75
         },
         "operation": {
           "status": "no_trade",
@@ -10298,9 +10298,9 @@
         "spotgammaError": {
           "callWall": 50.0,
           "putWall": 225.0,
-          "gammaFlip": 50.0,
+          "gammaFlip": 20.0,
           "volTrigger": 50.0,
-          "weightedError": 111.25
+          "weightedError": 106.75
         },
         "operation": {
           "status": "no_trade",
@@ -10314,9 +10314,9 @@
         "spotgammaError": {
           "callWall": 25.0,
           "putWall": 75.0,
-          "gammaFlip": 25.0,
+          "gammaFlip": 5.0,
           "volTrigger": 0.0,
-          "weightedError": 38.75
+          "weightedError": 35.75
         },
         "operation": {
           "status": "win",
@@ -10334,9 +10334,9 @@
         "spotgammaError": {
           "callWall": 0.0,
           "putWall": 75.0,
-          "gammaFlip": 0.0,
+          "gammaFlip": 30.0,
           "volTrigger": 0.0,
-          "weightedError": 26.25
+          "weightedError": 30.75
         },
         "operation": {
           "status": "win",
