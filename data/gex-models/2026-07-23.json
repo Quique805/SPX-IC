@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-07-23T20:32:18.536458+00:00",
+  "generatedAt": "2026-07-24T13:32:20.155011+00:00",
   "date": "2026-07-23",
   "targetSession": "2026-07-24",
   "sourceChain": "data/chains-close/2026-07-23.json",
@@ -10215,54 +10215,121 @@
     }
   },
   "reference": {
-    "spotgamma": null
+    "spotgamma": {
+      "callWall": 7600.0,
+      "putWall": 7300.0,
+      "gammaFlip": 7450.0,
+      "volTrigger": 7500.0,
+      "source": "SpotGamma manual",
+      "updatedAt": "2026-07-24T07:11:35.447Z"
+    }
   },
   "diagnostics": {
     "pure_gex": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 100.0,
+          "putWall": 100.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 0.0,
+          "weightedError": 77.5
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 6.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 100.0,
+          "putWall": 0.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 0.0,
+          "weightedError": 42.5
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 53.0,
+          "sellCall": 7500.0,
+          "sellPut": 7300.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7415.0,
+          "low": 7406.0
         }
       }
     },
     "liquidity_weighted": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 100.0,
+          "putWall": 100.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 0.0,
+          "weightedError": 77.5
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 6.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 100.0,
+          "putWall": 100.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 0.0,
+          "weightedError": 77.5
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 6.0
         }
       }
     },
     "spotgamma_fit": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 50.0,
+          "putWall": 50.0,
+          "gammaFlip": 0.0,
+          "volTrigger": 50.0,
+          "weightedError": 42.5
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 52.0,
+          "sellCall": 7550.0,
+          "sellPut": 7250.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7415.0,
+          "low": 7406.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 50.0,
+          "putWall": 50.0,
+          "gammaFlip": 25.0,
+          "volTrigger": 50.0,
+          "weightedError": 46.25
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 52.0,
+          "sellCall": 7550.0,
+          "sellPut": 7250.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7415.0,
+          "low": 7406.0
         }
       }
     }
