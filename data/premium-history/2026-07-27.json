@@ -1,0 +1,37 @@
+{
+  "date": "2026-07-27",
+  "status": "no_trade",
+  "reason": "CALL: NO COMPENSA (-5.00 USD); PUT: NO COMPENSA (-5.00 USD)",
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7464.0,
+    "open_pct": 54.666666666666664,
+    "call_wall": 7600.0,
+    "put_wall": 7300.0,
+    "sell_call": 7600.0,
+    "sell_put": 7300.0,
+    "adjustment": "Sin ajuste",
+    "skipped_wings": [
+      {
+        "wing": "call",
+        "reason": "NO COMPENSA",
+        "credit": -0.05,
+        "creditUsd": -5.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7600.0,
+        "buyStrike": 7620.0
+      },
+      {
+        "wing": "put",
+        "reason": "NO COMPENSA",
+        "credit": -0.05000000000000002,
+        "creditUsd": -5.000000000000002,
+        "thresholdUsd": 5,
+        "sellStrike": 7300.0,
+        "buyStrike": 7280.0
+      }
+    ]
+  },
+  "snapshots": []
+}
