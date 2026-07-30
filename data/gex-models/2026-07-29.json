@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-07-30T14:07:26.863512+00:00",
+  "generatedAt": "2026-07-30T20:32:22.821721+00:00",
   "date": "2026-07-29",
   "targetSession": "2026-07-30",
   "sourceChain": "data/chains-close/2026-07-29.json",
@@ -10134,8 +10134,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7415.0,
-          "low": 7372.0
+          "high": 7449.0,
+          "low": 7371.0
         }
       },
       "multi": {
@@ -10154,8 +10154,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7415.0,
-          "low": 7372.0
+          "high": 7449.0,
+          "low": 7371.0
         }
       }
     },
@@ -10176,8 +10176,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7415.0,
-          "low": 7372.0
+          "high": 7449.0,
+          "low": 7371.0
         }
       },
       "multi": {
@@ -10212,8 +10212,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7415.0,
-          "low": 7372.0
+          "high": 7449.0,
+          "low": 7371.0
         }
       },
       "multi": {
@@ -10225,15 +10225,15 @@
           "weightedError": 128.75
         },
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 87.27272727272727,
           "sellCall": 7440.0,
           "sellPut": 7150.0,
           "adjustment": "Call Wall +15",
-          "upperTouch": false,
+          "upperTouch": true,
           "lowerTouch": false,
-          "high": 7415.0,
-          "low": 7372.0
+          "high": 7449.0,
+          "low": 7371.0
         }
       }
     }
