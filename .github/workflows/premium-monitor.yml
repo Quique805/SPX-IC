@@ -2,9 +2,10 @@ name: SPX Premium Monitor
 
 on:
   schedule:
-    # Fallback GitHub cron. Preferred trigger: repository_dispatch from cron-job.org
-    # every 15 minutes. The Python script restricts execution to 16:00-22:59 Madrid.
-    - cron: '*/15 14-21 * * 1-5'
+    # Fallback GitHub cron. Preferred trigger: repository_dispatch from cron-job.org.
+    # Every 5 minutes; the Python script restricts execution to 16:00-22:59 Madrid
+    # and skips duplicates captured less than 4 minutes apart.
+    - cron: '*/5 14-21 * * 1-5'
   repository_dispatch:
     types: [premium_monitor]
   workflow_dispatch:

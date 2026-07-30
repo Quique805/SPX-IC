@@ -7333,11 +7333,23 @@ async function renderGammaSummaryPanel() {
   if (first && last) generateGammaSummary();
 }
 
-async function fetchPremiumHistoryIndex() {
-  const candidates = [
-    `data/premium-history-index.json?t=${Date.now()}`,
-    `${GITHUB_RAW_BASE}/data/premium-history-index.json?t=${Date.now()}`
+function premiumHistoryPaths(source, date) {
+  const folder = source === 'ml-shadow' ? 'premium-history-ml-shadow' : 'premium-history';
+  const index = source === 'ml-shadow' ? 'premium-history-ml-shadow-index.json' : 'premium-history-index.json';
+  if (date) {
+    return [
+      `data/${folder}/${date}.json?t=${Date.now()}`,
+      `${GITHUB_RAW_BASE}/data/${folder}/${date}.json?t=${Date.now()}`
+    ];
+  }
+  return [
+    `data/${index}?t=${Date.now()}`,
+    `${GITHUB_RAW_BASE}/data/${index}?t=${Date.now()}`
   ];
+}
+
+async function fetchPremiumHistoryIndex(source = 'benchmark') {
+  const candidates = premiumHistoryPaths(source);
   for (const url of candidates) {
     try {
       const response = await fetch(url);
@@ -7347,11 +7359,8 @@ async function fetchPremiumHistoryIndex() {
   return { dates: [] };
 }
 
-async function fetchPremiumHistory(date) {
-  const candidates = [
-    `data/premium-history/${date}.json?t=${Date.now()}`,
-    `${GITHUB_RAW_BASE}/data/premium-history/${date}.json?t=${Date.now()}`
-  ];
+async function fetchPremiumHistory(date, source = 'benchmark') {
+  const candidates = premiumHistoryPaths(source, date);
   let lastError = null;
   for (const url of candidates) {
     try {
@@ -7392,12 +7401,13 @@ function premiumLegLabel(name, leg) {
   return `${action} ${type} ${fmtGammaNum(leg.strike, 0)}`;
 }
 
-async function drawPremiumHistory(date) {
+async function drawPremiumHistory(date, source = 'benchmark') {
   const output = document.getElementById('premiumHistoryOutput');
   if (!output) return;
-  output.innerHTML = '<div style="padding:14px;text-align:center">Cargando evolución de primas…</div>';
+  const sourceLabel = source === 'ml-shadow' ? 'ML Shadow' : 'Benchmark';
+  output.innerHTML = `<div style="padding:14px;text-align:center">Cargando evolucion de primas ${sourceLabel}...</div>`;
   try {
-    const history = await fetchPremiumHistory(date);
+    const history = await fetchPremiumHistory(date, source);
     if (history.status !== 'active') {
       output.innerHTML = `<div style="padding:14px;background:#ececec;border-radius:6px;color:#666">
         <b>${date} · No operable</b><br>${history.reason || 'Sesión excluida por los filtros de riesgo.'}
@@ -7468,8 +7478,9 @@ async function renderPremiumHistoryPanel() {
   const panel = document.getElementById('premiumHistoryPanel');
   if (!panel) return;
   panel.innerHTML = '<div style="padding:14px;text-align:center">Buscando sesiones monitorizadas…</div>';
-  const index = await fetchPremiumHistoryIndex();
-  const dates = (index.dates || []).slice().sort().reverse();
+  const index = await fetchPremiumHistoryIndex('benchmark');
+  const shadowIndex = await fetchPremiumHistoryIndex('ml-shadow');
+  const dates = Array.from(new Set([...(index.dates || []), ...(shadowIndex.dates || [])])).sort().reverse();
   if (!dates.length) {
     panel.innerHTML = `<div style="padding:14px;background:var(--blue-50);border:1px solid var(--blue-200);border-radius:6px;color:var(--ink-soft)">
       Todavía no hay sesiones monitorizadas. El histórico empezará a generarse automáticamente en la próxima sesión de mercado.
@@ -7478,6 +7489,12 @@ async function renderPremiumHistoryPanel() {
   }
   panel.innerHTML = `
     <div class="premium-history-controls">
+      <label>Modelo
+        <select id="premiumHistorySource">
+          <option value="benchmark">Benchmark SpotGamma</option>
+          <option value="ml-shadow">ML Shadow</option>
+        </select>
+      </label>
       <label>Sesión
         <select id="premiumHistoryDate">${dates.map(date => `<option value="${date}">${date}</option>`).join('')}</select>
       </label>
@@ -7485,8 +7502,10 @@ async function renderPremiumHistoryPanel() {
     </div>
     <div id="premiumHistoryOutput"></div>`;
   const select = document.getElementById('premiumHistoryDate');
-  document.getElementById('loadPremiumHistoryBtn').addEventListener('click', () => drawPremiumHistory(select.value));
-  drawPremiumHistory(select.value);
+  const sourceSelect = document.getElementById('premiumHistorySource');
+  document.getElementById('loadPremiumHistoryBtn').addEventListener('click', () => drawPremiumHistory(select.value, sourceSelect.value));
+  sourceSelect.addEventListener('change', () => drawPremiumHistory(select.value, sourceSelect.value));
+  drawPremiumHistory(select.value, sourceSelect.value);
 }
 
 function getGammaSessionRow(chainDate) {
