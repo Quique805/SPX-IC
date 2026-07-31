@@ -1,6 +1,6 @@
 {
   "version": "ml-shadow-v1.1",
-  "lastUpdated": "2026-07-31T14:08:13.294972+00:00",
+  "lastUpdated": "2026-07-31T20:33:04.108332+00:00",
   "mode": "paper_shadow",
   "description": "ML Shadow V1: candidate generator + heuristic + regularized logistic regression + small gradient boosting. No production signals are changed.",
   "objective": "Improve operate/no-operate and wing/strike selection for 0DTE volatility selling.",
@@ -94,10 +94,10 @@
     "shadowSignals": 23,
     "shadowNoTrade": 3,
     "evaluatedShadowSignals": 23,
-    "shadowNoTouchWins": 19,
-    "shadowNoTouchWr": 82.6086956521739,
-    "benchmarkEvaluatedSignals": 18,
-    "benchmarkNoTouchWr": 83.33333333333334,
+    "shadowNoTouchWins": 18,
+    "shadowNoTouchWr": 78.26086956521739,
+    "benchmarkEvaluatedSignals": 19,
+    "benchmarkNoTouchWr": 84.21052631578947,
     "averageShadowCreditUsd": 140.2173913043478,
     "averageShadowMaxRiskUsd": 2294.5652173913045,
     "averageShadowRiskRewardPct": 7.107088278868089
