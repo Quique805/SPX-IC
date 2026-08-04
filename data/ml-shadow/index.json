@@ -1,8 +1,9 @@
 {
-  "version": "ml-shadow-v1.1",
-  "lastUpdated": "2026-08-04T13:33:10.188024+00:00",
+  "version": "ml-shadow-v1.2",
+  "lastUpdated": "2026-08-04T14:42:12.489800+00:00",
   "mode": "paper_shadow",
   "description": "ML Shadow V1: candidate generator + heuristic + regularized logistic regression + small gradient boosting. No production signals are changed.",
+  "spotgammaDependency": "optional; when manual SpotGamma is missing, Shadow runs autonomous mode from GEX/DEX/Vol Surface/underlying/options chain.",
   "objective": "Improve operate/no-operate and wing/strike selection for 0DTE volatility selling.",
   "dependencies": "pure_python_no_external_ml_libraries",
   "files": {
@@ -26,6 +27,7 @@
       "side_call",
       "distance_open_points",
       "distance_open_pct",
+      "spotgamma_available",
       "distance_wall_points",
       "distance_benchmark_points",
       "wall_range",
@@ -86,14 +88,15 @@
     "2026-07-29",
     "2026-07-30",
     "2026-07-31",
-    "2026-08-03"
+    "2026-08-03",
+    "2026-08-04"
   ],
-  "latestDate": "2026-08-03",
-  "latestFile": "data/ml-shadow/predictions/2026-08-03.json",
+  "latestDate": "2026-08-04",
+  "latestFile": "data/ml-shadow/predictions/2026-08-04.json",
   "summary": {
-    "predictions": 27,
+    "predictions": 28,
     "shadowSignals": 23,
-    "shadowNoTrade": 4,
+    "shadowNoTrade": 5,
     "evaluatedShadowSignals": 23,
     "shadowNoTouchWins": 18,
     "shadowNoTouchWr": 78.26086956521739,
@@ -101,6 +104,6 @@
     "benchmarkNoTouchWr": 80.0,
     "averageShadowCreditUsd": 140.2173913043478,
     "averageShadowMaxRiskUsd": 2294.5652173913045,
-    "averageShadowRiskRewardPct": 7.107088278868089
+    "averageShadowRiskRewardPct": 7.10708827886809
   }
 }

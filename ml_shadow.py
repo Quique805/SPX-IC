@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 from fetch_daily import DATA_DIR, load_json_safe, save_json
 
-VERSION = "ml-shadow-v1.1"
+VERSION = "ml-shadow-v1.2"
 STRIKE_STEP = 5
 SPREAD_WIDTH = 20
 PROTECTION_WIDTHS = (5, 10, 15, 20, 25, 30, 40)
@@ -25,6 +25,7 @@ MIN_TRAIN_DAYS = 8
 
 ML_DATASET_DIR = os.path.join(DATA_DIR, "ml-dataset")
 CHAINS_DIR = os.path.join(DATA_DIR, "chains")
+INTRADAY_CHAINS_INDEX = os.path.join(DATA_DIR, "chains-intraday-index.json")
 SIGNALS_DIR = os.path.join(DATA_DIR, "signals")
 OUT_DIR = os.path.join(DATA_DIR, "ml-shadow")
 OUT_PREDICTIONS_DIR = os.path.join(OUT_DIR, "predictions")
@@ -34,6 +35,7 @@ FEATURE_COLUMNS = [
     "side_call",
     "distance_open_points",
     "distance_open_pct",
+    "spotgamma_available",
     "distance_wall_points",
     "distance_benchmark_points",
     "wall_range",
@@ -135,6 +137,25 @@ def load_rows(name, key="date"):
         if row_key:
             out[row_key] = row
     return out
+
+
+def load_entry_chain(date_str, intraday_index=None):
+    chain_path = os.path.join(CHAINS_DIR, f"{date_str}.json")
+    chain = load_json_safe(chain_path)
+    if chain and chain.get("expirations"):
+        return chain, f"data/chains/{date_str}.json"
+
+    intraday_index = intraday_index or {}
+    captures = ((intraday_index.get("byDate") or {}).get(date_str) or [])
+    captures = sorted(captures, key=lambda item: item.get("capturedAt") or item.get("file") or "")
+    for capture in captures:
+        rel_file = capture.get("file")
+        if not rel_file:
+            continue
+        fallback = load_json_safe(os.path.join(DATA_DIR, os.path.relpath(rel_file, "data")))
+        if fallback and fallback.get("expirations"):
+            return fallback, rel_file
+    return None, None
 
 
 def option_expiration(chain, date_str):
@@ -376,15 +397,35 @@ def collect_level_values(gex, dex, side):
     return {v for v in levels if v is not None}
 
 
-def candidate_strikes(spotgamma, gex, dex, side):
+def autonomous_spot(context):
+    spotgamma = context.get("spotgamma") or {}
+    underlying = context.get("underlying") or {}
+    chain = context.get("chain") or {}
+    return (
+        safe_num(spotgamma.get("open"))
+        or safe_num(underlying.get("open"))
+        or safe_num(chain.get("spot"))
+        or safe_num(underlying.get("close"))
+    )
+
+
+def candidate_strikes(spotgamma, gex, dex, side, spot=None):
     cw = safe_num(spotgamma.get("callWall"))
     pw = safe_num(spotgamma.get("putWall"))
+    spot = safe_num(spot)
+    base = set()
     if side == "call":
-        base = set(strike_range(cw - 100, cw + 25))
-        base.add(round_step(cw))
+        if cw is not None:
+            base |= set(strike_range(cw - 100, cw + 25))
+            base.add(round_step(cw))
+        elif spot is not None:
+            base |= set(strike_range(spot + 20, spot + 220))
     else:
-        base = set(strike_range(pw - 25, pw + 100))
-        base.add(round_step(pw))
+        if pw is not None:
+            base |= set(strike_range(pw - 25, pw + 100))
+            base.add(round_step(pw))
+        elif spot is not None:
+            base |= set(strike_range(spot - 220, spot - 20))
     base |= collect_level_values(gex, dex, side)
     return sorted(s for s in base if s is not None)
 
@@ -597,14 +638,15 @@ class SmallGradientBoosting:
 def build_candidate(date_str, side, strike, context):
     underlying = context["underlying"]
     prior_underlying = context.get("priorUnderlying") or underlying
-    spotgamma = context["spotgamma"]
+    spotgamma = context.get("spotgamma") or {}
+    spotgamma_available = bool(context.get("spotgammaAvailable"))
     gex = context["gex"]
     dex = context["dex"]
     vol_surface = context["vol_surface"]
     chain = context["chain"]
     benchmark = context["benchmark"]
 
-    open_price = safe_num(spotgamma.get("open")) or safe_num(underlying.get("open")) or safe_num(chain.get("spot"))
+    open_price = autonomous_spot(context)
     high = safe_num(underlying.get("high"))
     low = safe_num(underlying.get("low"))
     wall = safe_num(spotgamma.get("callWall" if side == "call" else "putWall"))
@@ -646,9 +688,11 @@ def build_candidate(date_str, side, strike, context):
         "distance_open_points": distance_open,
         "distanceOpenPct": distance_open / open_price * 100 if open_price else None,
         "distance_open_pct": distance_open / open_price * 100 if open_price else None,
+        "spotgammaAvailable": spotgamma_available,
+        "spotgamma_available": 1 if spotgamma_available else 0,
         "wall": wall,
         "distanceWallPoints": abs(strike - wall) if wall is not None else None,
-        "distance_wall_points": abs(strike - wall) if wall is not None else None,
+        "distance_wall_points": abs(strike - wall) if wall is not None else 999.0,
         "distanceBenchmarkPoints": abs(strike - bench_strike) if bench_strike is not None else None,
         "distance_benchmark_points": abs(strike - bench_strike) if bench_strike is not None else 999.0,
         "wall_range": safe_num(spotgamma.get("wallRange")),
@@ -705,9 +749,9 @@ def build_candidate(date_str, side, strike, context):
 
 def build_candidates_for_date(date_str, context):
     candidates = []
-    open_price = safe_num(context["spotgamma"].get("open")) or safe_num(context["underlying"].get("open")) or safe_num(context["chain"].get("spot"))
+    open_price = autonomous_spot(context)
     for side in ("call", "put"):
-        for strike in candidate_strikes(context["spotgamma"], context["gex"], context["dex"], side):
+        for strike in candidate_strikes(context.get("spotgamma") or {}, context["gex"], context["dex"], side, open_price):
             if open_price is None:
                 continue
             if side == "call" and strike <= open_price:
@@ -855,7 +899,9 @@ def prediction_for_date(date_str, context, candidates, train_rows, train_day_cou
     avg_score = mean([row.get("finalScore") for row in selected])
     benchmark = context["benchmark"]
     underlying = context["underlying"]
-    spotgamma = context["spotgamma"]
+    spotgamma = context.get("spotgamma") or {}
+    spotgamma_available = bool(context.get("spotgammaAvailable"))
+    source_mode = "spotgamma_reference" if spotgamma_available else "autonomous_without_spotgamma"
 
     return {
         "version": VERSION,
@@ -865,8 +911,10 @@ def prediction_for_date(date_str, context, candidates, train_rows, train_day_cou
         "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
         "training": training,
         "context": {
-            "entryChain": f"data/chains/{date_str}.json",
+            "entryChain": context.get("chainSourceFile") or f"data/chains/{date_str}.json",
             "entrySpot": safe_num(context["chain"].get("spot")),
+            "sourceMode": source_mode,
+            "spotgammaAvailable": spotgamma_available,
             "open": safe_num(spotgamma.get("open")) or safe_num(underlying.get("open")),
             "high": safe_num(underlying.get("high")),
             "low": safe_num(underlying.get("low")),
@@ -959,10 +1007,11 @@ def build():
     dex = load_rows("dex", key="targetSession")
     vol_surface = load_rows("vol_surface", key="targetSession")
     chains_index = load_json_safe(os.path.join(DATA_DIR, "chains-index.json")) or {"dates": []}
+    intraday_index = load_json_safe(INTRADAY_CHAINS_INDEX) or {"dates": [], "byDate": {}}
+    chain_dates = set(chains_index.get("dates") or []) | set(intraday_index.get("dates") or [])
     dates = sorted(
-        set(chains_index.get("dates") or [])
+        chain_dates
         & set(underlying.keys())
-        & set(spotgamma.keys())
         & set(gex.keys())
         & set(dex.keys())
         & set(vol_surface.keys())
@@ -980,19 +1029,23 @@ def build():
     training_rows = []
     training_dates = set()
     for date_str in dates:
-        chain = load_json_safe(os.path.join(CHAINS_DIR, f"{date_str}.json")) or {}
+        chain, chain_source = load_entry_chain(date_str, intraday_index)
+        chain = chain or {}
         if not chain.get("expirations"):
             continue
+        spotgamma_row = spotgamma.get(date_str) or {}
         context = {
             "date": date_str,
             "underlying": underlying[date_str],
             "priorUnderlying": prior_underlying_by_date.get(date_str) or underlying[date_str],
             "priorUnderlyingDate": (prior_underlying_by_date.get(date_str) or {}).get("date"),
-            "spotgamma": spotgamma[date_str],
+            "spotgamma": spotgamma_row,
+            "spotgammaAvailable": bool(spotgamma_row),
             "gex": gex[date_str],
             "dex": dex[date_str],
             "vol_surface": vol_surface[date_str],
             "chain": chain,
+            "chainSourceFile": chain_source,
             "benchmark": benchmark_from_signal(date_str),
         }
         candidates = build_candidates_for_date(date_str, context)
@@ -1014,6 +1067,7 @@ def build():
         "lastUpdated": now,
         "mode": "paper_shadow",
         "description": "ML Shadow V1: candidate generator + heuristic + regularized logistic regression + small gradient boosting. No production signals are changed.",
+        "spotgammaDependency": "optional; when manual SpotGamma is missing, Shadow runs autonomous mode from GEX/DEX/Vol Surface/underlying/options chain.",
         "objective": "Improve operate/no-operate and wing/strike selection for 0DTE volatility selling.",
         "dependencies": "pure_python_no_external_ml_libraries",
         "files": {
