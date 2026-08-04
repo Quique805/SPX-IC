@@ -1,7 +1,7 @@
 {
-  "version": "ml-shadow-v1.1",
+  "version": "ml-shadow-v1.2",
   "date": "2026-06-29",
-  "generatedAt": "2026-08-04T13:32:28.428941+00:00",
+  "generatedAt": "2026-08-04T20:32:33.960752+00:00",
   "mode": "paper_shadow",
   "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
   "training": {
@@ -16,11 +16,13 @@
     "logisticStatus": "warmup_min_days",
     "boostingStatus": "warmup_min_days",
     "minTrainDays": 8,
-    "featureCount": 34
+    "featureCount": 35
   },
   "context": {
     "entryChain": "data/chains/2026-06-29.json",
     "entrySpot": 7426.3501,
+    "sourceMode": "spotgamma_reference",
+    "spotgammaAvailable": true,
     "open": 7392.0,
     "high": 7444.0,
     "low": 7349.0,
