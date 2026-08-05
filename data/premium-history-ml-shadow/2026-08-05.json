@@ -1,0 +1,8 @@
+{
+  "date": "2026-08-05",
+  "status": "no_trade",
+  "reason": "El Shadow no encuentra una combinacion prima/riesgo suficientemente limpia para vender volatilidad.",
+  "modelVersion": "ml-shadow-v1.2",
+  "generatedAt": "2026-08-05T14:08:20.956426+00:00",
+  "snapshots": []
+}
