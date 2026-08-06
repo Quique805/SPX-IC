@@ -5795,15 +5795,15 @@ async function loadMlVolSurfaceDataset() {
 
 async function loadMlShadowIndex() {
   return fetchFirstJson([
-    `data/ml-shadow/index.json?t=${Date.now()}`,
-    `${GITHUB_RAW_BASE}/data/ml-shadow/index.json?t=${Date.now()}`
+    `${GITHUB_RAW_BASE}/data/ml-shadow/index.json?t=${Date.now()}`,
+    `data/ml-shadow/index.json?t=${Date.now()}`
   ]);
 }
 
 async function loadMlShadowPrediction(date) {
   return fetchFirstJson([
-    `data/ml-shadow/predictions/${date}.json?t=${Date.now()}`,
-    `${GITHUB_RAW_BASE}/data/ml-shadow/predictions/${date}.json?t=${Date.now()}`
+    `${GITHUB_RAW_BASE}/data/ml-shadow/predictions/${date}.json?t=${Date.now()}`,
+    `data/ml-shadow/predictions/${date}.json?t=${Date.now()}`
   ]);
 }
 
