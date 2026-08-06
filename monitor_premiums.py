@@ -38,6 +38,7 @@ MIN_T = 1 / 252
 RISK_FREE_RATE = 0.04
 CHAIN_MAX_PCT = 8.0
 MIN_CAPTURE_INTERVAL_MINUTES = 4
+ENTRY_FALLBACK_AFTER = (16, 7)
 
 
 def normal_pdf(x):
@@ -319,6 +320,51 @@ def parse_iso(value):
         return None
 
 
+def is_after_shadow_entry_time(now_madrid):
+    return (now_madrid.hour, now_madrid.minute) >= ENTRY_FALLBACK_AFTER
+
+
+def capture_after_entry_time(capture):
+    captured = parse_iso(capture.get("capturedAt"))
+    if not captured:
+        return False
+    madrid = captured.astimezone(ZoneInfo("Europe/Madrid"))
+    return is_after_shadow_entry_time(madrid)
+
+
+def load_data_file(rel_file):
+    if not rel_file:
+        return None
+    rel_file = str(rel_file).replace("\\", "/")
+    if rel_file.startswith("data/"):
+        rel_file = rel_file[len("data/"):]
+    return load_json_safe(os.path.join(DATA_DIR, *rel_file.split("/")))
+
+
+def load_intraday_entry_chain(today):
+    index = load_json_safe(INTRADAY_CHAINS_INDEX) or {}
+    captures = ((index.get("byDate") or {}).get(today) or [])
+    captures = sorted(captures, key=lambda item: item.get("capturedAt") or item.get("file") or "")
+    fallback_pool = [capture for capture in captures if capture_after_entry_time(capture)] or captures
+    for capture in fallback_pool:
+        chain = load_data_file(capture.get("file"))
+        if chain and chain.get("expirations"):
+            return chain
+    return None
+
+
+def load_shadow_entry_chain(today, prediction=None):
+    prediction = prediction or {}
+    rel_file = ((prediction.get("context") or {}).get("entryChain"))
+    chain = load_data_file(rel_file)
+    if chain and chain.get("expirations"):
+        return chain
+    chain = load_json_safe(os.path.join(ENTRY_DIR, f"{today}.json"))
+    if chain and chain.get("expirations"):
+        return chain
+    return load_intraday_entry_chain(today)
+
+
 def recent_capture_exists(today, now_iso):
     index = load_json_safe(INTRADAY_CHAINS_INDEX) or {}
     captures = ((index.get("byDate") or {}).get(today) or [])
@@ -435,7 +481,7 @@ def entry_quote_for_leg(entry_strikes, leg):
 
 
 def shadow_legs_from_prediction(today, prediction):
-    entry = load_json_safe(os.path.join(ENTRY_DIR, f"{today}.json"))
+    entry = load_shadow_entry_chain(today, prediction)
     _, expiration = nearest_expiration(entry or {})
     entry_strikes = expiration.get("strikes", []) if expiration else []
     legs = {}
@@ -456,6 +502,22 @@ def shadow_legs_from_prediction(today, prediction):
             "strike": float(buy_strike),
         })
     return entry, legs
+
+
+def ensure_shadow_prediction(today, now_madrid):
+    prediction_file = os.path.join(ML_SHADOW_DIR, f"{today}.json")
+    if load_json_safe(prediction_file):
+        return True
+    if not is_after_shadow_entry_time(now_madrid):
+        return False
+    print("  INFO ML Shadow: no hay prediccion; se intenta generar con la cadena intradia disponible.")
+    try:
+        import ml_shadow
+
+        ml_shadow.build()
+    except Exception as exc:
+        print(f"  WARN ML Shadow: no se pudo generar prediccion fallback ({exc}).")
+    return bool(load_json_safe(prediction_file))
 
 
 def ensure_shadow_history(today):
@@ -625,6 +687,7 @@ def main():
     spot, strikes = fetch_current_chain(today)
     chain_file = save_intraday_chain(today, now_iso, spot, strikes)
     print(f"  OK chain 0DTE: {chain_file} ({len(strikes)} strikes)")
+    ensure_shadow_prediction(today, now_madrid)
 
     levels = load_spotgamma_levels(today)
     if not levels:

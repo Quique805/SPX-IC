@@ -13,6 +13,7 @@ import json
 import math
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fetch_daily import DATA_DIR, load_json_safe, save_json
 
@@ -22,6 +23,7 @@ SPREAD_WIDTH = 20
 PROTECTION_WIDTHS = (5, 10, 15, 20, 25, 30, 40)
 MIN_REASONABLE_CREDIT_USD = 5.0
 MIN_TRAIN_DAYS = 8
+ENTRY_FALLBACK_AFTER = (16, 7)
 
 ML_DATASET_DIR = os.path.join(DATA_DIR, "ml-dataset")
 CHAINS_DIR = os.path.join(DATA_DIR, "chains")
@@ -139,6 +141,32 @@ def load_rows(name, key="date"):
     return out
 
 
+def parse_iso(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def is_after_entry_time(capture):
+    captured = parse_iso(capture.get("capturedAt"))
+    if not captured:
+        return False
+    madrid = captured.astimezone(ZoneInfo("Europe/Madrid"))
+    return (madrid.hour, madrid.minute) >= ENTRY_FALLBACK_AFTER
+
+
+def load_chain_file(rel_file):
+    if not rel_file:
+        return None
+    rel_file = str(rel_file).replace("\\", "/")
+    if rel_file.startswith("data/"):
+        rel_file = rel_file[len("data/"):]
+    return load_json_safe(os.path.join(DATA_DIR, *rel_file.split("/")))
+
+
 def load_entry_chain(date_str, intraday_index=None):
     chain_path = os.path.join(CHAINS_DIR, f"{date_str}.json")
     chain = load_json_safe(chain_path)
@@ -148,11 +176,10 @@ def load_entry_chain(date_str, intraday_index=None):
     intraday_index = intraday_index or {}
     captures = ((intraday_index.get("byDate") or {}).get(date_str) or [])
     captures = sorted(captures, key=lambda item: item.get("capturedAt") or item.get("file") or "")
-    for capture in captures:
+    fallback_pool = [capture for capture in captures if is_after_entry_time(capture)] or captures
+    for capture in fallback_pool:
         rel_file = capture.get("file")
-        if not rel_file:
-            continue
-        fallback = load_json_safe(os.path.join(DATA_DIR, os.path.relpath(rel_file, "data")))
+        fallback = load_chain_file(rel_file)
         if fallback and fallback.get("expirations"):
             return fallback, rel_file
     return None, None
