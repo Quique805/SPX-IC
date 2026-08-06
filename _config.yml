@@ -1,0 +1,10 @@
+exclude:
+  - data
+  - output
+  - scripts
+  - tmp
+  - __pycache__
+  - .github
+  - cloudflare-worker
+  - "*.py"
+  - "*.csv"
