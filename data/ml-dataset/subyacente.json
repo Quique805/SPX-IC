@@ -1,6 +1,6 @@
 {
   "version": "ml-dataset-v5",
-  "lastUpdated": "2026-08-07T20:32:28.804531+00:00",
+  "lastUpdated": "2026-08-07T22:18:19.034556+00:00",
   "block": "subyacente",
   "description": "Primer bloque del dataset ML: features diarios del subyacente SPX y VIX derivados de daily-ohlc.json.",
   "source": "data/daily-ohlc.json",
