@@ -1,0 +1,8 @@
+{
+  "date": "2026-08-07",
+  "status": "no_trade",
+  "reason": "Shadow no opera: faltan datos del cierre previo para construir la fotografia completa del laboratorio (GEX, DEX, Vol Surface). No se puntuan strikes en modo degradado.",
+  "modelVersion": "ml-shadow-v1.2",
+  "generatedAt": "2026-08-07T14:31:01.338065+00:00",
+  "snapshots": []
+}
