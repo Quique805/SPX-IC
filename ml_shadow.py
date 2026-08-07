@@ -667,9 +667,9 @@ def build_candidate(date_str, side, strike, context):
     prior_underlying = context.get("priorUnderlying") or underlying
     spotgamma = context.get("spotgamma") or {}
     spotgamma_available = bool(context.get("spotgammaAvailable"))
-    gex = context["gex"]
-    dex = context["dex"]
-    vol_surface = context["vol_surface"]
+    gex = context.get("gex") or {}
+    dex = context.get("dex") or {}
+    vol_surface = context.get("vol_surface") or {}
     chain = context["chain"]
     benchmark = context["benchmark"]
 
@@ -778,7 +778,7 @@ def build_candidates_for_date(date_str, context):
     candidates = []
     open_price = autonomous_spot(context)
     for side in ("call", "put"):
-        for strike in candidate_strikes(context.get("spotgamma") or {}, context["gex"], context["dex"], side, open_price):
+        for strike in candidate_strikes(context.get("spotgamma") or {}, context.get("gex") or {}, context.get("dex") or {}, side, open_price):
             if open_price is None:
                 continue
             if side == "call" and strike <= open_price:
@@ -942,6 +942,9 @@ def prediction_for_date(date_str, context, candidates, train_rows, train_day_cou
             "entrySpot": safe_num(context["chain"].get("spot")),
             "sourceMode": source_mode,
             "spotgammaAvailable": spotgamma_available,
+            "gexAvailable": bool(context.get("gex")),
+            "dexAvailable": bool(context.get("dex")),
+            "volSurfaceAvailable": bool(context.get("vol_surface")),
             "open": safe_num(spotgamma.get("open")) or safe_num(underlying.get("open")),
             "high": safe_num(underlying.get("high")),
             "low": safe_num(underlying.get("low")),
@@ -978,6 +981,83 @@ def prediction_for_date(date_str, context, candidates, train_rows, train_day_cou
             "topCalls": [slim_candidate(row) for row in calls[:18]],
             "topPuts": [slim_candidate(row) for row in puts[:18]],
             "all": [slim_candidate(row) for row in sorted(scored, key=lambda r: r["finalScore"], reverse=True)],
+        },
+    }
+
+
+def unavailable_prediction_for_date(date_str, context, missing_blocks):
+    benchmark = context["benchmark"]
+    underlying = context["underlying"]
+    spotgamma = context.get("spotgamma") or {}
+    spotgamma_available = bool(context.get("spotgammaAvailable"))
+    source_mode = "spotgamma_reference" if spotgamma_available else "autonomous_without_spotgamma"
+    missing_text = ", ".join(missing_blocks)
+    commentary = (
+        "Shadow no opera: faltan datos del cierre previo para construir la fotografia completa "
+        f"del laboratorio ({missing_text}). No se puntuan strikes en modo degradado."
+    )
+    return {
+        "version": VERSION,
+        "date": date_str,
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "mode": "paper_shadow",
+        "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
+        "training": {
+            "modelStatus": "blocked_data_incomplete",
+            "priorTrainingDays": None,
+            "priorTrainingRows": None,
+            "weights": None,
+            "logisticStatus": "not_run",
+            "boostingStatus": "not_run",
+            "minTrainDays": MIN_TRAIN_DAYS,
+            "featureCount": len(FEATURE_COLUMNS),
+        },
+        "context": {
+            "entryChain": context.get("chainSourceFile") or f"data/chains/{date_str}.json",
+            "entrySpot": safe_num(context["chain"].get("spot")),
+            "sourceMode": source_mode,
+            "spotgammaAvailable": spotgamma_available,
+            "gexAvailable": bool(context.get("gex")),
+            "dexAvailable": bool(context.get("dex")),
+            "volSurfaceAvailable": bool(context.get("vol_surface")),
+            "missingBlocks": missing_blocks,
+            "dataQuality": "blocked_missing_previous_close",
+            "open": safe_num(spotgamma.get("open")) or safe_num(underlying.get("open")),
+            "high": safe_num(underlying.get("high")),
+            "low": safe_num(underlying.get("low")),
+            "close": safe_num(underlying.get("close")),
+            "callWall": safe_num(spotgamma.get("callWall")),
+            "putWall": safe_num(spotgamma.get("putWall")),
+            "openPctWalls": safe_num(spotgamma.get("openPctWalls")),
+            "openZone": spotgamma.get("openZone"),
+            "priorUnderlyingFeatureDate": context.get("priorUnderlyingDate"),
+        },
+        "benchmark": benchmark,
+        "decision": {
+            "action": "no_operar",
+            "selectedWings": [],
+            "totalCreditUsd": 0,
+            "totalMaxRiskUsd": 0,
+            "portfolioRiskRewardPct": None,
+            "averageProbNoTouch": None,
+            "averageScore": None,
+            "confidence": "sin_datos",
+            "commentary": commentary,
+            "note": "Shadow mode: no altera la senal real ni envia ordenes.",
+        },
+        "evaluation": {
+            "available": False,
+            "noTouchAll": None,
+            "selectedTouchCount": 0,
+            "high": safe_num(underlying.get("high")),
+            "low": safe_num(underlying.get("low")),
+            "benchmarkNoTouch": benchmark_no_touch(benchmark, underlying),
+        },
+        "candidates": {
+            "count": 0,
+            "topCalls": [],
+            "topPuts": [],
+            "all": [],
         },
     }
 
@@ -1036,13 +1116,15 @@ def build():
     chains_index = load_json_safe(os.path.join(DATA_DIR, "chains-index.json")) or {"dates": []}
     intraday_index = load_json_safe(INTRADAY_CHAINS_INDEX) or {"dates": [], "byDate": {}}
     chain_dates = set(chains_index.get("dates") or []) | set(intraday_index.get("dates") or [])
-    dates = sorted(
-        chain_dates
-        & set(underlying.keys())
-        & set(gex.keys())
-        & set(dex.keys())
-        & set(vol_surface.keys())
-    )
+    available_dates = chain_dates & set(underlying.keys())
+    complete_lab_dates = set(gex.keys()) & set(dex.keys()) & set(vol_surface.keys())
+    dates_set = available_dates & complete_lab_dates
+    latest_available_date = max(available_dates) if available_dates else None
+    if latest_available_date:
+        # The current session should be visible in the dashboard, but never as
+        # a degraded trade if the previous-close lab blocks are missing.
+        dates_set.add(latest_available_date)
+    dates = sorted(dates_set)
 
     underlying_dates = sorted(underlying.keys())
     prior_underlying_by_date = {}
@@ -1068,13 +1150,26 @@ def build():
             "priorUnderlyingDate": (prior_underlying_by_date.get(date_str) or {}).get("date"),
             "spotgamma": spotgamma_row,
             "spotgammaAvailable": bool(spotgamma_row),
-            "gex": gex[date_str],
-            "dex": dex[date_str],
-            "vol_surface": vol_surface[date_str],
+            "gex": gex.get(date_str) or {},
+            "dex": dex.get(date_str) or {},
+            "vol_surface": vol_surface.get(date_str) or {},
             "chain": chain,
             "chainSourceFile": chain_source,
             "benchmark": benchmark_from_signal(date_str),
         }
+        missing_blocks = []
+        if not context["gex"]:
+            missing_blocks.append("GEX")
+        if not context["dex"]:
+            missing_blocks.append("DEX")
+        if not context["vol_surface"]:
+            missing_blocks.append("Vol Surface")
+        if missing_blocks:
+            if date_str == latest_available_date:
+                prediction = unavailable_prediction_for_date(date_str, context, missing_blocks)
+                predictions.append(prediction)
+                save_json(os.path.join(OUT_PREDICTIONS_DIR, f"{date_str}.json"), prediction)
+            continue
         candidates = build_candidates_for_date(date_str, context)
         if not candidates:
             continue
@@ -1097,6 +1192,7 @@ def build():
         "spotgammaDependency": "optional; when manual SpotGamma is missing, Shadow runs autonomous mode from GEX/DEX/Vol Surface/underlying/options chain.",
         "objective": "Improve operate/no-operate and wing/strike selection for 0DTE volatility selling.",
         "dependencies": "pure_python_no_external_ml_libraries",
+        "labDependency": "required; when previous-close GEX/DEX/Vol Surface are missing, Shadow records no_operar/data_incomplete instead of scoring strikes.",
         "files": {
             "predictionsDir": "data/ml-shadow/predictions",
         },

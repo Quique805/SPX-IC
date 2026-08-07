@@ -1,13 +1,17 @@
 name: Daily SPX Data Fetch
 
 on:
-  # Trigger principal: evento repository_dispatch desde cron-job.org (servicio externo).
-  # Se dispara vía HTTP POST a la API de GitHub. Latencia típica: 5-30 segundos.
-  # NO usamos `schedule` aquí porque GitHub Actions cron tiene 5-6h de cola en
-  # picos de carga (13-14 UTC = apertura US), inaceptable para nuestro caso.
+  # Primary trigger: repository_dispatch from cron-job.org.
+  # We avoid schedule around the US open because GitHub Actions cron can queue
+  # during 13-14 UTC peaks, which is unacceptable for the entry signal.
   repository_dispatch:
     types: [fetch_data]
-  # Permite disparar manualmente desde la pestaña Actions (botón Run workflow):
+  # Night fallback for the close snapshot only. This is late, but it prevents
+  # losing the previous-close lab photo if cron-job.org or a hosted runner fails.
+  # Summer: 23:45 Madrid. Winter: 22:45 Madrid.
+  schedule:
+    - cron: '45 21 * * 1-5'
+  # Manual trigger from the Actions tab.
   workflow_dispatch:
 
 permissions:
@@ -61,7 +65,7 @@ jobs:
             exit 0
           fi
           git commit -m "Auto fetch $(date -u +%Y-%m-%d_%H%M)"
-          # Reintenta hasta 3 veces si remoto cambia mientras pusheamos (race condition)
+          # Retry up to 3 times if the remote changes while this workflow runs.
           for i in 1 2 3; do
             git pull --rebase origin main && git push && exit 0
             echo "Push attempt $i failed, retrying..."

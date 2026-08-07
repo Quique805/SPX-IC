@@ -1,0 +1,87 @@
+{
+  "version": "ml-shadow-v1.2",
+  "date": "2026-08-07",
+  "generatedAt": "2026-08-07T14:31:01.338065+00:00",
+  "mode": "paper_shadow",
+  "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
+  "training": {
+    "modelStatus": "blocked_data_incomplete",
+    "priorTrainingDays": null,
+    "priorTrainingRows": null,
+    "weights": null,
+    "logisticStatus": "not_run",
+    "boostingStatus": "not_run",
+    "minTrainDays": 8,
+    "featureCount": 35
+  },
+  "context": {
+    "entryChain": "data/chains/2026-08-07.json",
+    "entrySpot": 7743.6201,
+    "sourceMode": "spotgamma_reference",
+    "spotgammaAvailable": true,
+    "gexAvailable": false,
+    "dexAvailable": false,
+    "volSurfaceAvailable": false,
+    "missingBlocks": [
+      "GEX",
+      "DEX",
+      "Vol Surface"
+    ],
+    "dataQuality": "blocked_missing_previous_close",
+    "open": 7735.0,
+    "high": 7748.0,
+    "low": 7727.0,
+    "close": 7731.0,
+    "callWall": 7890.0,
+    "putWall": 7700.0,
+    "openPctWalls": 18.421052631578945,
+    "openZone": "low_adjust_10_20",
+    "priorUnderlyingFeatureDate": "2026-08-06"
+  },
+  "benchmark": {
+    "status": "active",
+    "entryCredit": 0.44999999999999996,
+    "entryCreditUsd": 44.99999999999999,
+    "callStrike": null,
+    "putStrike": 7665.0,
+    "skippedWings": [
+      {
+        "wing": "call",
+        "reason": "NO COMPENSA",
+        "credit": 0.0,
+        "creditUsd": 0.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7890.0,
+        "buyStrike": 7910.0
+      }
+    ],
+    "openPct": 18.421052631578945,
+    "adjustment": "Put Wall -35"
+  },
+  "decision": {
+    "action": "no_operar",
+    "selectedWings": [],
+    "totalCreditUsd": 0,
+    "totalMaxRiskUsd": 0,
+    "portfolioRiskRewardPct": null,
+    "averageProbNoTouch": null,
+    "averageScore": null,
+    "confidence": "sin_datos",
+    "commentary": "Shadow no opera: faltan datos del cierre previo para construir la fotografia completa del laboratorio (GEX, DEX, Vol Surface). No se puntuan strikes en modo degradado.",
+    "note": "Shadow mode: no altera la senal real ni envia ordenes."
+  },
+  "evaluation": {
+    "available": false,
+    "noTouchAll": null,
+    "selectedTouchCount": 0,
+    "high": 7748.0,
+    "low": 7727.0,
+    "benchmarkNoTouch": true
+  },
+  "candidates": {
+    "count": 0,
+    "topCalls": [],
+    "topPuts": [],
+    "all": []
+  }
+}
