@@ -1,7 +1,7 @@
 {
   "version": "ml-shadow-v1.2",
   "date": "2026-08-07",
-  "generatedAt": "2026-08-07T14:31:01.338065+00:00",
+  "generatedAt": "2026-08-07T20:33:24.185758+00:00",
   "mode": "paper_shadow",
   "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
   "training": {
@@ -29,9 +29,9 @@
     ],
     "dataQuality": "blocked_missing_previous_close",
     "open": 7735.0,
-    "high": 7748.0,
-    "low": 7727.0,
-    "close": 7731.0,
+    "high": 7763.0,
+    "low": 7719.0,
+    "close": 7758.0,
     "callWall": 7890.0,
     "putWall": 7700.0,
     "openPctWalls": 18.421052631578945,
@@ -74,8 +74,8 @@
     "available": false,
     "noTouchAll": null,
     "selectedTouchCount": 0,
-    "high": 7748.0,
-    "low": 7727.0,
+    "high": 7763.0,
+    "low": 7719.0,
     "benchmarkNoTouch": true
   },
   "candidates": {

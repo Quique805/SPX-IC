@@ -1,7 +1,7 @@
 {
   "version": "ml-shadow-v1.2",
   "date": "2026-07-15",
-  "generatedAt": "2026-08-07T14:31:01.060808+00:00",
+  "generatedAt": "2026-08-07T20:32:38.428000+00:00",
   "mode": "paper_shadow",
   "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
   "training": {
@@ -23,6 +23,9 @@
     "entrySpot": 7558.2598,
     "sourceMode": "spotgamma_reference",
     "spotgammaAvailable": true,
+    "gexAvailable": true,
+    "dexAvailable": true,
+    "volSurfaceAvailable": true,
     "open": 7572.0,
     "high": 7582.0,
     "low": 7527.0,
