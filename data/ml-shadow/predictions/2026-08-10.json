@@ -1,7 +1,7 @@
 {
   "version": "ml-shadow-v1.2",
   "date": "2026-08-10",
-  "generatedAt": "2026-08-10T14:08:32.098014+00:00",
+  "generatedAt": "2026-08-10T20:33:24.787663+00:00",
   "mode": "paper_shadow",
   "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
   "training": {
@@ -27,9 +27,9 @@
     "dexAvailable": true,
     "volSurfaceAvailable": true,
     "open": 7752.0,
-    "high": 7763.0,
-    "low": 7748.0,
-    "close": 7761.0,
+    "high": 7774.0,
+    "low": 7743.0,
+    "close": 7753.0,
     "callWall": 7900.0,
     "putWall": 7500.0,
     "openPctWalls": 63.0,
@@ -37,14 +37,33 @@
     "priorUnderlyingFeatureDate": "2026-08-07"
   },
   "benchmark": {
-    "status": null,
+    "status": "no_trade",
     "entryCredit": null,
     "entryCreditUsd": null,
     "callStrike": null,
     "putStrike": null,
-    "skippedWings": [],
-    "openPct": null,
-    "adjustment": null
+    "skippedWings": [
+      {
+        "wing": "call",
+        "reason": "NO COMPENSA",
+        "credit": -0.05,
+        "creditUsd": -5.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7900.0,
+        "buyStrike": 7920.0
+      },
+      {
+        "wing": "put",
+        "reason": "NO COMPENSA",
+        "credit": -0.05,
+        "creditUsd": -5.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7500.0,
+        "buyStrike": 7480.0
+      }
+    ],
+    "openPct": 63.0,
+    "adjustment": "Sin ajuste"
   },
   "decision": {
     "action": "solo_put",
@@ -99,8 +118,8 @@
     "available": true,
     "noTouchAll": true,
     "selectedTouchCount": 0,
-    "high": 7763.0,
-    "low": 7748.0,
+    "high": 7774.0,
+    "low": 7743.0,
     "benchmarkNoTouch": null
   },
   "candidates": {
