@@ -18,7 +18,7 @@ from monitor_premiums import (
     SPREAD_WIDTH,
     get_open_wall_setup,
     is_opex_day,
-    load_spotgamma_levels,
+    load_trading_levels,
     no_compensa_reason,
     select_legs,
 )
@@ -322,16 +322,35 @@ def previous_failed(date):
 
 
 def create_entry_signal(date):
-    levels = load_spotgamma_levels(date)
+    levels = load_trading_levels(date)
     if not levels:
-        raise RuntimeError(f"no hay niveles SpotGamma cargados para {date}")
+        reason = f"Faltan niveles operativos para {date}"
+        return {
+            "date": date,
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+            "sourceCloseDate": date,
+            "levelsSource": None,
+            "emails": {},
+            "status": "no_trade",
+            "reason": reason,
+            "missingInputs": ["spotgamma_levels", "gex_model_levels"],
+            "openWall": {
+                "ok": False,
+                "reason": reason,
+                "target": date,
+            },
+        }
     setup = get_open_wall_setup(date, levels)
     reason = None if setup["ok"] else setup["reason"]
     signal = {
         "date": date,
         "createdAt": datetime.now(timezone.utc).isoformat(),
-        "sourceCloseDate": date,
+        "sourceCloseDate": levels.get("sourceCloseDate") or date,
         "levelsSource": levels.get("source"),
+        "levelsOrigin": levels.get("levelsOrigin"),
+        "levelsModel": levels.get("levelsModel"),
+        "levelsComponents": levels.get("levelsComponents"),
+        "spotgammaAvailable": levels.get("spotgammaAvailable"),
         "emails": {},
     }
     if reason:

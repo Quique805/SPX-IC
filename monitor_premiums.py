@@ -30,6 +30,8 @@ CLOSE_DIR = os.path.join(DATA_DIR, "chains-close")
 ENTRY_DIR = os.path.join(DATA_DIR, "chains")
 ML_SHADOW_DIR = os.path.join(DATA_DIR, "ml-shadow", "predictions")
 SPOTGAMMA_FILE = os.path.join(DATA_DIR, "spotgamma-levels.json")
+GEX_MODELS_DIR = os.path.join(DATA_DIR, "gex-models")
+GEX_MODELS_INDEX = os.path.join(DATA_DIR, "gex-models-index.json")
 CONTRACT_MULTIPLIER = 100
 SPREAD_WIDTH = 20
 MIN_WING_CREDIT_USD = 5
@@ -105,7 +107,89 @@ def load_spotgamma_levels(day):
         "gamma_flip": row.get("gammaFlip"),
         "source": row.get("source") or "SpotGamma manual",
         "date": day,
+        "sourceCloseDate": day,
+        "levelsOrigin": "spotgamma",
     }
+
+
+def level_float(value):
+    try:
+        value = float(value)
+        return value if math.isfinite(value) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def round_level(value, step=25):
+    if value is None:
+        return None
+    return float(round(float(value) / step) * step)
+
+
+def level_component(component_id, name, levels, source_date=None, origin=None):
+    return {
+        "id": component_id,
+        "name": name,
+        "origin": origin or component_id,
+        "sourceDate": source_date,
+        "call_wall": level_float(levels.get("call_wall") if "call_wall" in levels else levels.get("callWall")),
+        "put_wall": level_float(levels.get("put_wall") if "put_wall" in levels else levels.get("putWall")),
+        "vol_trigger": level_float(levels.get("vol_trigger") if "vol_trigger" in levels else levels.get("volTrigger")),
+        "gamma_flip": level_float(levels.get("gamma_flip") if "gamma_flip" in levels else levels.get("gammaFlip")),
+    }
+
+
+def combine_component_level(components, key):
+    values = [component.get(key) for component in components if component.get(key) is not None]
+    if not values:
+        return None
+    return round_level(sum(values) / len(values))
+
+
+def load_gex_consensus_levels(day):
+    index = load_json_safe(GEX_MODELS_INDEX) or {"dates": []}
+    for source_date in sorted(index.get("dates", []), reverse=True):
+        record = load_json_safe(os.path.join(GEX_MODELS_DIR, f"{source_date}.json"))
+        if not record or record.get("targetSession") != day:
+            continue
+        models = record.get("models") or {}
+        components = []
+        for model_id in ("pure_gex", "liquidity_weighted"):
+            model = models.get(model_id) or {}
+            levels = model.get("next") or {}
+            component = level_component(model_id, model.get("name") or model_id, levels, source_date, "gex_model")
+            if component["call_wall"] is not None and component["put_wall"] is not None:
+                components.append(component)
+        if not components:
+            return None
+        spotgamma = load_spotgamma_levels(day)
+        if spotgamma:
+            components.append(level_component("spotgamma", spotgamma.get("source") or "SpotGamma manual", spotgamma, day, "spotgamma"))
+        call_wall = combine_component_level(components, "call_wall")
+        put_wall = combine_component_level(components, "put_wall")
+        if call_wall is None or put_wall is None:
+            return None
+        vol_trigger = combine_component_level(components, "vol_trigger")
+        gamma_flip = combine_component_level(components, "gamma_flip")
+        component_ids = [component["id"] for component in components]
+        return {
+            "call_wall": call_wall,
+            "put_wall": put_wall,
+            "vol_trigger": vol_trigger,
+            "gamma_flip": gamma_flip,
+            "source": f"GEX consensus - {' + '.join(component_ids)} - close {source_date}",
+            "date": day,
+            "sourceCloseDate": source_date,
+            "levelsOrigin": "gex_consensus",
+            "levelsModel": "+".join(component_ids),
+            "levelsComponents": components,
+            "spotgammaAvailable": bool(spotgamma),
+        }
+    return None
+
+
+def load_trading_levels(day):
+    return load_gex_consensus_levels(day)
 
 
 def previous_close_chain(today):
@@ -238,6 +322,8 @@ def no_compensa_reason(setup):
 
 def select_legs(today, levels):
     entry = load_json_safe(os.path.join(ENTRY_DIR, f"{today}.json"))
+    if not entry:
+        entry = load_intraday_entry_chain(today)
     if not entry:
         raise RuntimeError("la cadena de entrada todavía no existe")
     _, expiration = nearest_expiration(entry)
@@ -438,6 +524,12 @@ def ensure_benchmark_history(today, levels):
             "date": today,
             "status": "no_trade",
             "reason": reason,
+            "sourceCloseDate": levels.get("sourceCloseDate") or today,
+            "levelsSource": levels.get("source"),
+            "levelsOrigin": levels.get("levelsOrigin"),
+            "levelsModel": levels.get("levelsModel"),
+            "levelsComponents": levels.get("levelsComponents"),
+            "spotgammaAvailable": levels.get("spotgammaAvailable"),
             "openWall": get_open_wall_setup(today, levels),
             "snapshots": [],
         }
@@ -450,6 +542,12 @@ def ensure_benchmark_history(today, levels):
             "date": today,
             "status": "no_trade",
             "reason": reason,
+            "sourceCloseDate": levels.get("sourceCloseDate") or today,
+            "levelsSource": levels.get("source"),
+            "levelsOrigin": levels.get("levelsOrigin"),
+            "levelsModel": levels.get("levelsModel"),
+            "levelsComponents": levels.get("levelsComponents"),
+            "spotgammaAvailable": levels.get("spotgammaAvailable"),
             "openWall": setup,
             "snapshots": [],
         }
@@ -458,8 +556,12 @@ def ensure_benchmark_history(today, levels):
     history = {
         "date": today,
         "status": "active",
-        "sourceCloseDate": today,
+        "sourceCloseDate": levels.get("sourceCloseDate") or today,
         "levelsSource": levels.get("source"),
+        "levelsOrigin": levels.get("levelsOrigin"),
+        "levelsModel": levels.get("levelsModel"),
+        "levelsComponents": levels.get("levelsComponents"),
+        "spotgammaAvailable": levels.get("spotgammaAvailable"),
         "selectedAt": entry.get("capturedAt"),
         "entrySpot": entry.get("spot"),
         "entryCredit": entry_credit,
@@ -596,15 +698,21 @@ def legacy_main_selected_premiums_only():
     history_file = os.path.join(HISTORY_DIR, f"{today}.json")
     history = load_json_safe(history_file)
     if not history:
-        levels = load_spotgamma_levels(today)
+        levels = load_trading_levels(today)
         if not levels:
-            raise RuntimeError(f"no hay niveles SpotGamma cargados para {today}")
+            raise RuntimeError(f"no hay niveles operativos cargados para {today}")
         reason = no_trade_reason(today, levels)
         if reason:
             history = {
                 "date": today,
                 "status": "no_trade",
                 "reason": reason,
+                "sourceCloseDate": levels.get("sourceCloseDate") or today,
+                "levelsSource": levels.get("source"),
+                "levelsOrigin": levels.get("levelsOrigin"),
+                "levelsModel": levels.get("levelsModel"),
+                "levelsComponents": levels.get("levelsComponents"),
+                "spotgammaAvailable": levels.get("spotgammaAvailable"),
                 "openWall": get_open_wall_setup(today, levels),
                 "snapshots": [],
             }
@@ -625,6 +733,12 @@ def legacy_main_selected_premiums_only():
                 "date": today,
                 "status": "no_trade",
                 "reason": reason,
+                "sourceCloseDate": levels.get("sourceCloseDate") or today,
+                "levelsSource": levels.get("source"),
+                "levelsOrigin": levels.get("levelsOrigin"),
+                "levelsModel": levels.get("levelsModel"),
+                "levelsComponents": levels.get("levelsComponents"),
+                "spotgammaAvailable": levels.get("spotgammaAvailable"),
                 "openWall": setup,
                 "snapshots": [],
             }
@@ -635,8 +749,12 @@ def legacy_main_selected_premiums_only():
         history = {
             "date": today,
             "status": "active",
-            "sourceCloseDate": today,
+            "sourceCloseDate": levels.get("sourceCloseDate") or today,
             "levelsSource": levels.get("source"),
+            "levelsOrigin": levels.get("levelsOrigin"),
+            "levelsModel": levels.get("levelsModel"),
+            "levelsComponents": levels.get("levelsComponents"),
+            "spotgammaAvailable": levels.get("spotgammaAvailable"),
             "selectedAt": entry.get("capturedAt"),
             "entrySpot": entry.get("spot"),
             "entryCredit": entry_credit,
@@ -689,9 +807,9 @@ def main():
     print(f"  OK chain 0DTE: {chain_file} ({len(strikes)} strikes)")
     ensure_shadow_prediction(today, now_madrid)
 
-    levels = load_spotgamma_levels(today)
+    levels = load_trading_levels(today)
     if not levels:
-        print(f"  WARN benchmark: no hay niveles SpotGamma cargados para {today}.")
+        print(f"  WARN benchmark: no hay niveles operativos cargados para {today}.")
     else:
         try:
             history, history_file = ensure_benchmark_history(today, levels)
