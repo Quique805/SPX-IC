@@ -2007,8 +2007,15 @@
         "spot": 7814.1299,
         "strikeCount": 180,
         "file": "data/chains-intraday/2026-08-13/144546Z.json"
+      },
+      {
+        "capturedAt": "2026-08-13T14:54:17.171228+00:00",
+        "effectiveAt": "2026-08-13T14:39:17.171228+00:00",
+        "spot": 7814.1602,
+        "strikeCount": 180,
+        "file": "data/chains-intraday/2026-08-13/145417Z.json"
       }
     ]
   },
-  "lastUpdated": "2026-08-13T14:45:46.668951+00:00"
+  "lastUpdated": "2026-08-13T14:54:17.171228+00:00"
 }
