@@ -1,7 +1,7 @@
 {
   "version": "ml-shadow-v1.2",
   "date": "2026-07-27",
-  "generatedAt": "2026-08-13T22:24:40.918361+00:00",
+  "generatedAt": "2026-08-14T13:32:58.048195+00:00",
   "mode": "paper_shadow",
   "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
   "training": {
