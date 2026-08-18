@@ -1,0 +1,14 @@
+date,action,status,snapshots,firstCaptureMadrid,lastCaptureMadrid,entryCreditUsd,maxCloseCostUsd,maxPremiumMultiple,timeMaxStressMadrid,dangerX2,dangerX3,dangerX4,timeX2Madrid,timeX3Madrid,timeX4Madrid,maxAdversePnlUsd,bestIntradayPnlUsd,finalPnlUsd,finalPremiumMultiple,finalCloseCostUsd,noTouchAll,selectedTouchCount,cleanSurvival,stressBucket,shadowConfidence,sourceMode
+2026-07-30,solo_put,active,17,19:01,22:45,95.0,30.0,0.316,19:01,False,False,False,,,,65.0,90.0,90.0,0.053,5.0,True,0,True,limpia_sub_1x,media,spotgamma_reference
+2026-07-31,iron_condor,active,30,16:15,22:45,185.0,365.0,1.973,16:30,False,False,False,,,,-180.0,175.0,175.0,0.054,10.0,False,1,False,normal_1x_2x,media,spotgamma_reference
+2026-08-03,no_operar,no_trade,0,,,,,,,False,False,False,,,,,,,,,,0,False,sin_datos,baja,spotgamma_reference
+2026-08-04,no_operar,no_trade,0,,,,,,,False,False,False,,,,,,,,,,0,False,sin_datos,baja,autonomous_without_spotgamma
+2026-08-05,no_operar,no_trade,0,,,,,,,False,False,False,,,,,,,,,,0,False,sin_datos,baja,spotgamma_reference
+2026-08-06,solo_put,active,7,17:01,19:35,65.0,80.0,1.231,17:45,False,False,False,,,,-15.0,35.0,25.0,0.615,40.0,True,0,True,normal_1x_2x,baja,autonomous_without_spotgamma
+2026-08-07,no_operar,no_trade,0,,,,,,,False,False,False,,,,,,,,,,0,False,sin_datos,sin_datos,spotgamma_reference
+2026-08-10,solo_put,active,32,16:15,22:45,50.0,45.0,0.9,16:15,False,False,False,,,,5.0,45.0,45.0,0.1,5.0,True,0,True,limpia_sub_1x,media,spotgamma_reference
+2026-08-11,no_operar,no_trade,0,,,,,,,False,False,False,,,,,,,,,,0,False,sin_datos,baja,autonomous_without_spotgamma
+2026-08-12,solo_put,active,30,16:15,22:45,90.0,140.0,1.556,16:15,False,False,False,,,,-50.0,85.0,85.0,0.056,5.0,True,0,True,normal_1x_2x,media,autonomous_without_spotgamma
+2026-08-13,iron_condor,active,32,16:15,22:54,165.0,440.0,2.667,16:54,True,False,False,16:30,,,-275.0,155.0,155.0,0.061,10.0,False,1,False,stress_x2,media,autonomous_without_spotgamma
+2026-08-14,solo_put,active,30,16:15,22:57,60.0,70.0,1.167,18:00,False,False,False,,,,-10.0,55.0,55.0,0.083,5.0,True,0,True,normal_1x_2x,media,spotgamma_reference
+2026-08-17,solo_put,active,37,16:15,22:53,65.0,470.0,7.231,22:15,True,True,True,19:45,19:45,22:15,-405.0,40.0,-405.0,7.231,470.0,False,1,False,crisis_x4+,baja,autonomous_without_spotgamma
