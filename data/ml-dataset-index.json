@@ -1,43 +1,43 @@
 {
   "version": "ml-dataset-v5",
-  "lastUpdated": "2026-08-11T13:32:29.147174+00:00",
+  "lastUpdated": "2026-08-17T21:59:35.713210+00:00",
   "blocks": {
     "subyacente": {
       "status": "available",
       "file": "data/ml-dataset/subyacente.json",
-      "rows": 74,
+      "rows": 78,
       "firstDate": "2026-04-27",
-      "lastDate": "2026-08-11"
+      "lastDate": "2026-08-17"
     },
     "spotgamma": {
       "status": "available",
       "file": "data/ml-dataset/spotgamma.json",
-      "rows": 43,
+      "rows": 44,
       "firstDate": "2026-06-02",
-      "lastDate": "2026-08-10"
+      "lastDate": "2026-08-14"
     },
     "gex": {
       "status": "available",
       "file": "data/ml-dataset/gex.json",
-      "rows": 34,
+      "rows": 39,
       "firstDate": "2026-06-23",
-      "lastDate": "2026-08-11",
+      "lastDate": "2026-08-18",
       "sourceVersion": "gex-lab-v1"
     },
     "dex": {
       "status": "available",
       "file": "data/ml-dataset/dex.json",
-      "rows": 34,
+      "rows": 39,
       "firstDate": "2026-06-23",
-      "lastDate": "2026-08-11",
+      "lastDate": "2026-08-18",
       "sourceVersion": "dex-lab-v1"
     },
     "vol_surface": {
       "status": "available",
       "file": "data/ml-dataset/vol_surface.json",
-      "rows": 34,
+      "rows": 39,
       "firstDate": "2026-06-23",
-      "lastDate": "2026-08-11"
+      "lastDate": "2026-08-18"
     },
     "premiums_labels": {
       "status": "pending"

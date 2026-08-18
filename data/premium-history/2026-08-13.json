@@ -1,0 +1,41 @@
+{
+  "date": "2026-08-13",
+  "status": "no_trade",
+  "reason": "Open fuera del rango operable (113.00%)",
+  "sourceCloseDate": "2026-08-12",
+  "levelsSource": "GEX consensus - pure_gex + liquidity_weighted - close 2026-08-12",
+  "levelsOrigin": "gex_consensus",
+  "levelsModel": "pure_gex+liquidity_weighted",
+  "levelsComponents": [
+    {
+      "id": "pure_gex",
+      "name": "Pure GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-12",
+      "call_wall": 7750.0,
+      "put_wall": 7550.0,
+      "vol_trigger": 7750.0,
+      "gamma_flip": 7725.0
+    },
+    {
+      "id": "liquidity_weighted",
+      "name": "Liquidity Weighted GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-12",
+      "call_wall": 7750.0,
+      "put_wall": 7725.0,
+      "vol_trigger": 7750.0,
+      "gamma_flip": 7725.0
+    }
+  ],
+  "spotgammaAvailable": false,
+  "openWall": {
+    "ok": false,
+    "reason": "Open fuera del rango operable (113.00%)",
+    "open": 7763.0,
+    "open_pct": 112.99999999999999,
+    "call_wall": 7750.0,
+    "put_wall": 7650.0
+  },
+  "snapshots": []
+}
