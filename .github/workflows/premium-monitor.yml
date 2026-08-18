@@ -29,6 +29,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Refresh repo before capture
+        run: git pull --rebase origin main
+
       - name: Capture selected premiums
         run: python monitor_premiums.py
 
