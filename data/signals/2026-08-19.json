@@ -1,0 +1,90 @@
+{
+  "date": "2026-08-19",
+  "createdAt": "2026-08-19T14:09:11.144200+00:00",
+  "sourceCloseDate": "2026-08-18",
+  "levelsSource": "GEX consensus - pure_gex + liquidity_weighted + spotgamma - close 2026-08-18",
+  "levelsOrigin": "gex_consensus",
+  "levelsModel": "pure_gex+liquidity_weighted+spotgamma",
+  "levelsComponents": [
+    {
+      "id": "pure_gex",
+      "name": "Pure GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-18",
+      "call_wall": 7725.0,
+      "put_wall": 7625.0,
+      "vol_trigger": 7750.0,
+      "gamma_flip": 7775.0
+    },
+    {
+      "id": "liquidity_weighted",
+      "name": "Liquidity Weighted GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-18",
+      "call_wall": 7725.0,
+      "put_wall": 7625.0,
+      "vol_trigger": 7750.0,
+      "gamma_flip": 7775.0
+    },
+    {
+      "id": "spotgamma",
+      "name": "SpotGamma manual",
+      "origin": "spotgamma",
+      "sourceDate": "2026-08-19",
+      "call_wall": 7900.0,
+      "put_wall": 7500.0,
+      "vol_trigger": 7750.0,
+      "gamma_flip": 7650.0
+    }
+  ],
+  "spotgammaAvailable": true,
+  "emails": {
+    "entry": {
+      "id": "4c5ce03f-b1ed-4175-aa22-5e6b559523c8",
+      "sentAt": "2026-08-19T14:09:11.409026+00:00"
+    }
+  },
+  "status": "active",
+  "opex": false,
+  "capitalPercent": 50,
+  "spreadWidth": 20,
+  "entryCredit": 0.09999999999999998,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7717.0,
+    "open_pct": 71.0,
+    "call_wall": 7775.0,
+    "put_wall": 7575.0,
+    "sell_call": 7775.0,
+    "sell_put": 7575.0,
+    "adjustment": "Sin ajuste",
+    "skipped_wings": [
+      {
+        "wing": "put",
+        "reason": "NO COMPENSA",
+        "credit": 0.0,
+        "creditUsd": 0.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7575.0,
+        "buyStrike": 7555.0
+      }
+    ]
+  },
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7775.0,
+      "entryBid": 0.3,
+      "entryAsk": 0.35
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7795.0,
+      "entryBid": 0.15,
+      "entryAsk": 0.2
+    }
+  }
+}
