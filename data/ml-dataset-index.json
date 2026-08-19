@@ -1,20 +1,20 @@
 {
   "version": "ml-dataset-v5",
-  "lastUpdated": "2026-08-18T21:57:55.090526+00:00",
+  "lastUpdated": "2026-08-19T13:32:35.108717+00:00",
   "blocks": {
     "subyacente": {
       "status": "available",
       "file": "data/ml-dataset/subyacente.json",
-      "rows": 79,
+      "rows": 80,
       "firstDate": "2026-04-27",
-      "lastDate": "2026-08-18"
+      "lastDate": "2026-08-19"
     },
     "spotgamma": {
       "status": "available",
       "file": "data/ml-dataset/spotgamma.json",
-      "rows": 44,
+      "rows": 45,
       "firstDate": "2026-06-02",
-      "lastDate": "2026-08-14"
+      "lastDate": "2026-08-19"
     },
     "gex": {
       "status": "available",

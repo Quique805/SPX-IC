@@ -1,6 +1,6 @@
 {
   "version": "ml-dataset-v5",
-  "lastUpdated": "2026-08-18T21:57:55.090526+00:00",
+  "lastUpdated": "2026-08-19T13:32:35.108717+00:00",
   "block": "spotgamma",
   "description": "Segundo bloque del dataset ML: niveles SpotGamma manuales alineados por fecha aplicada a la sesion.",
   "source": "data/spotgamma-levels.json",
@@ -1412,6 +1412,38 @@
       "wallRangeChange": -100.0,
       "source": "SpotGamma manual",
       "updatedAt": "2026-08-14T08:10:39.864Z"
+    },
+    {
+      "date": "2026-08-19",
+      "hasUnderlying": true,
+      "open": 7717.0,
+      "callWall": 7900.0,
+      "putWall": 7500.0,
+      "gammaFlip": 7650.0,
+      "volTrigger": 7750.0,
+      "wallRange": 400.0,
+      "openPctWalls": 54.25,
+      "openZone": "middle_30_80",
+      "openInsideWalls": true,
+      "openOperableRange10_90": true,
+      "openLowTail0_10": false,
+      "openLowAdjust10_20": false,
+      "openLowAdjust20_30": false,
+      "openMiddle30_80": true,
+      "openHighAdjust80_90": false,
+      "openHighTail90_100": false,
+      "openOutsideWalls": false,
+      "distanceOpenCallWall": 183.0,
+      "distanceOpenPutWall": 217.0,
+      "distanceOpenGammaFlip": 67.0,
+      "distanceOpenVolTrigger": -33.0,
+      "callWallChange": 100.0,
+      "putWallChange": 0.0,
+      "gammaFlipChange": 50.0,
+      "volTriggerChange": 50.0,
+      "wallRangeChange": 100.0,
+      "source": "SpotGamma manual",
+      "updatedAt": "2026-08-19T04:25:32.189Z"
     }
   ]
 }
