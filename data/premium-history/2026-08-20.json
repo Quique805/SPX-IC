@@ -1,0 +1,106 @@
+{
+  "date": "2026-08-20",
+  "status": "active",
+  "sourceCloseDate": "2026-08-19",
+  "levelsSource": "GEX consensus - pure_gex + liquidity_weighted + spotgamma - close 2026-08-19",
+  "levelsOrigin": "gex_consensus",
+  "levelsModel": "pure_gex+liquidity_weighted+spotgamma",
+  "levelsComponents": [
+    {
+      "id": "pure_gex",
+      "name": "Pure GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-19",
+      "call_wall": 7750.0,
+      "put_wall": 7700.0,
+      "vol_trigger": 7700.0,
+      "gamma_flip": 7725.0
+    },
+    {
+      "id": "liquidity_weighted",
+      "name": "Liquidity Weighted GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-19",
+      "call_wall": 7750.0,
+      "put_wall": 7700.0,
+      "vol_trigger": 7700.0,
+      "gamma_flip": 7725.0
+    },
+    {
+      "id": "spotgamma",
+      "name": "SpotGamma manual",
+      "origin": "spotgamma",
+      "sourceDate": "2026-08-20",
+      "call_wall": 7900.0,
+      "put_wall": 7500.0,
+      "vol_trigger": 7750.0,
+      "gamma_flip": 7665.0
+    }
+  ],
+  "spotgammaAvailable": true,
+  "selectedAt": "2026-08-20T14:01:00.368844+00:00",
+  "entrySpot": 7693.1499,
+  "entryCredit": 0.5499999999999999,
+  "spreadWidth": 20,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7690.0,
+    "open_pct": 37.142857142857146,
+    "call_wall": 7800.0,
+    "put_wall": 7625.0,
+    "sell_call": 7800.0,
+    "sell_put": 7625.0,
+    "adjustment": "Sin ajuste",
+    "skipped_wings": [
+      {
+        "wing": "call",
+        "reason": "NO COMPENSA",
+        "credit": -0.05,
+        "creditUsd": -5.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7800.0,
+        "buyStrike": 7820.0
+      }
+    ]
+  },
+  "legs": {
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7625.0,
+      "entryBid": 1.4,
+      "entryAsk": 1.45
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7605.0,
+      "entryBid": 0.8,
+      "entryAsk": 0.85
+    }
+  },
+  "snapshots": [
+    {
+      "capturedAt": "2026-08-20T14:01:00.368844+00:00",
+      "effectiveAt": "2026-08-20T13:46:00.368844+00:00",
+      "spot": 7693.1499,
+      "quotes": {
+        "sell_put": {
+          "bid": 1.4,
+          "ask": 1.45,
+          "mid": 1.4249999999999998
+        },
+        "buy_put": {
+          "bid": 0.8,
+          "ask": 0.85,
+          "mid": 0.825
+        }
+      },
+      "closeCost": 0.6499999999999999,
+      "pnl": -9.999999999999998,
+      "multiple": 1.1818181818181819
+    }
+  ],
+  "lastUpdated": "2026-08-20T14:01:00.368844+00:00"
+}
