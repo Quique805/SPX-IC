@@ -3551,8 +3551,15 @@
         "spot": 7680.6699,
         "strikeCount": 233,
         "file": "data/chains-intraday/2026-08-21/191537Z.json"
+      },
+      {
+        "capturedAt": "2026-08-21T19:29:59.506145+00:00",
+        "effectiveAt": "2026-08-21T19:14:59.506145+00:00",
+        "spot": 7678.6499,
+        "strikeCount": 234,
+        "file": "data/chains-intraday/2026-08-21/192959Z.json"
       }
     ]
   },
-  "lastUpdated": "2026-08-21T19:15:37.497907+00:00"
+  "lastUpdated": "2026-08-21T19:29:59.506145+00:00"
 }
