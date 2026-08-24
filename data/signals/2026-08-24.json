@@ -1,0 +1,90 @@
+{
+  "date": "2026-08-24",
+  "createdAt": "2026-08-24T14:09:22.031257+00:00",
+  "sourceCloseDate": "2026-08-21",
+  "levelsSource": "GEX consensus - pure_gex + liquidity_weighted + spotgamma - close 2026-08-21",
+  "levelsOrigin": "gex_consensus",
+  "levelsModel": "pure_gex+liquidity_weighted+spotgamma",
+  "levelsComponents": [
+    {
+      "id": "pure_gex",
+      "name": "Pure GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-21",
+      "call_wall": 7700.0,
+      "put_wall": 7625.0,
+      "vol_trigger": 7700.0,
+      "gamma_flip": 7725.0
+    },
+    {
+      "id": "liquidity_weighted",
+      "name": "Liquidity Weighted GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-21",
+      "call_wall": 7700.0,
+      "put_wall": 7650.0,
+      "vol_trigger": 7700.0,
+      "gamma_flip": 7725.0
+    },
+    {
+      "id": "spotgamma",
+      "name": "SpotGamma manual",
+      "origin": "spotgamma",
+      "sourceDate": "2026-08-24",
+      "call_wall": 7900.0,
+      "put_wall": 7500.0,
+      "vol_trigger": 7700.0,
+      "gamma_flip": 7600.0
+    }
+  ],
+  "spotgammaAvailable": true,
+  "emails": {
+    "entry": {
+      "id": "4600080f-484d-4eb7-bc5d-c4ae671daf0d",
+      "sentAt": "2026-08-24T14:09:22.257615+00:00"
+    }
+  },
+  "status": "active",
+  "opex": false,
+  "capitalPercent": 100,
+  "spreadWidth": 20,
+  "entryCredit": 0.6,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7663.0,
+    "open_pct": 36.0,
+    "call_wall": 7775.0,
+    "put_wall": 7600.0,
+    "sell_call": 7775.0,
+    "sell_put": 7600.0,
+    "adjustment": "Sin ajuste",
+    "skipped_wings": [
+      {
+        "wing": "call",
+        "reason": "NO COMPENSA",
+        "credit": -0.05,
+        "creditUsd": -5.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7775.0,
+        "buyStrike": 7795.0
+      }
+    ]
+  },
+  "legs": {
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7600.0,
+      "entryBid": 1.25,
+      "entryAsk": 1.3
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7580.0,
+      "entryBid": 0.6,
+      "entryAsk": 0.65
+    }
+  }
+}
