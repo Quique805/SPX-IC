@@ -42,6 +42,10 @@
     "entry": {
       "id": "4600080f-484d-4eb7-bc5d-c4ae671daf0d",
       "sentAt": "2026-08-24T14:09:22.257615+00:00"
+    },
+    "result": {
+      "id": "12d3e831-366f-4f2b-ad3e-3cdc5ec880a0",
+      "sentAt": "2026-08-24T20:34:33.690137+00:00"
     }
   },
   "status": "active",
@@ -86,5 +90,12 @@
       "entryBid": 0.6,
       "entryAsk": 0.65
     }
+  },
+  "result": {
+    "source": "premium_monitor",
+    "capturedAt": "2026-08-24T20:27:35.479076+00:00",
+    "pnl": 95.0,
+    "closeCost": 0.05,
+    "multiple": 0.05
   }
 }
