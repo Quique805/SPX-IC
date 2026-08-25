@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-08-24T22:01:13.122137+00:00",
+  "generatedAt": "2026-08-25T13:32:25.745205+00:00",
   "date": "2026-08-24",
   "targetSession": "2026-08-25",
   "sourceChain": "data/chains-close/2026-08-24.json",
@@ -10263,54 +10263,127 @@
     }
   },
   "reference": {
-    "spotgamma": null
+    "spotgamma": {
+      "callWall": 7900.0,
+      "putWall": 7500.0,
+      "gammaFlip": 7600.0,
+      "volTrigger": 7700.0,
+      "source": "SpotGamma manual",
+      "updatedAt": "2026-08-25T06:40:36.699Z"
+    }
   },
   "diagnostics": {
     "pure_gex": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 225.0,
+          "putWall": 150.0,
+          "gammaFlip": 75.0,
+          "volTrigger": 0.0,
+          "weightedError": 142.5
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 108.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 200.0,
+          "putWall": 100.0,
+          "gammaFlip": 100.0,
+          "volTrigger": 0.0,
+          "weightedError": 120.0
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 77.0,
+          "sellCall": 7700.0,
+          "sellPut": 7600.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7684.0,
+          "low": 7677.0
         }
       }
     },
     "liquidity_weighted": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 225.0,
+          "putWall": 150.0,
+          "gammaFlip": 75.0,
+          "volTrigger": 0.0,
+          "weightedError": 142.5
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 108.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 200.0,
+          "putWall": 150.0,
+          "gammaFlip": 100.0,
+          "volTrigger": 0.0,
+          "weightedError": 137.5
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 54.0,
+          "sellCall": 7700.0,
+          "sellPut": 7650.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7684.0,
+          "low": 7677.0
         }
       }
     },
     "spotgamma_fit": {
       "next": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 125.0,
+          "putWall": 0.0,
+          "gammaFlip": 25.0,
+          "volTrigger": 50.0,
+          "weightedError": 55.0
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 64.36363636363637,
+          "sellCall": 7775.0,
+          "sellPut": 7500.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7684.0,
+          "low": 7677.0
         }
       },
       "multi": {
-        "spotgammaError": null,
+        "spotgammaError": {
+          "callWall": 100.0,
+          "putWall": 0.0,
+          "gammaFlip": 50.0,
+          "volTrigger": 50.0,
+          "weightedError": 50.0
+        },
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 59.0,
+          "sellCall": 7800.0,
+          "sellPut": 7500.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7684.0,
+          "low": 7677.0
         }
       }
     }
