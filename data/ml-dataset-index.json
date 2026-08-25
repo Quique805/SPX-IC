@@ -1,6 +1,6 @@
 {
   "version": "ml-dataset-v5",
-  "lastUpdated": "2026-08-25T14:07:35.647772+00:00",
+  "lastUpdated": "2026-08-25T20:32:35.884904+00:00",
   "blocks": {
     "subyacente": {
       "status": "available",
@@ -19,25 +19,25 @@
     "gex": {
       "status": "available",
       "file": "data/ml-dataset/gex.json",
-      "rows": 44,
+      "rows": 45,
       "firstDate": "2026-06-23",
-      "lastDate": "2026-08-25",
+      "lastDate": "2026-08-26",
       "sourceVersion": "gex-lab-v1"
     },
     "dex": {
       "status": "available",
       "file": "data/ml-dataset/dex.json",
-      "rows": 44,
+      "rows": 45,
       "firstDate": "2026-06-23",
-      "lastDate": "2026-08-25",
+      "lastDate": "2026-08-26",
       "sourceVersion": "dex-lab-v1"
     },
     "vol_surface": {
       "status": "available",
       "file": "data/ml-dataset/vol_surface.json",
-      "rows": 44,
+      "rows": 45,
       "firstDate": "2026-06-23",
-      "lastDate": "2026-08-25"
+      "lastDate": "2026-08-26"
     },
     "premiums_labels": {
       "status": "pending"
