@@ -1,0 +1,74 @@
+{
+  "date": "2026-08-26",
+  "status": "no_trade",
+  "reason": "CALL: NO COMPENSA (0.00 USD); PUT: NO COMPENSA (5.00 USD)",
+  "sourceCloseDate": "2026-08-25",
+  "levelsSource": "GEX consensus - pure_gex + liquidity_weighted + spotgamma - close 2026-08-25",
+  "levelsOrigin": "gex_consensus",
+  "levelsModel": "pure_gex+liquidity_weighted+spotgamma",
+  "levelsComponents": [
+    {
+      "id": "pure_gex",
+      "name": "Pure GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-25",
+      "call_wall": 7700.0,
+      "put_wall": 7675.0,
+      "vol_trigger": 7650.0,
+      "gamma_flip": 7675.0
+    },
+    {
+      "id": "liquidity_weighted",
+      "name": "Liquidity Weighted GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-08-25",
+      "call_wall": 7700.0,
+      "put_wall": 7675.0,
+      "vol_trigger": 7650.0,
+      "gamma_flip": 7675.0
+    },
+    {
+      "id": "spotgamma",
+      "name": "SpotGamma manual",
+      "origin": "spotgamma",
+      "sourceDate": "2026-08-26",
+      "call_wall": 7900.0,
+      "put_wall": 7500.0,
+      "vol_trigger": 7700.0,
+      "gamma_flip": 7600.0
+    }
+  ],
+  "spotgammaAvailable": true,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7667.0,
+    "open_pct": 28.000000000000004,
+    "call_wall": 7775.0,
+    "put_wall": 7625.0,
+    "sell_call": 7775.0,
+    "sell_put": 7605.0,
+    "adjustment": "Put Wall -20",
+    "skipped_wings": [
+      {
+        "wing": "call",
+        "reason": "NO COMPENSA",
+        "credit": 0.0,
+        "creditUsd": 0.0,
+        "thresholdUsd": 5,
+        "sellStrike": 7775.0,
+        "buyStrike": 7795.0
+      },
+      {
+        "wing": "put",
+        "reason": "NO COMPENSA",
+        "credit": 0.04999999999999999,
+        "creditUsd": 4.999999999999999,
+        "thresholdUsd": 5,
+        "sellStrike": 7605.0,
+        "buyStrike": 7585.0
+      }
+    ]
+  },
+  "snapshots": []
+}
