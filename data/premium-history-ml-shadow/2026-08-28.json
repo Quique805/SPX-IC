@@ -1,0 +1,76 @@
+{
+  "date": "2026-08-28",
+  "status": "active",
+  "strategy": "ml_shadow",
+  "modelVersion": "ml-shadow-v1.2",
+  "generatedAt": "2026-08-28T14:10:01.799779+00:00",
+  "selectedAt": "2026-08-28T14:07:13.808849+00:00",
+  "entrySpot": 7735.7002,
+  "entryCredit": 2.0,
+  "entryCreditUsd": 200.0,
+  "action": "iron_condor",
+  "confidence": "media",
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7780.0,
+      "entryBid": 2.6,
+      "entryAsk": 2.65
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7790.0,
+      "entryBid": 1.45,
+      "entryAsk": 1.5
+    },
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7665.0,
+      "entryBid": 2.3,
+      "entryAsk": 2.35
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7645.0,
+      "entryBid": 1.3,
+      "entryAsk": 1.4
+    }
+  },
+  "snapshots": [
+    {
+      "capturedAt": "2026-08-28T14:15:37.454007+00:00",
+      "effectiveAt": "2026-08-28T14:00:37.454007+00:00",
+      "spot": 7744.1899,
+      "quotes": {
+        "sell_call": {
+          "bid": 3.6,
+          "ask": 3.9,
+          "mid": 3.75
+        },
+        "buy_call": {
+          "bid": 2.15,
+          "ask": 2.25,
+          "mid": 2.2
+        },
+        "sell_put": {
+          "bid": 1.55,
+          "ask": 1.75,
+          "mid": 1.65
+        },
+        "buy_put": {
+          "bid": 0.9,
+          "ask": 1.0,
+          "mid": 0.95
+        }
+      },
+      "closeCost": 2.6,
+      "pnl": -60.00000000000001,
+      "multiple": 1.3
+    }
+  ],
+  "lastUpdated": "2026-08-28T14:15:37.454007+00:00"
+}
