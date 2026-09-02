@@ -42,6 +42,10 @@
     "entry": {
       "id": "6eaa6553-083a-4460-8798-f18304347551",
       "sentAt": "2026-09-02T14:10:24.975390+00:00"
+    },
+    "result": {
+      "id": "01a063d5-662e-701d-9bfb-a9b924b51a6e",
+      "sentAt": "2026-09-02T20:35:24.940005+00:00"
     }
   },
   "status": "active",
@@ -86,5 +90,10 @@
       "entryBid": 0.25,
       "entryAsk": 0.3
     }
+  },
+  "result": {
+    "source": "expiry_estimate",
+    "pnl": 10.000000000000004,
+    "touched": false
   }
 }
