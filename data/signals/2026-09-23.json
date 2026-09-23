@@ -1,0 +1,83 @@
+{
+  "date": "2026-09-23",
+  "createdAt": "2026-09-23T14:12:45.684791+00:00",
+  "sourceCloseDate": "2026-09-22",
+  "levelsSource": "GEX consensus - pure_gex + liquidity_weighted - close 2026-09-22",
+  "levelsOrigin": "gex_consensus",
+  "levelsModel": "pure_gex+liquidity_weighted",
+  "levelsComponents": [
+    {
+      "id": "pure_gex",
+      "name": "Pure GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-09-22",
+      "call_wall": 7775.0,
+      "put_wall": 7750.0,
+      "vol_trigger": 7750.0,
+      "gamma_flip": 7675.0
+    },
+    {
+      "id": "liquidity_weighted",
+      "name": "Liquidity Weighted GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-09-22",
+      "call_wall": 7775.0,
+      "put_wall": 7750.0,
+      "vol_trigger": 7750.0,
+      "gamma_flip": 7675.0
+    }
+  ],
+  "spotgammaAvailable": false,
+  "emails": {
+    "entry": {
+      "id": "01a0ce9c-9e82-73d3-9ddd-be0949aaf0a6",
+      "sentAt": "2026-09-23T14:12:45.894667+00:00"
+    }
+  },
+  "status": "active",
+  "opex": false,
+  "capitalPercent": 100,
+  "spreadWidth": 20,
+  "entryCredit": 9.5,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7762.0,
+    "open_pct": 48.0,
+    "call_wall": 7775.0,
+    "put_wall": 7750.0,
+    "sell_call": 7775.0,
+    "sell_put": 7750.0,
+    "adjustment": "Sin ajuste"
+  },
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7775.0,
+      "entryBid": 11.4,
+      "entryAsk": 11.7
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7795.0,
+      "entryBid": 4.7,
+      "entryAsk": 4.9
+    },
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7750.0,
+      "entryBid": 6.2,
+      "entryAsk": 6.4
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7730.0,
+      "entryBid": 3.0,
+      "entryAsk": 3.2
+    }
+  }
+}
