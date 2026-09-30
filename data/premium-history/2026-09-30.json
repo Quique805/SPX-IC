@@ -1,0 +1,109 @@
+{
+  "date": "2026-09-30",
+  "status": "active",
+  "sourceCloseDate": "2026-09-29",
+  "levelsSource": "GEX consensus - pure_gex + liquidity_weighted - close 2026-09-29",
+  "levelsOrigin": "gex_consensus",
+  "levelsModel": "pure_gex+liquidity_weighted",
+  "levelsComponents": [
+    {
+      "id": "pure_gex",
+      "name": "Pure GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-09-29",
+      "call_wall": 7700.0,
+      "put_wall": 7600.0,
+      "vol_trigger": 7700.0,
+      "gamma_flip": 7700.0
+    },
+    {
+      "id": "liquidity_weighted",
+      "name": "Liquidity Weighted GEX",
+      "origin": "gex_model",
+      "sourceDate": "2026-09-29",
+      "call_wall": 7675.0,
+      "put_wall": 7650.0,
+      "vol_trigger": 7700.0,
+      "gamma_flip": 7700.0
+    }
+  ],
+  "spotgammaAvailable": false,
+  "selectedAt": "2026-09-30T14:01:21.515417+00:00",
+  "entrySpot": 7694.1602,
+  "entryCredit": 3.8999999999999995,
+  "spreadWidth": 20,
+  "openWall": {
+    "ok": true,
+    "reason": null,
+    "open": 7689.0,
+    "open_pct": 85.33333333333334,
+    "call_wall": 7700.0,
+    "put_wall": 7625.0,
+    "sell_call": 7715.0,
+    "sell_put": 7625.0,
+    "adjustment": "Call Wall +15"
+  },
+  "legs": {
+    "sell_call": {
+      "type": "call",
+      "side": "sell",
+      "strike": 7715.0,
+      "entryBid": 5.3,
+      "entryAsk": 5.4
+    },
+    "buy_call": {
+      "type": "call",
+      "side": "buy",
+      "strike": 7735.0,
+      "entryBid": 1.85,
+      "entryAsk": 1.9
+    },
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7625.0,
+      "entryBid": 1.2,
+      "entryAsk": 1.25
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7605.0,
+      "entryBid": 0.65,
+      "entryAsk": 0.7
+    }
+  },
+  "snapshots": [
+    {
+      "capturedAt": "2026-09-30T14:01:21.515417+00:00",
+      "effectiveAt": "2026-09-30T13:46:21.515417+00:00",
+      "spot": 7694.1602,
+      "quotes": {
+        "sell_call": {
+          "bid": 5.3,
+          "ask": 5.4,
+          "mid": 5.35
+        },
+        "buy_call": {
+          "bid": 1.85,
+          "ask": 1.9,
+          "mid": 1.875
+        },
+        "sell_put": {
+          "bid": 1.2,
+          "ask": 1.25,
+          "mid": 1.225
+        },
+        "buy_put": {
+          "bid": 0.65,
+          "ask": 0.7,
+          "mid": 0.675
+        }
+      },
+      "closeCost": 4.15,
+      "pnl": -25.00000000000009,
+      "multiple": 1.0641025641025643
+    }
+  ],
+  "lastUpdated": "2026-09-30T14:01:21.515417+00:00"
+}
