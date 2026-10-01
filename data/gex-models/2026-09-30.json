@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-10-01T13:32:30.360784+00:00",
+  "generatedAt": "2026-10-01T14:07:30.747563+00:00",
   "date": "2026-09-30",
   "targetSession": "2026-10-01",
   "sourceChain": "data/chains-close/2026-09-30.json",
@@ -10307,22 +10307,22 @@
           "adjustment": "Put Wall -35",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7673.0,
-          "low": 7660.0
+          "high": 7684.0,
+          "low": 7627.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 32.0,
           "sellCall": 7700.0,
           "sellPut": 7650.0,
           "adjustment": "Sin ajuste",
           "upperTouch": false,
-          "lowerTouch": false,
-          "high": 7673.0,
-          "low": 7660.0
+          "lowerTouch": true,
+          "high": 7684.0,
+          "low": 7627.0
         }
       }
     },
@@ -10330,29 +10330,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 32.0,
           "sellCall": 7700.0,
           "sellPut": 7650.0,
           "adjustment": "Sin ajuste",
           "upperTouch": false,
-          "lowerTouch": false,
-          "high": 7673.0,
-          "low": 7660.0
+          "lowerTouch": true,
+          "high": 7684.0,
+          "low": 7627.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 32.0,
           "sellCall": 7700.0,
           "sellPut": 7650.0,
           "adjustment": "Sin ajuste",
           "upperTouch": false,
-          "lowerTouch": false,
-          "high": 7673.0,
-          "low": 7660.0
+          "lowerTouch": true,
+          "high": 7684.0,
+          "low": 7627.0
         }
       }
     },
@@ -10367,8 +10367,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7673.0,
-          "low": 7660.0
+          "high": 7684.0,
+          "low": 7627.0
         }
       },
       "multi": {
@@ -10381,8 +10381,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7673.0,
-          "low": 7660.0
+          "high": 7684.0,
+          "low": 7627.0
         }
       }
     }
