@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-10-05T13:32:33.453421+00:00",
+  "generatedAt": "2026-10-05T14:07:33.806969+00:00",
   "date": "2026-10-02",
   "targetSession": "2026-10-05",
   "sourceChain": "data/chains-close/2026-10-02.json",
@@ -9599,7 +9599,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7739.0,
+          "high": 7743.0,
           "low": 7728.0
         }
       },
@@ -9613,7 +9613,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7739.0,
+          "high": 7743.0,
           "low": 7728.0
         }
       }
@@ -9629,7 +9629,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7739.0,
+          "high": 7743.0,
           "low": 7728.0
         }
       },
@@ -9643,7 +9643,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7739.0,
+          "high": 7743.0,
           "low": 7728.0
         }
       }
@@ -9659,7 +9659,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7739.0,
+          "high": 7743.0,
           "low": 7728.0
         }
       },
@@ -9673,7 +9673,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7739.0,
+          "high": 7743.0,
           "low": 7728.0
         }
       }
