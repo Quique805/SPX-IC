@@ -1,0 +1,23 @@
+{
+  "date": "2026-10-06",
+  "createdAt": "2026-10-06T14:14:36.289947+00:00",
+  "sourceCloseDate": "2026-10-06",
+  "levelsSource": null,
+  "emails": {
+    "entry": {
+      "id": "01a11190-fa36-7753-a10f-bc76ec0e62e7",
+      "sentAt": "2026-10-06T14:14:36.401832+00:00"
+    }
+  },
+  "status": "no_trade",
+  "reason": "Faltan niveles operativos para 2026-10-06",
+  "missingInputs": [
+    "spotgamma_levels",
+    "gex_model_levels"
+  ],
+  "openWall": {
+    "ok": false,
+    "reason": "Faltan niveles operativos para 2026-10-06",
+    "target": "2026-10-06"
+  }
+}

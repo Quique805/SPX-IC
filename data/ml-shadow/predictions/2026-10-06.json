@@ -1,0 +1,77 @@
+{
+  "version": "ml-shadow-v1.2",
+  "date": "2026-10-06",
+  "generatedAt": "2026-10-06T14:14:35.897402+00:00",
+  "mode": "paper_shadow",
+  "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
+  "training": {
+    "modelStatus": "blocked_data_incomplete",
+    "priorTrainingDays": null,
+    "priorTrainingRows": null,
+    "weights": null,
+    "logisticStatus": "not_run",
+    "boostingStatus": "not_run",
+    "minTrainDays": 8,
+    "featureCount": 35
+  },
+  "context": {
+    "entryChain": "data/chains/2026-10-06.json",
+    "entrySpot": 7820.5698,
+    "sourceMode": "autonomous_without_spotgamma",
+    "spotgammaAvailable": false,
+    "gexAvailable": false,
+    "dexAvailable": false,
+    "volSurfaceAvailable": false,
+    "missingBlocks": [
+      "GEX",
+      "DEX",
+      "Vol Surface"
+    ],
+    "dataQuality": "blocked_missing_previous_close",
+    "open": 7806.0,
+    "high": 7831.0,
+    "low": 7806.0,
+    "close": 7828.0,
+    "callWall": null,
+    "putWall": null,
+    "openPctWalls": null,
+    "openZone": null,
+    "priorUnderlyingFeatureDate": "2026-10-05"
+  },
+  "benchmark": {
+    "status": null,
+    "entryCredit": null,
+    "entryCreditUsd": null,
+    "callStrike": null,
+    "putStrike": null,
+    "skippedWings": [],
+    "openPct": null,
+    "adjustment": null
+  },
+  "decision": {
+    "action": "no_operar",
+    "selectedWings": [],
+    "totalCreditUsd": 0,
+    "totalMaxRiskUsd": 0,
+    "portfolioRiskRewardPct": null,
+    "averageProbNoTouch": null,
+    "averageScore": null,
+    "confidence": "sin_datos",
+    "commentary": "Shadow no opera: faltan datos del cierre previo para construir la fotografia completa del laboratorio (GEX, DEX, Vol Surface). No se puntuan strikes en modo degradado.",
+    "note": "Shadow mode: no altera la senal real ni envia ordenes."
+  },
+  "evaluation": {
+    "available": false,
+    "noTouchAll": null,
+    "selectedTouchCount": 0,
+    "high": 7831.0,
+    "low": 7806.0,
+    "benchmarkNoTouch": null
+  },
+  "candidates": {
+    "count": 0,
+    "topCalls": [],
+    "topPuts": [],
+    "all": []
+  }
+}
