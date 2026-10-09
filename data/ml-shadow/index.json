@@ -1,6 +1,6 @@
 {
   "version": "ml-shadow-v1.2",
-  "lastUpdated": "2026-10-09T14:15:13.792510+00:00",
+  "lastUpdated": "2026-10-09T20:40:20.747614+00:00",
   "mode": "paper_shadow",
   "description": "ML Shadow V1: candidate generator + heuristic + regularized logistic regression + small gradient boosting. No production signals are changed.",
   "spotgammaDependency": "optional; when manual SpotGamma is missing, Shadow runs autonomous mode from GEX/DEX/Vol Surface/underlying/options chain.",
@@ -146,8 +146,8 @@
     "evaluatedShadowSignals": 62,
     "shadowNoTouchWins": 46,
     "shadowNoTouchWr": 74.19354838709677,
-    "benchmarkEvaluatedSignals": 47,
-    "benchmarkNoTouchWr": 65.95744680851064,
+    "benchmarkEvaluatedSignals": 48,
+    "benchmarkNoTouchWr": 64.58333333333334,
     "averageShadowCreditUsd": 133.8709677419355,
     "averageShadowMaxRiskUsd": 2172.5806451612902,
     "averageShadowRiskRewardPct": 7.046185952225546
