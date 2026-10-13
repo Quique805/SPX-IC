@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-13",
+  "status": "active",
+  "strategy": "ml_shadow",
+  "modelVersion": "ml-shadow-v1.2",
+  "generatedAt": "2026-10-13T14:15:28.980781+00:00",
+  "selectedAt": "2026-10-13T14:07:19.000049+00:00",
+  "entrySpot": 7808.79,
+  "entryCredit": 0.4,
+  "entryCreditUsd": 40.0,
+  "action": "solo_put",
+  "confidence": "media",
+  "legs": {
+    "sell_put": {
+      "type": "put",
+      "side": "sell",
+      "strike": 7765.0,
+      "entryBid": 0.9,
+      "entryAsk": 0.95
+    },
+    "buy_put": {
+      "type": "put",
+      "side": "buy",
+      "strike": 7745.0,
+      "entryBid": 0.45,
+      "entryAsk": 0.5
+    }
+  },
+  "snapshots": [
+    {
+      "capturedAt": "2026-10-13T14:15:48.216372+00:00",
+      "effectiveAt": "2026-10-13T14:00:48.216372+00:00",
+      "spot": 7808.2202,
+      "quotes": {
+        "sell_put": {
+          "bid": 0.75,
+          "ask": 0.85,
+          "mid": 0.8
+        },
+        "buy_put": {
+          "bid": 0.35,
+          "ask": 0.45,
+          "mid": 0.4
+        }
+      },
+      "closeCost": 0.5,
+      "pnl": -9.999999999999998,
+      "multiple": 1.25
+    }
+  ],
+  "lastUpdated": "2026-10-13T14:15:48.216372+00:00"
+}
