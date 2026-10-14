@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-10-14T00:37:26.815506+00:00",
+  "generatedAt": "2026-10-14T13:32:35.469688+00:00",
   "date": "2026-10-13",
   "targetSession": "2026-10-14",
   "sourceChain": "data/chains-close/2026-10-13.json",
@@ -10240,15 +10240,17 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": -34.66666666666667
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": -34.66666666666667
         }
       }
     },
@@ -10256,15 +10258,17 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": -34.66666666666667
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": -104.0
         }
       }
     },
@@ -10272,15 +10276,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 38.15384615384615,
+          "sellCall": 7975.0,
+          "sellPut": 7650.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7777.0,
+          "low": 7768.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 45.09090909090909,
+          "sellCall": 7925.0,
+          "sellPut": 7650.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7777.0,
+          "low": 7768.0
         }
       }
     }
