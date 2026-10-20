@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-10-20T14:07:37.260097+00:00",
+  "generatedAt": "2026-10-20T20:32:38.653507+00:00",
   "date": "2026-10-19",
   "targetSession": "2026-10-20",
   "sourceChain": "data/chains-close/2026-10-19.json",
@@ -10432,14 +10432,14 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 38.666666666666664,
           "sellCall": 7725.0,
           "sellPut": 7650.0,
           "adjustment": "Sin ajuste",
-          "upperTouch": false,
+          "upperTouch": true,
           "lowerTouch": false,
-          "high": 7710.0,
+          "high": 7748.0,
           "low": 7668.0
         }
       },
@@ -10453,7 +10453,7 @@
           "adjustment": "Put Wall -20",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7710.0,
+          "high": 7748.0,
           "low": 7668.0
         }
       }
@@ -10469,7 +10469,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": true,
           "lowerTouch": false,
-          "high": 7710.0,
+          "high": 7748.0,
           "low": 7668.0
         }
       },
@@ -10483,7 +10483,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": true,
           "lowerTouch": false,
-          "high": 7710.0,
+          "high": 7748.0,
           "low": 7668.0
         }
       }
@@ -10499,7 +10499,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7710.0,
+          "high": 7748.0,
           "low": 7668.0
         }
       },
@@ -10513,7 +10513,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7710.0,
+          "high": 7748.0,
           "low": 7668.0
         }
       }
