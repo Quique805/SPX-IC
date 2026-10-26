@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-10-26T14:32:37.663250+00:00",
+  "generatedAt": "2026-10-26T15:07:37.801327+00:00",
   "date": "2026-10-23",
   "targetSession": "2026-10-26",
   "sourceChain": "data/chains-close/2026-10-23.json",
@@ -10435,14 +10435,14 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 20.0,
           "sellCall": 7700.0,
           "sellPut": 7590.0,
           "adjustment": "Put Wall -35",
-          "upperTouch": false,
+          "upperTouch": true,
           "lowerTouch": false,
-          "high": 7683.0,
+          "high": 7702.0,
           "low": 7640.0
         }
       },
@@ -10456,7 +10456,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7683.0,
+          "high": 7702.0,
           "low": 7640.0
         }
       }
@@ -10465,14 +10465,14 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 20.0,
           "sellCall": 7700.0,
           "sellPut": 7590.0,
           "adjustment": "Put Wall -35",
-          "upperTouch": false,
+          "upperTouch": true,
           "lowerTouch": false,
-          "high": 7683.0,
+          "high": 7702.0,
           "low": 7640.0
         }
       },
@@ -10486,7 +10486,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": true,
           "lowerTouch": false,
-          "high": 7683.0,
+          "high": 7702.0,
           "low": 7640.0
         }
       }
@@ -10502,7 +10502,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7683.0,
+          "high": 7702.0,
           "low": 7640.0
         }
       },
@@ -10516,7 +10516,7 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7683.0,
+          "high": 7702.0,
           "low": 7640.0
         }
       }
