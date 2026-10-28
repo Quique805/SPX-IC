@@ -820,7 +820,37 @@
       "closeCost": 0.0,
       "pnl": 200.0,
       "multiple": 0.0
+    },
+    {
+      "capturedAt": "2026-10-28T21:45:47.314862+00:00",
+      "effectiveAt": "2026-10-28T21:30:47.314862+00:00",
+      "spot": 7743.98,
+      "quotes": {
+        "sell_call": {
+          "bid": 0.0,
+          "ask": 0.0,
+          "mid": 0.0
+        },
+        "buy_call": {
+          "bid": 0.0,
+          "ask": 0.0,
+          "mid": 0.0
+        },
+        "sell_put": {
+          "bid": 0.0,
+          "ask": 0.0,
+          "mid": 0.0
+        },
+        "buy_put": {
+          "bid": 0.0,
+          "ask": 0.0,
+          "mid": 0.0
+        }
+      },
+      "closeCost": 0.0,
+      "pnl": 200.0,
+      "multiple": 0.0
     }
   ],
-  "lastUpdated": "2026-10-28T21:31:03.326164+00:00"
+  "lastUpdated": "2026-10-28T21:45:47.314862+00:00"
 }
