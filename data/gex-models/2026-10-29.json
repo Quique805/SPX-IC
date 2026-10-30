@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-10-30T01:21:19.063222+00:00",
+  "generatedAt": "2026-10-30T14:32:40.264186+00:00",
   "date": "2026-10-29",
   "targetSession": "2026-10-30",
   "sourceChain": "data/chains-close/2026-10-29.json",
@@ -10648,15 +10648,17 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": -138.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": -69.0
         }
       }
     },
@@ -10664,15 +10666,17 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": -138.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": -138.0
         }
       }
     },
@@ -10680,15 +10684,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 27.0,
+          "sellCall": 7850.0,
+          "sellPut": 7530.0,
+          "adjustment": "Put Wall -20",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7637.0,
+          "low": 7597.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 27.0,
+          "sellCall": 7850.0,
+          "sellPut": 7530.0,
+          "adjustment": "Put Wall -20",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7637.0,
+          "low": 7597.0
         }
       }
     }
