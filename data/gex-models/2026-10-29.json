@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-10-30T15:07:38.540135+00:00",
+  "generatedAt": "2026-10-30T21:32:40.174748+00:00",
   "date": "2026-10-29",
   "targetSession": "2026-10-30",
   "sourceChain": "data/chains-close/2026-10-29.json",
@@ -10684,29 +10684,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 27.0,
           "sellCall": 7850.0,
           "sellPut": 7530.0,
           "adjustment": "Put Wall -20",
           "upperTouch": false,
-          "lowerTouch": false,
+          "lowerTouch": true,
           "high": 7637.0,
-          "low": 7597.0
+          "low": 7528.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 27.0,
           "sellCall": 7850.0,
           "sellPut": 7530.0,
           "adjustment": "Put Wall -20",
           "upperTouch": false,
-          "lowerTouch": false,
+          "lowerTouch": true,
           "high": 7637.0,
-          "low": 7597.0
+          "low": 7528.0
         }
       }
     }
