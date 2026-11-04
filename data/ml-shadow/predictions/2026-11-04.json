@@ -1,7 +1,7 @@
 {
   "version": "ml-shadow-v1.2",
   "date": "2026-11-04",
-  "generatedAt": "2026-11-04T15:16:26.661781+00:00",
+  "generatedAt": "2026-11-04T21:44:08.677076+00:00",
   "mode": "paper_shadow",
   "objective": "Optimize no_touch with reasonable premium before using the model for live decisions.",
   "training": {
@@ -27,9 +27,9 @@
     "dexAvailable": true,
     "volSurfaceAvailable": true,
     "open": 7636.0,
-    "high": 7706.0,
+    "high": 7716.0,
     "low": 7636.0,
-    "close": 7698.0,
+    "close": 7689.0,
     "callWall": null,
     "putWall": null,
     "openPctWalls": null,
@@ -37,13 +37,13 @@
     "priorUnderlyingFeatureDate": "2026-11-03"
   },
   "benchmark": {
-    "status": null,
+    "status": "no_trade",
     "entryCredit": null,
     "entryCreditUsd": null,
     "callStrike": null,
     "putStrike": null,
     "skippedWings": [],
-    "openPct": null,
+    "openPct": 111.00000000000001,
     "adjustment": null
   },
   "decision": {
@@ -135,7 +135,7 @@
     "available": true,
     "noTouchAll": true,
     "selectedTouchCount": 0,
-    "high": 7706.0,
+    "high": 7716.0,
     "low": 7636.0,
     "benchmarkNoTouch": null
   },
@@ -533,8 +533,8 @@
         "boostingProbNoTouch": 0.8538541955630262,
         "finalProbNoTouch": 0.5756054333632156,
         "finalScore": 0.6725400986920289,
-        "labelTouched": false,
-        "labelNoTouch": true,
+        "labelTouched": true,
+        "labelNoTouch": false,
         "gexDistanceSideConsensus": 65.0,
         "dexDistanceSideWall": 65.0
       },
@@ -605,8 +605,8 @@
         "boostingProbNoTouch": 0.8538541955630262,
         "finalProbNoTouch": 0.5573323814073163,
         "finalScore": 0.6580253391453471,
-        "labelTouched": false,
-        "labelNoTouch": true,
+        "labelTouched": true,
+        "labelNoTouch": false,
         "gexDistanceSideConsensus": 60.0,
         "dexDistanceSideWall": 60.0
       },
@@ -1833,8 +1833,8 @@
         "boostingProbNoTouch": 0.8538541955630262,
         "finalProbNoTouch": 0.5756054333632156,
         "finalScore": 0.6725400986920289,
-        "labelTouched": false,
-        "labelNoTouch": true,
+        "labelTouched": true,
+        "labelNoTouch": false,
         "gexDistanceSideConsensus": 65.0,
         "dexDistanceSideWall": 65.0
       },
@@ -1905,8 +1905,8 @@
         "boostingProbNoTouch": 0.8538541955630262,
         "finalProbNoTouch": 0.5573323814073163,
         "finalScore": 0.6580253391453471,
-        "labelTouched": false,
-        "labelNoTouch": true,
+        "labelTouched": true,
+        "labelNoTouch": false,
         "gexDistanceSideConsensus": 60.0,
         "dexDistanceSideWall": 60.0
       },
