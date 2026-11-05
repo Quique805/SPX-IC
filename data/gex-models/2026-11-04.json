@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-11-05T01:48:54.320506+00:00",
+  "generatedAt": "2026-11-05T14:32:39.183512+00:00",
   "date": "2026-11-04",
   "targetSession": "2026-11-05",
   "sourceChain": "data/chains-close/2026-11-04.json",
@@ -10000,15 +10000,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 57.99999999999999,
+          "sellCall": 7700.0,
+          "sellPut": 7650.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7681.0,
+          "low": 7656.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 57.99999999999999,
+          "sellCall": 7700.0,
+          "sellPut": 7650.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7681.0,
+          "low": 7656.0
         }
       }
     },
@@ -10016,15 +10030,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 57.99999999999999,
+          "sellCall": 7700.0,
+          "sellPut": 7650.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7681.0,
+          "low": 7656.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 57.99999999999999,
+          "sellCall": 7700.0,
+          "sellPut": 7650.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7681.0,
+          "low": 7656.0
         }
       }
     },
@@ -10032,15 +10060,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 59.66666666666667,
+          "sellCall": 7800.0,
+          "sellPut": 7500.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7681.0,
+          "low": 7656.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 59.66666666666667,
+          "sellCall": 7800.0,
+          "sellPut": 7500.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7681.0,
+          "low": 7656.0
         }
       }
     }
