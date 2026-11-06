@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-11-06T01:48:55.562990+00:00",
+  "generatedAt": "2026-11-06T14:32:36.841489+00:00",
   "date": "2026-11-05",
   "targetSession": "2026-11-06",
   "sourceChain": "data/chains-close/2026-11-05.json",
@@ -9736,15 +9736,23 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 31.2,
+          "sellCall": 7550.0,
+          "sellPut": 7300.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7383.0,
+          "low": 7370.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "no_trade",
+          "reason": "Open fuera de rango",
+          "openPct": 9.333333333333334
         }
       }
     },
@@ -9768,15 +9776,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 71.2,
+          "sellCall": 7450.0,
+          "sellPut": 7200.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7383.0,
+          "low": 7370.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "pending",
-          "reason": "Datos insuficientes"
+          "status": "win",
+          "openPct": 71.2,
+          "sellCall": 7450.0,
+          "sellPut": 7200.0,
+          "adjustment": "Sin ajuste",
+          "upperTouch": false,
+          "lowerTouch": false,
+          "high": 7383.0,
+          "low": 7370.0
         }
       }
     }
