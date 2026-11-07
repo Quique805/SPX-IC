@@ -1,6 +1,6 @@
 {
   "version": "ml-dataset-v5",
-  "lastUpdated": "2026-11-06T21:32:52.943218+00:00",
+  "lastUpdated": "2026-11-07T01:13:51.425864+00:00",
   "block": "spotgamma",
   "description": "Segundo bloque del dataset ML: niveles SpotGamma manuales alineados por fecha aplicada a la sesion.",
   "source": "data/spotgamma-levels.json",
