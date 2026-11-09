@@ -1,6 +1,6 @@
 {
   "version": "dex-lab-v1",
-  "generatedAt": "2026-11-07T01:13:46.129280+00:00",
+  "generatedAt": "2026-11-09T14:32:43.053553+00:00",
   "date": "2026-09-08",
   "targetSession": "2026-09-09",
   "sourceChain": "data/chains-close/2026-09-08.json",
@@ -16,7 +16,7 @@
     "dexFlip": 7700,
     "maxPositiveDex": 8125,
     "maxNegativeDex": 7225,
-    "netDexAtSpot": -21977403927.90301,
+    "netDexAtSpot": -21977403927.903015,
     "expirationsUsed": [
       {
         "expiration": "2026-09-09",
@@ -1298,7 +1298,7 @@
       },
       {
         "spot": 7525,
-        "netDex": -91436229057.44301
+        "netDex": -91436229057.443
       },
       {
         "spot": 7550,
@@ -1338,7 +1338,7 @@
       },
       {
         "spot": 7775,
-        "netDex": 47936596365.14774
+        "netDex": 47936596365.147736
       },
       {
         "spot": 7800,

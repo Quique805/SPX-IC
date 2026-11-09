@@ -1,6 +1,6 @@
 {
   "version": "dex-lab-v1",
-  "generatedAt": "2026-11-07T01:13:49.600459+00:00",
+  "generatedAt": "2026-11-09T14:32:46.683872+00:00",
   "date": "2026-10-27",
   "targetSession": "2026-10-28",
   "sourceChain": "data/chains-close/2026-10-27.json",
@@ -1399,7 +1399,7 @@
       },
       {
         "spot": 7900,
-        "netDex": 134741873386.56294
+        "netDex": 134741873386.56291
       },
       {
         "spot": 7925,
