@@ -1,6 +1,6 @@
 {
   "version": "ml-dataset-v5",
-  "lastUpdated": "2026-11-10T03:49:40.148947+00:00",
+  "lastUpdated": "2026-11-10T14:32:49.334690+00:00",
   "block": "vol_surface",
   "description": "Quinto bloque del dataset ML: firma compacta de superficie de volatilidad, skew, term structure, liquidez y calidad.",
   "source": "data/chains-close/*.json",
@@ -106296,8 +106296,8 @@
       "sourceChain": "data/chains-close/2026-11-09.json",
       "capturedAt": "2026-11-09T21:32:19.109475+00:00",
       "chainSpot": 7549.9399,
-      "sessionOpen": null,
-      "hasUnderlying": false,
+      "sessionOpen": 7513.0,
+      "hasUnderlying": true,
       "hasSpotGamma": false,
       "front": {
         "expiration": "2026-11-10",
