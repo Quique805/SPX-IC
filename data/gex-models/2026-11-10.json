@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-11-11T14:32:38.142574+00:00",
+  "generatedAt": "2026-11-11T15:07:43.757456+00:00",
   "date": "2026-11-10",
   "targetSession": "2026-11-11",
   "sourceChain": "data/chains-close/2026-11-10.json",
@@ -10451,8 +10451,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7600.0,
-          "low": 7587.0
+          "high": 7604.0,
+          "low": 7572.0
         }
       },
       "multi": {
@@ -10465,8 +10465,8 @@
           "adjustment": "Sin ajuste",
           "upperTouch": false,
           "lowerTouch": false,
-          "high": 7600.0,
-          "low": 7587.0
+          "high": 7604.0,
+          "low": 7572.0
         }
       }
     }
