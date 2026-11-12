@@ -15205,8 +15205,15 @@
         "spot": 7592.3999,
         "strikeCount": 196,
         "file": "data/chains-intraday/2026-11-12/213103Z.json"
+      },
+      {
+        "capturedAt": "2026-11-12T21:45:41.251856+00:00",
+        "effectiveAt": "2026-11-12T21:30:41.251856+00:00",
+        "spot": 7592.3999,
+        "strikeCount": 196,
+        "file": "data/chains-intraday/2026-11-12/214541Z.json"
       }
     ]
   },
-  "lastUpdated": "2026-11-12T21:31:03.928956+00:00"
+  "lastUpdated": "2026-11-12T21:45:41.251856+00:00"
 }
