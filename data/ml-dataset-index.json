@@ -1,13 +1,13 @@
 {
   "version": "ml-dataset-v5",
-  "lastUpdated": "2026-11-17T04:11:43.664176+00:00",
+  "lastUpdated": "2026-11-17T14:33:02.950811+00:00",
   "blocks": {
     "subyacente": {
       "status": "available",
       "file": "data/ml-dataset/subyacente.json",
-      "rows": 142,
+      "rows": 143,
       "firstDate": "2026-04-27",
-      "lastDate": "2026-11-16"
+      "lastDate": "2026-11-17"
     },
     "spotgamma": {
       "status": "available",
