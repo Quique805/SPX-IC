@@ -1,6 +1,6 @@
 {
   "version": "gex-lab-v1",
-  "generatedAt": "2026-11-20T15:07:47.507306+00:00",
+  "generatedAt": "2026-11-20T21:32:33.067098+00:00",
   "date": "2026-11-19",
   "targetSession": "2026-11-20",
   "sourceChain": "data/chains-close/2026-11-19.json",
@@ -9928,29 +9928,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 20.0,
           "sellCall": 7350.0,
           "sellPut": 7065.0,
           "adjustment": "Put Wall -35",
           "upperTouch": false,
-          "lowerTouch": false,
+          "lowerTouch": true,
           "high": 7199.0,
-          "low": 7134.0
+          "low": 6883.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 20.0,
           "sellCall": 7350.0,
           "sellPut": 7065.0,
           "adjustment": "Put Wall -35",
           "upperTouch": false,
-          "lowerTouch": false,
+          "lowerTouch": true,
           "high": 7199.0,
-          "low": 7134.0
+          "low": 6883.0
         }
       }
     },
@@ -9958,15 +9958,15 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 50.0,
           "sellCall": 7200.0,
           "sellPut": 7100.0,
           "adjustment": "Sin ajuste",
           "upperTouch": false,
-          "lowerTouch": false,
+          "lowerTouch": true,
           "high": 7199.0,
-          "low": 7134.0
+          "low": 6883.0
         }
       },
       "multi": {
@@ -9982,29 +9982,29 @@
       "next": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 57.14285714285714,
           "sellCall": 7300.0,
           "sellPut": 6950.0,
           "adjustment": "Sin ajuste",
           "upperTouch": false,
-          "lowerTouch": false,
+          "lowerTouch": true,
           "high": 7199.0,
-          "low": 7134.0
+          "low": 6883.0
         }
       },
       "multi": {
         "spotgammaError": null,
         "operation": {
-          "status": "win",
+          "status": "loss",
           "openPct": 50.0,
           "sellCall": 7300.0,
           "sellPut": 7000.0,
           "adjustment": "Sin ajuste",
           "upperTouch": false,
-          "lowerTouch": false,
+          "lowerTouch": true,
           "high": 7199.0,
-          "low": 7134.0
+          "low": 6883.0
         }
       }
     }
